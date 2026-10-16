@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "migrate": "node dist/db/migrate.js",
+    "migrate": "node dist/db/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage"
   },
