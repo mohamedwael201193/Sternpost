@@ -10,6 +10,7 @@ import { activityRoutes } from "./routes/activity.js";
 import { receiptsRoutes } from "./routes/receipts.js";
 import { demoRoutes, type ChainSnapshot } from "./routes/demo.js";
 import type { PaywallOpts } from "./x402/paywall.js";
+import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger.js";
 
 export interface AppDeps {
@@ -58,6 +59,7 @@ export function createApp(d: AppDeps) {
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {
+    if (err instanceof HTTPException) return c.json({ error: err.status === 413 ? "payload_too_large" : "http_error" }, err.status);
     logger.error({ err: String(err), path: c.req.path }, "unhandled");
     return c.json({ error: "internal_error" }, 500);
   });
