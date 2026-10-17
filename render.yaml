@@ -1,0 +1,28 @@
+databases:
+  - name: sternpost-db
+    plan: free
+    databaseName: sternpost
+    user: sternpost
+
+services:
+  - type: web
+    name: sternpost-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        fromDatabase: { name: sternpost-db, property: connectionString }
+      - key: FACTORY_ADDRESS
+        value: "0x29bf11Cd948CE845687A21819b2844d5321432Cf"
+      - key: INDEXER_START_BLOCK
+        value: "16309865"
+      - key: X402_PAY_TO
+        value: "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+      - key: CORS_ORIGINS
+        value: "https://sternpost.vercel.app,*.vercel.app,http://localhost:5173"
