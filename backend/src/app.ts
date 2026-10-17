@@ -10,6 +10,7 @@ import { activityRoutes } from "./routes/activity.js";
 import { receiptsRoutes } from "./routes/receipts.js";
 import { demoRoutes, type ChainSnapshot } from "./routes/demo.js";
 import type { PaywallOpts } from "./x402/paywall.js";
+import type { Indexer } from "./indexer/indexer.js";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger.js";
 
@@ -20,6 +21,7 @@ export interface AppDeps {
   pay: Omit<PaywallOpts, "description">;
   snapshot: () => Promise<ChainSnapshot>;
   version?: string;
+  indexer?: Pick<Indexer, "tick">;
 }
 
 const originAllowed = (origin: string, list: string[]) =>
@@ -49,6 +51,17 @@ export function createApp(d: AppDeps) {
     const s = await d.snapshot().catch(() => null);
     const ok = db === "ok";
     return c.json({ status: ok ? "ok" : "degraded", db, chain: s ? { block: String(s.blockNumber) } : "unreachable", version: d.version ?? "dev" }, ok ? 200 : 503);
+  });
+
+  // Catch-up sync for serverless deployments where no background loop runs. Throttled to one run per 10s.
+  let lastSync = 0;
+  app.post("/v1/indexer/sync", async (c) => {
+    if (!d.indexer) return c.json({ error: "indexer_disabled" }, 404);
+    if (Date.now() - lastSync < 10_000) return c.json({ status: "throttled" }, 429);
+    lastSync = Date.now();
+    let stored = 0;
+    for (let i = 0; i < 5; i++) stored += await d.indexer.tick();
+    return c.json({ status: "ok", stored });
   });
 
   app.route("/v1", appsRoutes(d.db));
