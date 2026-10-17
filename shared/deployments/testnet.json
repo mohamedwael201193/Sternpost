@@ -1,0 +1,19 @@
+{
+  "chainId": 31611,
+  "rpc": "https://rpc.test.mezo.org",
+  "explorer": "https://explorer.test.mezo.org",
+  "sternpost": {
+    "SternpostFactory": { "address": "0x29bf11Cd948CE845687A21819b2844d5321432Cf", "tx": "0x8206c91ca528588c27002e408b5c0b45c95b3a21ee1f84f3fe49aeaac5c26e0a", "block": 16309865 }
+  },
+  "mezo": {
+    "BorrowerOperationsSignatures": "0xD757e3646AF370b15f32EB557F0F8380Df7D639e",
+    "BorrowerOperations": "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
+    "TroveManager": "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0",
+    "PriceFeed": "0x86bCF0841622a5dAC14A313a15f96A95421b9366",
+    "ActivePool": "0x143A063F62340DA3A8bEA1C5642d18C6D0F7FF51",
+    "MUSD": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
+    "sMUSD": "0x6f461c68B2c5492C0F5CCEc5a264d692aA7A8e16",
+    "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+  },
+  "x402": { "facilitator": "https://facilitator.vativ.io", "network": "eip155:31611" }
+}
