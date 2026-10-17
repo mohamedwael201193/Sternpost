@@ -29,4 +29,5 @@ export async function testApp(over: Partial<AppDeps> = {}) {
   return { app, db };
 }
 
+export { b64 } from "../src/x402/paywall.js";
 export const json = (body: unknown, method = "POST") => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
