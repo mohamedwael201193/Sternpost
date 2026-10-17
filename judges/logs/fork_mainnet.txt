@@ -1,0 +1,13 @@
+No files changed, compilation skipped
+
+Ran 7 tests for test/fork/Fork.t.sol:ForkTest
+[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 1386999)
+[PASS] test_fork_defend() (gas: 1457050)
+[PASS] test_fork_directBypassReverts() (gas: 524947)
+[PASS] test_fork_nonceRace() (gas: 783290)
+[PASS] test_fork_revokeBurnsNonce() (gas: 502588)
+[PASS] test_fork_safeDraw_previewMatches() (gas: 709286)
+[PASS] test_fork_unsafeDrawRefused() (gas: 588332)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 18.37s (18.59s CPU time)
+
+Ran 1 test suite in 18.37s (18.37s CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)
