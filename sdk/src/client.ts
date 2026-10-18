@@ -27,6 +27,19 @@ export type GovernorState = {
   buffer: bigint; parked: bigint; excess: bigint; nonce: bigint; standby: StandbyState;
 };
 
+/**
+ * Mezo's RPC enforces the EIP-7623 calldata floor, and eth_estimateGas can return less than that floor for cheap
+ * calls, and under-estimates fresh SSTOREs (observed: an approve estimated at 21.6k used 36.9k). Pad every estimate.
+ */
+export async function writePadded(publicClient: PublicClient, wallet: Wallet, req: Record<string, unknown>, minGas = 0n): Promise<Hex> {
+  if (req.gas) return wallet.writeContract({ ...req } as never);
+  const est = await publicClient.estimateContractGas({ ...req, account: wallet.account } as never);
+  return wallet.writeContract({ ...req, gas: [est + est / 2n + 50_000n, minGas].reduce((a, b) => (a > b ? a : b)) } as never);
+}
+
+/** draw() re-enters Mezo (withdraw + ActivePool callback); estimates under-report it badly (observed ~25k vs ~1.0M used). */
+export const DRAW_GAS = 1_500_000n;
+
 export class Sternpost {
   readonly nonces: Map<Address, NonceCoordinator> = new Map();
   constructor(
@@ -52,7 +65,7 @@ export class Sternpost {
   }
 
   async createGovernor(wallet: Wallet, floorICR: bigint, defendICR: bigint): Promise<Hex> {
-    return wallet.writeContract({ address: this.addresses.factory, abi: sternpostFactoryAbi, functionName: "createGovernor", args: [floorICR, defendICR] });
+    return writePadded(this.publicClient, wallet, { address: this.addresses.factory, abi: sternpostFactoryAbi, functionName: "createGovernor", args: [floorICR, defendICR] });
   }
 
   async state(governor: Address): Promise<GovernorState> {
@@ -99,24 +112,24 @@ export class Sternpost {
     if (!(await this.coordinator(borrower).isFresh(a.nonce))) {
       throw new Error("Stale authorization: another signed Mezo action used this nonce. Ask the borrower to sign again.");
     }
-    return appWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "draw",
-      args: [a.amount, payee, a.withdrawDeadline, a.withdrawSig, a.healDeadline, a.healSig] });
+    return writePadded(this.publicClient, appWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "draw",
+      args: [a.amount, payee, a.withdrawDeadline, a.withdrawSig, a.healDeadline, a.healSig] }, DRAW_GAS);
   }
 
   /** Freeze draws and burn the native nonce (1 wei AddColl), invalidating every outstanding Mezo signature. */
   async revoke(borrowerWallet: Wallet, governor: Address, burnNonce = true): Promise<Hex> {
     const borrower = borrowerWallet.account.address;
     return this.coordinator(borrower).run(async (nonce) => {
-      if (!burnNonce) return borrowerWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "revoke", args: [0n, "0x"] });
+      if (!burnNonce) return writePadded(this.publicClient, borrowerWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "revoke", args: [0n, "0x"] });
       const deadline = (await this.now()) + 600n;
       const sig = await borrowerWallet.signTypedData({ domain: domain(borrowerWallet.chain.id, this.addresses.signatures), types: addCollTypes,
         primaryType: "AddColl", message: { assetAmount: 1n, borrower, nonce, deadline } });
-      return borrowerWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "revoke", args: [deadline, sig], value: 1n });
+      return writePadded(this.publicClient, borrowerWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "revoke", args: [deadline, sig], value: 1n });
     });
   }
 
   async unfreeze(borrowerWallet: Wallet, governor: Address): Promise<Hex> {
-    return borrowerWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "unfreeze" });
+    return writePadded(this.publicClient, borrowerWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "unfreeze" });
   }
 
   /** Re-arm the defend() standby at the current nonce (needed after any other signed action). */
@@ -126,12 +139,12 @@ export class Sternpost {
       const deadline = (await this.now()) + healWindow;
       const sig = await borrowerWallet.signTypedData({ domain: domain(borrowerWallet.chain.id, this.addresses.signatures), types: repayTypes,
         primaryType: "RepayMUSD", message: { amount, borrower, nonce, deadline } });
-      return borrowerWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "rearm", args: [amount, deadline, sig] });
+      return writePadded(this.publicClient, borrowerWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "rearm", args: [amount, deadline, sig] });
     });
   }
 
   async authorizeApp(borrowerWallet: Wallet, governor: Address, p: { app: Address; budget: bigint; perDrawMax: bigint; expiry: bigint; payee?: Address }): Promise<Hex> {
-    return borrowerWallet.writeContract({ address: governor, abi: sternpostGovernorAbi, functionName: "authorizeApp",
+    return writePadded(this.publicClient, borrowerWallet, { address: governor, abi: sternpostGovernorAbi, functionName: "authorizeApp",
       args: [p.app, p.budget, p.perDrawMax, p.expiry, p.payee ?? zeroAddress] });
   }
 }
