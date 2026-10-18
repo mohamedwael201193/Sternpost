@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 700px at 70% -10%, rgba(255,255,255,.35), transparent 60%),
+    #F3EBDD;
+  -webkit-font-smoothing: antialiased;
+}
+/* paper grain, pure CSS so it costs no request */
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 60; opacity: .5; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45 0 0 0 0 .38 0 0 0 0 .28 0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.contours { background: url('/art/contours.svg') center/cover no-repeat; }
+.hairgrid {
+  background-image: linear-gradient(to right, rgba(23,19,15,.07) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(23,19,15,.07) 1px, transparent 1px);
+  background-size: 120px 120px;
+}
+.caps { text-transform: uppercase; letter-spacing: .16em; font-size: .72rem; }
+.display { font-family: 'Newsreader Variable', Georgia, serif; font-optical-sizing: auto; letter-spacing: -0.02em; }
+.pill { @apply inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-paper caps transition hover:-translate-y-px hover:shadow-[0_6px_0_-2px_#A3204F]; }
+.pill-ghost { @apply inline-flex items-center gap-2 rounded-full border border-ink/70 px-5 py-2.5 caps text-ink transition hover:bg-ink hover:text-paper; }
+.plate { @apply border border-ink/25 bg-paper/70 backdrop-blur-[1px]; }
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.ink-link { background: linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat; transition: background-size .3s; }
+.ink-link:hover { background-size: 100% 1px; }
+@keyframes pen { from { -webkit-mask-position: 0 100%; mask-position: 0 100%; } to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
+.pen-reveal {
+  -webkit-mask-image: linear-gradient(to top, transparent 45%, #000 55%); mask-image: linear-gradient(to top, transparent 45%, #000 55%);
+  -webkit-mask-size: 100% 220%; mask-size: 100% 220%; animation: pen 2.2s cubic-bezier(.6,.05,.25,1) .15s both;
+}
+@media (prefers-reduced-motion: reduce) { .pen-reveal { animation: none; -webkit-mask-image: none; mask-image: none; } }
