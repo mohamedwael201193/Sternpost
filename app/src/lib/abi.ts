@@ -6,7 +6,7 @@ export const troveManagerAbi = parseAbi([
 ])
 export const priceFeedAbi = parseAbi(['function fetchPrice() view returns (uint256)'])
 export const borrowerOpsAbi = parseAbi(['function getBorrowingFee(uint256) view returns (uint256)'])
-export const erc20Abi = parseAbi(['function balanceOf(address) view returns (uint256)'])
+export const erc20Abi = parseAbi(['function balanceOf(address) view returns (uint256)', 'event Transfer(address indexed from, address indexed to, uint256 value)'])
 export const signaturesAbi = parseAbi(['function getNonce(address) view returns (uint256)'])
 
 export const factoryAbi = parseAbi([
@@ -32,12 +32,15 @@ export const governorAbi = parseAbi([
   'function removeApp(address app)',
   'function revoke(uint256 burnDeadline, bytes burnSig) payable',
   'function unfreeze()',
+  'function rearm(uint256 amount, uint256 deadline, bytes repaySig)',
+  'function standby() view returns (uint256 amount, uint256 deadline, uint256 nonce, bool live)',
   'function draw(uint256 amount, address payee, uint256 withdrawDeadline, bytes withdrawSig, uint256 healDeadline, bytes healSig)',
   'event AppAuthorized(address indexed app, uint256 budget, uint256 perDrawMax, uint64 expiry, address payee)',
   'event AppRemoved(address indexed app)',
   'event Drawn(address indexed app, address indexed payee, uint256 amount, uint256 icrAfter, uint256 nonceUsed)',
   'event Revoked(bool nonceBurned, uint256 nonceAfter)',
   'event Unfrozen()',
+  'event Armed(uint256 amount, uint256 nonce, uint256 deadline)',
   'event PolicySet(uint256 floorICR, uint256 defendICR)',
   'event Healed(address indexed caller, uint256 amount, uint256 icrBefore, uint256 icrAfter)',
 ])
