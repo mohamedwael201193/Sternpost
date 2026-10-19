@@ -1,0 +1,92 @@
+'forge clean' running (wd: /workspace/Sternpost/contracts)
+'forge config --json' running
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /workspace/Sternpost/contracts)
+INFO:Detectors:
+Detector: reentrancy-balance
+Reentrancy in SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322):
+	External call allowing reentrancy:
+	- signatures.withdrawMUSDWithSignature(amount,address(0),address(0),borrower,address(this),withdrawSig,withdrawDeadline) (src/SternpostGovernor.sol#308-310)
+	Balance read before the call:
+	- pre = musd.balanceOf(address(this)) (src/SternpostGovernor.sol#305)
+	Possible stale balance used after the call in a condition:
+	- musd.balanceOf(address(this)) - pre != amount (src/SternpostGovernor.sol#313)
+		- stale variable `pre`
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities
+INFO:Detectors:
+Detector: missing-zero-check
+SpendWallet.constructor(address,address,uint64).owner_ (src/SpendWallet.sol#27) lacks a zero-check on :
+		- owner = owner_ (src/SpendWallet.sol#28)
+SpendWallet.constructor(address,address,uint64).agent_ (src/SpendWallet.sol#27) lacks a zero-check on :
+		- agent = agent_ (src/SpendWallet.sol#29)
+SpendWallet.setAgent(address,uint64).agent_ (src/SpendWallet.sol#39) lacks a zero-check on :
+		- agent = agent_ (src/SpendWallet.sol#40)
+SternpostFactory.constructor(IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD).activePool_ (src/SternpostFactory.sol#40) lacks a zero-check on :
+		- activePool = activePool_ (src/SternpostFactory.sol#48)
+SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256).borrower_ (src/SternpostGovernor.sol#110) lacks a zero-check on :
+		- borrower = borrower_ (src/SternpostGovernor.sol#122)
+SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256).activePool_ (src/SternpostGovernor.sol#116) lacks a zero-check on :
+		- activePool = activePool_ (src/SternpostGovernor.sol#128)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: reentrancy-benign
+Reentrancy in SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322):
+	External calls:
+	- signatures.withdrawMUSDWithSignature(amount,address(0),address(0),borrower,address(this),withdrawSig,withdrawDeadline) (src/SternpostGovernor.sol#308-310)
+	State variables written after the call(s):
+	- _inDraw = false (src/SternpostGovernor.sol#311)
+	- _standby = Standby(uint128(amount),uint64(healDeadline),uint64(nonce + 1),healSig) (src/SternpostGovernor.sol#318)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in SternpostGovernor.fund(uint256) (src/SternpostGovernor.sol#248-253):
+	External calls:
+	- ! musd.transferFrom(msg.sender,address(this),amount) (src/SternpostGovernor.sol#251)
+	Event emitted after the call(s):
+	- Funded(amount) (src/SternpostGovernor.sol#252)
+Reentrancy in SpendWallet.setBudget(address,uint256) (src/SpendWallet.sol#52-55):
+	External calls:
+	- ! IERC20Min(token).approve(PERMIT2,amount) (src/SpendWallet.sol#53)
+	Event emitted after the call(s):
+	- BudgetSet(token,amount) (src/SpendWallet.sol#54)
+Reentrancy in SpendWallet.sweep(address,uint256) (src/SpendWallet.sol#57-60):
+	External calls:
+	- ! IERC20Min(token).transfer(owner,amount) (src/SpendWallet.sol#58)
+	Event emitted after the call(s):
+	- Swept(token,amount) (src/SpendWallet.sol#59)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+INFO:Detectors:
+Detector: timestamp
+SpendWallet.isValidSignature(bytes32,bytes) (src/SpendWallet.sol#62-69) uses timestamp for comparisons
+	Dangerous comparisons:
+	- agent == address(0) || block.timestamp > agentExpiry || sig.length != 65 (src/SpendWallet.sol#63)
+SternpostGovernor.previewDraw(address,uint256,address) (src/SternpostGovernor.sol#171-187) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > a.expiry (src/SternpostGovernor.sol#181)
+SternpostGovernor.standby() (src/SternpostGovernor.sol#196-200) uses timestamp for comparisons
+	Dangerous comparisons:
+	- live = s.amount != 0 && s.deadline >= block.timestamp && signatures.getNonce(borrower) == s.nonce (src/SternpostGovernor.sol#198)
+SternpostGovernor.authorizeApp(address,uint128,uint128,uint64,address) (src/SternpostGovernor.sol#215-224) uses timestamp for comparisons
+	Dangerous comparisons:
+	- app == address(0) || expiry <= block.timestamp || perDrawMax == 0 || perDrawMax > budget (src/SternpostGovernor.sol#219)
+SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322) uses timestamp for comparisons
+	Dangerous comparisons:
+	- withdrawDeadline > block.timestamp + MAX_WINDOW (src/SternpostGovernor.sol#291)
+	- block.timestamp > a.expiry (src/SternpostGovernor.sol#295)
+SternpostGovernor._validRepay(uint256,uint256,uint256,bytes) (src/SternpostGovernor.sol#378-395) uses timestamp for comparisons
+	Dangerous comparisons:
+	- sig.length != 65 || deadline < block.timestamp (src/SternpostGovernor.sol#383)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: cyclomatic-complexity
+SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322) has a high cyclomatic complexity (14).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: naming-convention
+Variable SternpostGovernor.DOMAIN_SEPARATOR (src/SternpostGovernor.sol#36) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Detectors:
+Detector: too-many-digits
+SternpostFactory.predictGovernor(address,uint256,uint256) (src/SternpostFactory.sol#61-78) uses literals with too many digits:
+	- h = keccak256(bytes)(abi.encodePacked(bytes1(0xff),address(this),bytes32(uint256(uint160(borrower))),keccak256(bytes)(abi.encodePacked(type()(SternpostGovernor).creationCode,abi.encode(borrower,signatures,borrowerOperations,troveManager,priceFeed,musd,activePool,savings,floorICR,defendICR))))) (src/SternpostFactory.sol#62-76)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
+INFO:Slither:. analyzed (9 contracts with 102 detectors), 20 result(s) found
