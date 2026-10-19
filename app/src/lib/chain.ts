@@ -28,7 +28,7 @@ const at = (v: any) => (typeof v === 'string' ? v : v?.address)
 const pick = (...k: string[]) => k.map((x) => at(fromFile.sternpost?.[x] ?? fromFile[x] ?? fromFile.contracts?.[x])).find(Boolean)
 
 export const STERNPOST: Deployments = {
-  factory: (import.meta.env.VITE_FACTORY as Address) || pick('SternpostFactory', 'factory'),
+  factory: (import.meta.env.VITE_FACTORY as Address) || pick('SternpostFactory', 'factory') || '0x29bf11Cd948CE845687A21819b2844d5321432Cf',
   governor: (import.meta.env.VITE_GOVERNOR as Address) || pick('SternpostGovernor', 'governor'),
   spendWallet: (import.meta.env.VITE_SPEND_WALLET as Address) || pick('SpendWallet', 'spendWallet'),
 }
@@ -36,4 +36,4 @@ export const STERNPOST: Deployments = {
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'https://sternpost-api.vercel.app'
 
 /** First block worth scanning for Sternpost events (factory deployment). */
-export const DEPLOY_BLOCK: bigint = BigInt(fromFile.sternpost?.SternpostFactory?.block ?? import.meta.env.VITE_DEPLOY_BLOCK ?? 0)
+export const DEPLOY_BLOCK: bigint = BigInt(fromFile.sternpost?.SternpostFactory?.block ?? import.meta.env.VITE_DEPLOY_BLOCK ?? 16309865)
