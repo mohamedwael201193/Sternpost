@@ -50,7 +50,7 @@ contract SpendWallet {
 
     /// @notice Cap what Permit2 may pull for x402 payments.
     function setBudget(address token, uint256 amount) external onlyOwner {
-        IERC20Min(token).approve(PERMIT2, amount);
+        if (!IERC20Min(token).approve(PERMIT2, amount)) revert TransferFailed();
         emit BudgetSet(token, amount);
     }
 
