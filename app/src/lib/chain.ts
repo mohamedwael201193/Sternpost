@@ -21,19 +21,21 @@ export const MEZO = {
 
 type Deployments = { factory?: Address; governor?: Address; spendWallet?: Address }
 
-/** Sternpost deployments: shared/deployments/testnet.json at build time, overridable by env. */
-const files = import.meta.glob('../../../shared/deployments/testnet.json', { eager: true, import: 'default' }) as Record<string, any>
-const fromFile: any = Object.values(files)[0] ?? {}
-const at = (v: any) => (typeof v === 'string' ? v : v?.address)
-const pick = (...k: string[]) => k.map((x) => at(fromFile.sternpost?.[x] ?? fromFile[x] ?? fromFile.contracts?.[x])).find(Boolean)
+/**
+ * Sternpost deployments, imported from shared/deployments/testnet.json at build time.
+ * There is deliberately no hardcoded fallback: a missing file fails the build instead of shipping stale addresses.
+ */
+import deployments from '../../../shared/deployments/testnet.json'
+const d: any = deployments
+const at = (v: any): Address | undefined => (typeof v === 'string' ? v : v?.address) as Address | undefined
 
 export const STERNPOST: Deployments = {
-  factory: (import.meta.env.VITE_FACTORY as Address) || pick('SternpostFactory', 'factory') || '0x29bf11Cd948CE845687A21819b2844d5321432Cf',
-  governor: (import.meta.env.VITE_GOVERNOR as Address) || pick('SternpostGovernor', 'governor'),
-  spendWallet: (import.meta.env.VITE_SPEND_WALLET as Address) || pick('SpendWallet', 'spendWallet'),
+  factory: at(d.sternpost.SternpostFactory),
+  governor: at(d.sternpost.governor),
+  spendWallet: at(d.sternpost.spendWallet),
 }
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'https://sternpost-api.vercel.app'
 
 /** First block worth scanning for Sternpost events (factory deployment). */
-export const DEPLOY_BLOCK: bigint = BigInt(fromFile.sternpost?.SternpostFactory?.block ?? import.meta.env.VITE_DEPLOY_BLOCK ?? 16309865)
+export const DEPLOY_BLOCK: bigint = BigInt(d.sternpost.SternpostFactory.block)
