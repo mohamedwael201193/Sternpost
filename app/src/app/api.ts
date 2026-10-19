@@ -14,3 +14,9 @@ export function useApiList<T>(key: string, path: string | null) {
   }, [key, path])
   return s
 }
+
+/** Mark an API draw request approved/rejected. Only pending requests change; returns false otherwise. */
+export async function setRequestStatus(id: number | string, status: 'approved' | 'rejected') {
+  const r = await fetch(`${API_URL}/v1/requests/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) })
+  return r.ok
+}
