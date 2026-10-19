@@ -4,12 +4,19 @@
   "explorer": "https://explorer.test.mezo.org",
   "sternpost": {
     "SternpostFactory": {
-      "address": "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
-      "tx": "0x8206c91ca528588c27002e408b5c0b45c95b3a21ee1f84f3fe49aeaac5c26e0a",
-      "block": 16309865
+      "address": "0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980",
+      "tx": "0xfc32c7584b4c14b12f2d171d787b5bc6a5098d79535bd3c967923ef37c53c50c",
+      "block": 16310187,
+      "hardened": true
     },
     "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
-    "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87"
+    "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
+    "previous": {
+      "SternpostFactory": "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
+      "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
+      "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
+      "note": "pre-hardening deployment, superseded"
+    }
   },
   "mezo": {
     "BorrowerOperationsSignatures": "0xD757e3646AF370b15f32EB557F0F8380Df7D639e",
