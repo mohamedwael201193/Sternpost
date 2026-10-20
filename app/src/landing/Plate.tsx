@@ -6,7 +6,7 @@ export function Plate({ id, n, kicker, title, children, className = '' }: {
 }) {
   const reduce = useReducedMotion()
   return (
-    <section id={id} className={`relative scroll-mt-20 border-t border-ink/15 ${className}`}>
+    <section id={id} className={`relative scroll-mt-20 border-t border-ink/15 cv-auto ${className}`}>
       <div className="mx-auto max-w-[1280px] px-6 py-24 lg:px-10 lg:py-32">
         <motion.header
           initial={reduce ? false : { opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-80px' }}
