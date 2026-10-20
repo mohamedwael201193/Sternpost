@@ -30,12 +30,12 @@ Mezo lets a borrower sign a `WithdrawMUSD` message so someone else can submit it
                     SpendWallet (EIP-1271) ──x402 / Permit2──▶ paid API
 ```
 
-- **The gate.** The withdraw signature names the governor as recipient. During the withdraw, Mezo calls the governor, and the governor accepts that call only inside its own `draw()`. A direct submission to Mezo reverts atomically. [Proof on testnet](https://explorer.test.mezo.org/tx/0xcb54e35d4608952fa0b1a1b379870dee8cf55eeefcae4c22c82690c9cba6aed1).
+- **The gate.** The withdraw signature names the governor as recipient. During the withdraw, Mezo calls the governor, and the governor accepts that call only inside its own `draw()`. A direct submission to Mezo reverts atomically. [Proof on testnet](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2).
 - **Per-app policy.** Each app gets a budget, a per-draw cap, an expiry and an optional payee lock. `previewDraw()` returns a plain reason (`BELOW_FLOOR`, `OVER_BUDGET`, …) before anything is signed.
-- **The floor is enforced on-chain.** The ICR after the draw must stay at or above your floor. [An unsafe draw refused](https://explorer.test.mezo.org/tx/0xa489db6ab1602ba8c2140ebe0451b2d3a84148491f43c37d8e9d73a83f47dd78).
-- **One-click revoke.** `revoke()` freezes draws and burns your Mezo nonce, which kills every outstanding signature. [Revoke](https://explorer.test.mezo.org/tx/0xda372cf83477fa33dce7d504681b13d6dcf1845427539b15f7ff746a1a60274e), then [the old signature fails](https://explorer.test.mezo.org/tx/0xe783e1f4223c0a9c9bd9544b17691a89ae6d02650f57319ac7d98459175614b5).
+- **The floor is enforced on-chain.** The ICR after the draw must stay at or above your floor. [An unsafe draw refused](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf).
+- **One-click revoke.** `revoke()` freezes draws and burns your Mezo nonce, which kills every outstanding signature. [Revoke](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb), then [the old signature fails](https://explorer.test.mezo.org/tx/0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f).
 - **Heal and defend.** Each draw carries a paired repay signature. Anyone can call `defend()` below your defend ICR to repay from a reserve buffer, which can earn yield in sMUSD while it waits.
-- **Agents pay with x402.** A SpendWallet is an EIP-1271 wallet run by an agent session key, with a Permit2 budget. [It bought the paid API brief](https://explorer.test.mezo.org/tx/0x6ec3ca884a6040e830f9d7548567323f1c42a09a37fed6d534448fcc7637b46b), and a facilitator paid the gas.
+- **Agents pay with x402.** A SpendWallet is an EIP-1271 wallet run by an agent session key, with a Permit2 budget. [It bought the paid API brief](https://explorer.test.mezo.org/tx/0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06), and a facilitator paid the gas.
 
 ## SDK
 
@@ -57,9 +57,9 @@ The full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts
 
 | Contract | Address |
 |---|---|
-| SternpostFactory | `0x29bf11Cd948CE845687A21819b2844d5321432Cf` |
-| Demo governor | `0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6` |
-| Demo SpendWallet | `0x5433bc33e192d1675807306ef63a92fcD6ac2D87` |
+| SternpostFactory | `0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980` |
+| Demo governor | `0x9eEa9762ED3c1dE2308c800687558064DFf0B832` |
+| Demo SpendWallet | `0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA` |
 
 ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
 
@@ -67,10 +67,11 @@ ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`s
 
 | | |
 |---|---|
-| Contract tests (unit, fuzz, invariant) | 33 passing |
+| Contract tests (unit, fuzz, invariant) | 56 passing |
 | Fork tests on real Mezo **testnet** and **mainnet** | 7/7 each ([logs](judges/logs)) |
 | SDK tests (EIP-712 digests equal Solidity) | 9 passing |
-| Coverage, Governor | 100% lines, 92.5% statements, 64% branches ([report](judges/coverage.txt)) |
+| Coverage | Factory 100% lines and branches, SpendWallet 100%, Governor 100% lines and 93.6% branches ([report](judges/coverage.txt)) |
+| Live code equals this source | byte-for-byte, immutables masked ([how](judges/VERIFY.md)); explorer verification is blocked for now |
 | Slither | no high findings after triage ([triage](judges/SLITHER_TRIAGE.md)) |
 | Live testnet flow | 16 txs ([table](judges/TESTNET_TXS.md)) |
 
@@ -86,7 +87,7 @@ ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`s
 
 ## Honest limits
 
-The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. Sternpost is unaudited and runs on testnet only. Details are in the [threat model](docs/THREAT_MODEL.md).
+The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. Sternpost is unaudited and runs on testnet only. The explorer would not accept source verification for any contract while we tried, so `judges/VERIFY.md` shows a byte-for-byte match instead. Details are in the [threat model](docs/THREAT_MODEL.md).
 
 ## License
 
