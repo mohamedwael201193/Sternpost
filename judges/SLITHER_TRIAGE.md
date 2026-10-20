@@ -24,4 +24,4 @@ Slither 0.11 ran 102 detectors over 9 contracts. The first run reported 27 resul
 
 ## Deployed bytecode
 
-The contracts live on testnet (`0x29bf11Cd…` factory, `0x48C880DA…` governor) were deployed before these hardening changes. Those changes cover the checked approve returns, CEI in `defend`, and the `burned` init. None of the three is exploitable with the real Mezo MUSD and sMUSD, which return true or revert. A fresh deploy picks them up.
+The hardened code is live. Factory `0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980` was redeployed on 2026-10-23 after these fixes, and `script/bytecode-match.py` shows the live code equals this source. The pre-hardening factory `0x29bf11Cd…` is superseded.
