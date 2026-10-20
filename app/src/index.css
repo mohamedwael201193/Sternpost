@@ -39,4 +39,5 @@ body::before {
 @media (prefers-reduced-motion: reduce) { .pen-reveal { animation: none; -webkit-mask-image: none; mask-image: none; } }
 .cv-auto { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 .hero-bg { position: absolute; top: 64px; left: 0; right: 0; height: calc(100svh - 64px); opacity: .9; z-index: -1; pointer-events: none; }
-.dash-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+.dash-bg { position: fixed; inset: 64px 0 0 0; z-index: -1; pointer-events: none; }
+@media (min-width: 768px) { .dash-bg { inset: 0 0 0 240px; } }
