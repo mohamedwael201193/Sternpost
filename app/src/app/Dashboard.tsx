@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NavLink, Route, Routes, Link } from 'react-router-dom'
@@ -22,6 +23,13 @@ const NAV = [
 ] as const
 
 export default function Dashboard() {
+  // The landing's pre-JS hero background lives in index.html; hide it while the dashboard is mounted.
+  useEffect(() => {
+    const bg = document.getElementById('hero-bg')
+    if (!bg) return
+    bg.style.display = 'none'
+    return () => { bg.style.display = '' }
+  }, [])
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
