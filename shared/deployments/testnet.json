@@ -9,8 +9,8 @@
       "block": 16310187,
       "hardened": true
     },
-    "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
-    "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
+    "governor": "0x9eEa9762ED3c1dE2308c800687558064DFf0B832",
+    "spendWallet": "0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA",
     "previous": {
       "SternpostFactory": "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
       "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
@@ -37,95 +37,108 @@
     "app": "0x0508F05fD26811139cf0C3e139FD692Ae7612D1E",
     "agent": "0x62a4773191747994c0368664cA68BC476897c1d9",
     "merchant": "0x661E399Bf93b0Ee184bCe18da26Be03492E9D509",
-    "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
-    "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
+    "governor": "0x9eEa9762ED3c1dE2308c800687558064DFf0B832",
+    "spendWallet": "0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA",
     "txs": [
       {
         "step": "createGovernor(floor 2.5, defend 1.6)",
-        "hash": "0xb3767ba3fe9de6ac5ca89cf3e10e0b5c5902dde70c24dcec40eca6744d053a4e",
+        "hash": "0x88b6061302eaaa0611476350991b923e204516dd1cff2a709fca16587657b2a3",
         "status": "success",
-        "block": 16309924
+        "block": 16310192
       },
       {
         "step": "createSpendWallet(agent, 30d)",
-        "hash": "0x93b7ae9fad2c88e255ddd0191179b00454c929a2b187eb8679792596b704340f",
+        "hash": "0xb1ffe7713d798f203581e7b6b52022ca50b7a724da7ccf68c35a8309ad0c007f",
         "status": "success",
-        "block": 16309928
+        "block": 16310202
       },
       {
         "step": "authorizeApp(budget 1500, perDraw 1000, payee=SpendWallet)",
-        "hash": "0x8a3c46689039fdea105cb3af5ee8d389062423c48e0e00933a2e9fbb22cb5ba1",
-        "status": "success"
+        "hash": "0x5fe5825bd976919d89f18f95b79203220632616b566d19a38eda347ebd7f32f2",
+        "status": "success",
+        "block": 16310259
       },
       {
         "step": "MUSD.approve(governor)",
-        "hash": "0xc6f7d4bfcbbc7e89d58f8407e14ffd84fbb6741c2952ccb04f4e8ab10d45747a",
-        "status": "success"
+        "hash": "0x5e12401517f49f24d1ed9b5ccf25e07fe5bfbc35da99a019e5197595a4233f5a",
+        "status": "success",
+        "block": 16310260
       },
       {
         "step": "fund(20 MUSD buffer)",
-        "hash": "0x7d2d666ec64bea525e57e772dbfed654f154543a78d6329cae0e44a7d6d62ccc",
-        "status": "success"
+        "hash": "0x48e6a6b53d5aa84daf3c98d960f87538ef4db74bb31ea98e1d22b52541e523ad",
+        "status": "success",
+        "block": 16310262
       },
       {
         "step": "parkReserve(5 MUSD -> sMUSD)",
-        "hash": "0xccb03b9cf44d9c79c820400e67404c8d781f3a0b45974b0097be0012f91babe0",
-        "status": "success"
+        "hash": "0x00a348fc43ea08e94451d4c340ef5af1d3f74ed98738b1bd27fb39f243ffb3e6",
+        "status": "success",
+        "block": 16310264
       },
       {
         "step": "draw(10 MUSD) by app -> SpendWallet",
-        "hash": "0x656b1ed43e5661c9c9b264b8e263a57e5ffcf6e2fe43a0094fdbce4230f22247",
-        "status": "success"
+        "hash": "0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523",
+        "status": "success",
+        "block": 16310265
       },
       {
         "step": "draw(900 MUSD) refused: Unsafe (below floor)",
-        "hash": "0xa489db6ab1602ba8c2140ebe0451b2d3a84148491f43c37d8e9d73a83f47dd78",
+        "hash": "0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf",
         "status": "reverted",
-        "revertReason": "Unsafe(uint256,uint256) 0x5aa8ead1"
+        "block": 16310267,
+        "revertReason": "Unsafe(icrAfter=2.183e18, floor=2.5e18) (0x5aa8ead1)"
       },
       {
         "step": "direct withdrawMUSDWithSignature bypass blocked",
-        "hash": "0xcb54e35d4608952fa0b1a1b379870dee8cf55eeefcae4c22c82690c9cba6aed1",
+        "hash": "0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2",
         "status": "reverted",
-        "revertReason": "Mezo ActivePool: 'Sending BTC failed' (governor receive() reverted BypassBlocked)"
+        "block": 16310268,
+        "revertReason": "Mezo: \"Sending BTC failed\" (ActivePool callback rejected by governor.receive gate)"
       },
       {
         "step": "rearm(5 MUSD standby)",
-        "hash": "0x735cb4c31dd95cba6f9be6462026c842cdd00c98deef05b0aacddee3a86d4d54",
-        "status": "success"
+        "hash": "0x9a1fe31787be4283688871e0baecc7e0ac043db8cecdb0e81368dff9fa3418e3",
+        "status": "success",
+        "block": 16310269
       },
       {
         "step": "SpendWallet.setBudget(Permit2, 10 MUSD)",
-        "hash": "0x745e244c32a03df871d78d4d84223c0757e908fc81e3a488d5e92c09d76ebc48",
-        "status": "success"
+        "hash": "0xfa3c58ad0707c32532270381a06f613ce125f97cda128577a9b435ecce8d5d30",
+        "status": "success",
+        "block": 16310271
       },
       {
         "step": "x402 settle 0.5 MUSD SpendWallet -> merchant",
-        "hash": "0xfdd4c73ca9a8b85c62f801a0e1f0363196bfa1a6a5c01fc3e3d557598fb98f09",
-        "status": "success"
+        "hash": "0x4833c4a878d7efc6a7d7c47baca8a6901b12dfa7e3ca63d9985a5b565f114140",
+        "status": "success",
+        "block": 16310272
       },
       {
         "step": "revoke() + nonce burn (1 wei AddColl)",
-        "hash": "0xda372cf83477fa33dce7d504681b13d6dcf1845427539b15f7ff746a1a60274e",
-        "status": "success"
+        "hash": "0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb",
+        "status": "success",
+        "block": 16310274
       },
       {
         "step": "unfreeze()",
-        "hash": "0x27e251c025ab26411d5a61b0438c634dfe6b9b361907aab0d0c3aa569c0952a6",
-        "status": "success"
+        "hash": "0xd07c8470475d1a6d5c4dcfb746f34cb34153b0b3eea4f8b250b2775c0d9d01fa",
+        "status": "success",
+        "block": 16310276
       },
       {
         "step": "draw with pre-revoke signature fails (nonce burned)",
-        "hash": "0xe783e1f4223c0a9c9bd9544b17691a89ae6d02650f57319ac7d98459175614b5",
+        "hash": "0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f",
         "status": "reverted",
-        "revertReason": "BadHeal() 0x2cdd3c9a (signatures bound to the burned nonce)"
+        "block": 16310277,
+        "revertReason": "BadHeal() (0x2cdd3c9a): nonce burned by revoke"
       },
       {
         "step": "rearm() after burn",
-        "hash": "0x1e1a54213f98024059da76237d5c0dccffedd8a1dae73f96c6eb266684af84d8",
-        "status": "success"
+        "hash": "0xeb4365573f274c75a070facf13186bef3784b59d606e8eddb3ee9220a01b2ff3",
+        "status": "success",
+        "block": 16310278
       }
-    ],
-    "note": "Produced by `npm run e2e` in sdk/ (examples/e2e-testnet.ts). Expected reverts are broadcast with a fixed gas limit so they are on-chain evidence; reasons recovered by replaying each tx with eth_call at block-1."
+    ]
   }
 }
