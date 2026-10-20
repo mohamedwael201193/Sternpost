@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: contracts } }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: foundry-rs/foundry-toolchain@v1
       - name: forge-std
         run: git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
@@ -18,7 +18,7 @@ jobs:
   slither:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: foundry-rs/foundry-toolchain@v1
       - run: git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std
       - uses: actions/setup-python@v6
