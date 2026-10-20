@@ -31,8 +31,8 @@ export default function Home() {
                 <Stat k="Debt" v={`${fmt(t.debt!)} MUSD`} />
                 <Stat k="Floor" v={t.floor ? pct(t.floor) : '—'} sub={t.governor ? 'enforced by your Governor' : 'no Governor yet'} />
               </div>
-              <div className="grid grid-cols-3 gap-4 pt-5">
-                {([['BTC', t.balances.btc, 6], ['MUSD', t.balances.musd, 2], ['sMUSD', t.balances.smusd, 2]] as const).map(([s, v, d]) => (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5">
+                {([['BTC', t.balances.btc, 6], ['MUSD', t.balances.musd, 2], ['sMUSD', t.balances.smusd, 2], ['MEZO', t.balances.mezo, 2]] as const).map(([s, v, d]) => (
                   <div key={s} className="flex items-center gap-3"><Token sym={s} size={32} /><div><div className="text-sm">{s}</div><div className="mono text-sm">{v === undefined ? '—' : fmt(v, 18, d)}</div></div></div>
                 ))}
               </div>
