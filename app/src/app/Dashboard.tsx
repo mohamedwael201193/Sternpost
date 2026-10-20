@@ -25,7 +25,7 @@ export default function Dashboard() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
-        <div className="min-h-screen grain contours grid md:grid-cols-[240px_1fr]">
+        <div className="min-h-screen grain contours-soft grid md:grid-cols-[240px_1fr]">
           <aside className="border-r border-ink/20 bg-paper/70 md:sticky md:top-0 md:h-screen flex md:flex-col">
             <Link to="/" className="display text-[34px] px-7 py-6 md:border-b border-ink/20">Sternpost</Link>
             <nav className="flex md:flex-col gap-1 p-3 md:p-5 overflow-x-auto" aria-label="Dashboard">
