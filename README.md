@@ -82,8 +82,12 @@ ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`s
 | `contracts/` | Foundry: Governor, Factory, SpendWallet, tests, fork scripts |
 | `sdk/` | TypeScript (viem) SDK and the e2e example |
 | `backend/` | x402 paid API and indexer (Vercel + Postgres) |
-| `app/` | Dashboard (Vercel) |
+| `app/` | Chartroom dashboard (Vercel): collateral dial, one-screen Draw MUSD form, wallet picker |
 | `judges/` | Reproduction guide, tx tables, logs, reports |
+
+## Wallets
+
+The app connects any EVM wallet the browser announces (EIP-6963), plus Coinbase Wallet. WalletConnect turns on when `VITE_WC_PROJECT_ID` is set. Bitcoin wallets (Xverse, Unisat, OKX Bitcoin) are listed as read-only: Mezo's BorrowerOperationsSignatures checks plain ECDSA signatures and has no EIP-1271 path, so a smart account behind a BTC wallet cannot sign a draw.
 
 ## Honest limits
 
