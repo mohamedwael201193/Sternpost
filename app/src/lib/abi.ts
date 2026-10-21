@@ -44,3 +44,8 @@ export const governorAbi = parseAbi([
   'event PolicySet(uint256 floorICR, uint256 defendICR)',
   'event Healed(address indexed caller, uint256 amount, uint256 icrBefore, uint256 icrAfter)',
 ])
+
+import governorJson from '../../../shared/abis/SternpostGovernor.json'
+/** Governor ABI plus its custom errors, so viem can decode reverts from simulate/eth_call. */
+export const governorErrorsAbi = (governorJson as readonly any[]).filter((x) => x.type === 'error')
+export const governorFullAbi = [...governorAbi, ...governorErrorsAbi] as unknown as typeof governorAbi
