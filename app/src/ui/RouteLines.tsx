@@ -1,5 +1,5 @@
 import { useReducedMotion } from 'motion/react'
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 type Edge = 'top' | 'bottom' | 'left' | 'right'
 export type Link = { from: RefObject<HTMLElement | null>; fromEdge: Edge; to: RefObject<HTMLElement | null>; toEdge: Edge }
@@ -10,11 +10,12 @@ const pt = (r: DOMRect, base: DOMRect, e: Edge) => {
   return [x - base.left, y - base.top] as const
 }
 
+// Passive effect: the host ref is attached after child layout effects run.
 /** Dashed magenta courses between live cards, measured from the DOM so they follow any layout. */
 export function RouteLines({ host, links }: { host: RefObject<HTMLElement | null>; links: Link[] }) {
   const reduce = useReducedMotion()
   const [paths, setPaths] = useState<string[]>([])
-  useLayoutEffect(() => {
+  useEffect(() => {
     const el = host.current
     if (!el) return
     const draw = () => {
