@@ -76,4 +76,23 @@ CREATE TABLE receipts (
 );
 CREATE INDEX receipts_payer_idx ON receipts (payer);`,
   },
+  {
+    id: 5,
+    name: "telegram",
+    sql: `
+CREATE TABLE tg_users (
+  chat_id BIGINT PRIMARY KEY,
+  address TEXT NOT NULL,
+  governor TEXT,
+  alerted_at TIMESTAMPTZ,
+  last_request_id INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX tg_users_address_idx ON tg_users (address);
+CREATE TABLE tg_link_codes (
+  code TEXT PRIMARY KEY,
+  chat_id BIGINT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);`,
+  },
 ];
