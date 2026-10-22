@@ -15,6 +15,13 @@ const schema = z.object({
   X402_PRICE: z.string().regex(/^\d+$/).default("10000000000000000"),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().regex(/^[A-Za-z0-9_-]{16,256}$/).optional(),
+  CRON_SECRET: z.string().min(16).optional(),
+  MEZO_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default("0x7B7c000000000000000000000000000000000001"),
+  APP_URL: z.string().url().default("https://sternpost-pink.vercel.app"),
+  PUBLIC_API_URL: z.string().url().default("https://sternpost-api.vercel.app"),
+  TELEGRAM_ALERT_MARGIN_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
   LOG_LEVEL: z.string().default("info"),
 });
 
