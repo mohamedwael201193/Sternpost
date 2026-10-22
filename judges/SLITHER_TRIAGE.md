@@ -19,6 +19,10 @@ Slither 0.11 ran 102 detectors over 9 contracts. The first run reported 27 resul
 | reentrancy-balance | `draw()` reads the MUSD balance before the Mezo withdraw and compares the delta after it | This delta check is deliberate: it proves exactly `amount` arrived. `draw()` is `nonReentrant`, and the only re-entry allowed is the ActivePool's `receive()`, which accepts one zero-value callback while `inDraw` and nothing else. CI runs slither with this detector excluded and links this note. |
 | reentrancy-benign / events | `draw`, `heal`, `defend`, `revoke` | Only events or the callback counter are written after trusted Mezo calls, all under `nonReentrant`. |
 | missing-zero-check | SpendWallet constructor | Only the factory creates it, with `msg.sender` as owner. A zero agent means "no agent" by design. |
+| arbitrary-send-eth | `SternpostRouter._sendBtc` | Suppressed inline. `to` is always the borrower read from a factory-registered governor; the router never takes a destination argument. |
+| calls-loop | `SternpostRouter.loop` | Bounded at `MAX_LEGS = 3`; every call target is an immutable Mezo/DEX address or the registered governor. |
+| reentrancy-benign / events | `SternpostRouter` routes | All routes are `nonReentrant`; only events follow external calls, and each route ends with a no-residue check. |
+| low-level-calls | `SternpostRouter._sendBtc` | Native BTC transfer to the borrower; return value checked. |
 | timestamp | expiry and deadline checks | Second-level precision is fine for 120 s windows and day-level expiries. |
 | cyclomatic-complexity, naming, too-many-digits | style | Informational. |
 
