@@ -6,7 +6,7 @@ import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove } from '../useTrove'
 import { governorAbi } from '../../lib/abi'
 import { fmt } from '../../lib/icr'
-import { setRequestStatus, useApiList } from '../api'
+import { useSetRequestStatus, useApiList } from '../api'
 
 export default function Apps() {
   const t = useTrove()
@@ -61,6 +61,7 @@ function Authorize({ governor, preset, presetAmount, requestId }: { governor: Ad
   const [payee, setPayee] = useState('')
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
+  const setRequestStatus = useSetRequestStatus()
   useEffect(() => {
     if (tx.phase === 'success' && requestId && !marked) setRequestStatus(requestId, 'approved').then((ok) => setMarked(ok ? 'ok' : 'fail'))
   }, [tx.phase, requestId, marked])
@@ -96,6 +97,7 @@ function Authorize({ governor, preset, presetAmount, requestId }: { governor: Ad
 
 function RequestList({ borrower }: { borrower?: string }) {
   const [tick, setTick] = useState(0)
+  const setRequestStatus = useSetRequestStatus()
   const q = useApiList<{ id: number; app_address: string; amount: string; status: string; reason?: string }>('requests', borrower ? `/v1/requests?borrower=${borrower}&_=${tick}` : null)
   return (
     <Card title="Requests">
