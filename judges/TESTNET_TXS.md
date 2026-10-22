@@ -30,6 +30,20 @@ Mezo charges at least half the gas limit on a reverted tx, so gasUsed on the thr
 
 The first run of the hardened flow stopped after step 2 because of a gas-estimate bug in `createSpendWallet`, fixed in `2e79dfc`. A later re-run stopped after `revoke()`. Before the final run the script called `unfreeze()` ([`0x92743630…`](https://explorer.test.mezo.org/tx/0x92743630495e9a6b099d8c9f365a9b0f8e27ee92783d268e2225a44438c84c8b)). Those earlier partial txs are on-chain but not listed here.
 
+## Routes after a draw (SternpostRouter `0x7550a53Cc5510B192A3B486368B8330D1CC7284c`)
+
+| # | Step | Tx |
+|---|---|---|
+| 1 | Deploy SternpostRouter | [`0x2dd7809a…`](https://explorer.test.mezo.org/tx/0x2dd7809a87a7ca0b65d1e9acd4147b8656c0c87642ba81986f0ed01aed1a6f0c) |
+| 2 | governor.authorizeApp(router, budget 100, per draw 25, payee = router) | [`0x4dc0422b…`](https://explorer.test.mezo.org/tx/0x4dc0422b68fed65221dead590b8ae4f7313f6f29fecb45b473a8c68b6a661f54) |
+| 3 | router.setRoutes(SAVE \| SWAP \| LOOP) | [`0x6f91930f…`](https://explorer.test.mezo.org/tx/0x6f91930f4aaf40d08e7aec173b180caea8c1360d18d4191d66317cefdda5bc8a) |
+| 4 | **Save**: drawAndSave(5 MUSD) -> 5 sMUSD to borrower | [`0x2e775fc4…`](https://explorer.test.mezo.org/tx/0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311) |
+| 5 | **Swap**: drawAndSwap(5 MUSD -> BTC, min-out = quote - 1%) | [`0x8f1cffa6…`](https://explorer.test.mezo.org/tx/0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91) |
+| 6 | **Loop**: loop(1 leg: draw 5 MUSD -> swap -> addColl to same trove, floor re-checked) | [`0xcf9a5b39…`](https://explorer.test.mezo.org/tx/0xcf9a5b39f26efe769eb15ab82d789ab7d331236180e65a62e15ae89091e4e5dd) |
+| 7 | governor.rearm (the loop's AddColl consumes the heal nonce) | [`0x7bad78e8…`](https://explorer.test.mezo.org/tx/0x7bad78e81a88966cd42ec3041120c6ae3e6da81bde707436487bb58c977e4c21) |
+
+Slippage refusal: replaying `drawAndSwap` with min-out = 2x quote via `eth_call` reverts in the DEX (`0x42301c23`, insufficient output); not broadcast, to save deploy budget. Re-check all of the above with `judges/verify-routes.sh` (read-only; also asserts the router holds no MUSD, sMUSD or BTC).
+
 ## Previous (pre-hardening) deployment, superseded
 
 Factory `0x29bf11Cd948CE845687A21819b2844d5321432Cf`, governor `0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6`, SpendWallet `0x5433bc33e192d1675807306ef63a92fcD6ac2D87`. Its 16-tx run is in git history (`git log -- judges/TESTNET_TXS.md`).
