@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Gauge } from '../../ui/Gauge'
-import { Card, Empty, NeedsWallet, TxStatus } from '../kit'
+import { BtcSignNote, Card, Empty, NeedsWallet, TxStatus, useIsBtcAccount } from '../kit'
 import { useTrove } from '../useTrove'
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
@@ -30,6 +30,7 @@ export default function Draw() {
   return (
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Draw</h1><p className="text-muted mt-2 max-w-2xl">See exactly where a draw leaves your trove before you sign. The Governor runs the same check on-chain and reverts anything below your floor.</p></header>
+      <BtcSignNote className="max-w-2xl" />
       <NeedsWallet what="draw MUSD">
         {!t.hasTrove ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
           : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty> : (
@@ -69,6 +70,7 @@ function Sign({ t, wei, app, payee, ok, fields }: {
   fields: { amount: string; setAmount: (s: string) => void; app: string; setApp: (s: string) => void; payee: string; setPayee: (s: string) => void }
 }) {
   const { go: send, tx, bundle, err, step, deadline, skew, busy } = useDrawSend(t)
+  const btcAcct = useIsBtcAccount()
   const self = app.toLowerCase() === t.address?.toLowerCase()
   const f = 'mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full mt-1'
   const go = () => send(wei, app, payee)
@@ -80,7 +82,7 @@ function Sign({ t, wei, app, payee, ok, fields }: {
         <label className="caps text-[11px] text-muted">App (submits the draw)<input className={f} value={fields.app} onChange={(e) => fields.setApp(e.target.value.trim())} placeholder="this wallet" /></label>
         <label className="caps text-[11px] text-muted">Payee<input className={f} value={fields.payee} onChange={(e) => fields.setPayee(e.target.value.trim())} placeholder="this wallet" /></label>
         <p className="text-xs text-muted">Two signatures: first a standby repay for the next nonce (valid 24 h), then a withdraw that can only pay your Governor. Mezo's withdraw window is short by design: the Governor rejects deadlines more than 120 s ahead, and this app uses {String(DRAW_WINDOW_S)} s counted from chain time at the moment you sign it. {self ? 'The draw transaction is sent right after the second signature; confirm it in your wallet before the countdown ends.' : 'Hand the bundle to the app before the countdown ends.'}</p>
-        <button className="pill self-start" disabled={!ok || t.nonce === undefined || busy} onClick={go}>{self ? 'Sign & send' : 'Sign for app'}</button>
+        <button className="pill self-start" disabled={!ok || t.nonce === undefined || busy || btcAcct} onClick={go}>{self ? 'Sign & send' : 'Sign for app'}</button>
         {step && <p className="text-sm" role="status">{step}</p>}
         {deadline && !sent && !err && <Countdown deadline={deadline} skew={skew} />}
         {err && <p className="text-sm text-signal" role="alert">{err}</p>}

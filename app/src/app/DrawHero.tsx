@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { parseUnits, type Address } from 'viem'
 import { Link } from 'react-router-dom'
 import { Token } from '../ui/Token'
-import { ConnectButton, TxStatus } from './kit'
+import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
 import { useDrawSend } from './useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
@@ -29,6 +29,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const after = icrAfter ?? local
   const avail = t.hasTrove && t.price && t.floor ? maxSafeDraw(t.coll!, t.price, t.debt!, t.floor) : undefined
   const d = useDrawSend(t)
+  const btcAcct = useIsBtcAccount()
   const ready = t.isConnected && t.hasTrove && !!t.governor
   const cur = toPct(t.icr), aft = wei > 0n ? toPct(after) : cur, flo = toPct(t.floor)
 
@@ -79,13 +80,14 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />
             : !ready ? <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>
-            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n} onClick={() => d.go(wei, self, self)}>
+            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct} onClick={() => d.go(wei, self, self)}>
                 {d.busy ? 'Signing…' : 'Sign & send'} <span aria-hidden>→</span>
               </button>}
           <Ring deadline={d.deadline} skew={d.skew} active={!!d.deadline && !d.sent && !d.err} />
         </div>
         {d.step && <p className="text-xs mt-3" role="status">{d.step}</p>}
         {d.err && <p className="text-xs mt-3 text-signal" role="alert">{d.err}</p>}
+        <BtcSignNote className="mt-3" />
         <TxStatus tx={d.tx} />
       </div>
     </section>
