@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useAccount, useConnect, useDisconnect, useSwitchChain, type Connector } from 'wagmi'
+import { useAccount, useConfig, useConnect, useDisconnect, useSwitchChain, type Connector } from 'wagmi'
+import { switchChain as switchChainAction } from 'wagmi/actions'
 import { mezoTestnet } from '../lib/chain'
+import { addrUrl } from '../lib/proofs'
 
 /**
  * Sign-in sheet laid out like testnet.mezo.org's: Bitcoin wallets first (through Mezo Passport's OrangeKit
@@ -21,6 +23,14 @@ const hasBtcExt = (id: string) => {
   const w = window as unknown as Record<string, unknown>
   return id === 'xverse' ? !!(w.XverseProviders || w.BitcoinProvider) : id === 'unisat' ? !!w.unisat : false
 }
+/** Plain-language connect errors; -32002 means the wallet already has a prompt open (common on first MetaMask unlock). */
+export function connectError(e: Error) {
+  const x = e as Error & { code?: number; cause?: { code?: number } }
+  const code = x.code ?? x.cause?.code
+  if (code === -32002 || /already pending/i.test(e.message)) return 'Your wallet already has a request open. Open the extension to finish it.'
+  if (code === 4001 || /reject|denied/i.test(e.message)) return 'The request was declined in your wallet. Try again when ready.'
+  return e.message.split('\n')[0]
+}
 const Arrow = () => (
   <svg viewBox="0 0 24 24" className="w-6 h-6 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
     <circle cx="12" cy="12" r="9.2" /><path d="M8 12h8M12.5 8.5L16 12l-3.5 3.5" />
@@ -34,13 +44,7 @@ export function ConnectButton({ className = 'pill' }: { className?: string }) {
   const [open, setOpen] = useState(false)
   if (isConnected && chainId !== mezoTestnet.id)
     return <button className={className} onClick={() => switchChain({ chainId: mezoTestnet.id })}>Switch to Mezo testnet</button>
-  if (isConnected)
-    return (
-      <button className="pill-ghost inline-flex items-center gap-2" title="Disconnect" onClick={() => disconnect()}>
-        <span className="w-2 h-2 rounded-full bg-safe" aria-hidden />
-        <span className="mono text-xs" data-testid="account">{address!.slice(0, 6)}…{address!.slice(-4)}</span>
-      </button>
-    )
+  if (isConnected) return <AccountMenu address={address!} onDisconnect={() => disconnect()} />
   return (
     <>
       <button className={`${className} inline-flex items-center gap-2`} onClick={() => setOpen(true)}>
@@ -52,8 +56,55 @@ export function ConnectButton({ className = 'pill' }: { className?: string }) {
   )
 }
 
+/** Account pill: opens a menu (copy, explorer, disconnect with a confirm step) instead of disconnecting on one click. */
+export function AccountMenu({ address, onDisconnect }: { address: `0x${string}`; onDisconnect: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) { setConfirm(false); return }
+    const out = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', out); window.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', out); window.removeEventListener('keydown', esc) }
+  }, [open])
+  const item = 'w-full text-left px-4 py-2.5 rounded-xl text-sm hover:bg-paper2 hover:text-magenta flex items-center justify-between gap-3'
+  return (
+    <div ref={ref} className="relative">
+      <button className="pill-ghost inline-flex items-center gap-2 max-w-full" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="w-2 h-2 rounded-full bg-safe shrink-0" aria-hidden />
+        <span className="mono text-xs" data-testid="account">{address.slice(0, 6)}…{address.slice(-4)}</span>
+        <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div role="menu" aria-label="Account" className="absolute right-0 mt-2 z-40 w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-ink/15 bg-paper p-2 shadow-[0_20px_50px_-20px_rgba(23,19,15,.5)]">
+          <div className="px-4 pt-2 pb-3 mono text-[11px] break-all text-muted">{address}</div>
+          <button role="menuitem" className={item} onClick={async () => { await navigator.clipboard?.writeText(address).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>
+            {copied ? 'Copied' : 'Copy address'}</button>
+          <a role="menuitem" className={item} href={addrUrl(address)} target="_blank" rel="noreferrer">View on Mezo explorer <span aria-hidden>↗</span></a>
+          {!confirm ? <button role="menuitem" className={`${item} text-signal`} onClick={() => setConfirm(true)}>Disconnect</button> : (
+            <div className="px-4 py-2 text-sm">
+              <p>Disconnect this wallet?</p>
+              <div className="flex gap-2 mt-2">
+                <button className="pill text-xs" onClick={() => { setOpen(false); onDisconnect() }}>Disconnect</button>
+                <button className="pill-ghost text-xs" onClick={() => setConfirm(false)}>Cancel</button>
+              </div>
+            </div>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { connect, connectors, isPending, error, variables } = useConnect()
+  const { connectAsync, connectors, isPending, error, variables } = useConnect()
+  const config = useConfig()
+  // Connect first, then ask for Mezo testnet as a separate step. Bundling both into one connect made a slow
+  // chain-switch prompt surface as a failed connect even though the account was already linked.
+  const connect = ({ connector }: { connector: Connector }) => connectAsync({ connector })
+    .then((r) => { if (r.chainId !== mezoTestnet.id) return switchChainAction(config, { chainId: mezoTestnet.id }).catch(() => undefined) })
+    .catch(() => undefined)
   const { isConnected } = useAccount()
   const reduce = useReducedMotion()
   const [q, setQ] = useState('')
@@ -103,7 +154,7 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
       </>
     )
     const cls = 'w-full flex items-center gap-4 px-5 py-4 rounded-2xl border border-ink/15 bg-paper text-left transition-colors hover:bg-paper2 hover:border-magenta/50 hover:text-magenta focus-visible:outline focus-visible:outline-2 focus-visible:outline-magenta'
-    if (e.connector) return <button className={cls} disabled={isPending} onClick={() => connect({ connector: e.connector!, chainId: mezoTestnet.id })}>{inner}</button>
+    if (e.connector) return <button className={cls} disabled={isPending} onClick={() => { if (!isPending) connect({ connector: e.connector! }) }}>{inner}</button>
     if (e.install) return <a className={cls} href={e.install} target="_blank" rel="noreferrer" aria-label={`Install ${e.name}`}>{inner}</a>
     return <div className={`${cls} opacity-60 pointer-events-none`} aria-disabled>{inner}</div>
   }
@@ -133,7 +184,7 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
               {m.length > 0 && <div className="text-sm font-semibold text-muted pt-3 px-5">More wallets</div>}
               {m.map((e) => <Row key={e.key} e={e} />)}
               {b.length + m.length === 0 && <p className="text-center text-sm text-muted py-6">No wallet matches “{q}”.</p>}
-              {error && <p role="alert" className="text-xs text-signal px-2">{error.message.split('\n')[0]}</p>}
+              {error && !isPending && <p role="alert" className="text-xs text-signal px-2">{connectError(error)}</p>}
               <p className="text-[11px] text-muted leading-relaxed px-2 pt-2">
                 Bitcoin wallets sign in through a Mezo Passport smart account. It can hold, fund and send on Mezo, but Mezo's
                 draw signature check is ECDSA-only, so drawing MUSD with Sternpost needs an EVM wallet.
