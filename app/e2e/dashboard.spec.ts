@@ -6,17 +6,18 @@ const EMPTY = '0x000000000000000000000000000000000000dEaD'
 
 test('shows connect gate without a wallet', async ({ page }) => {
   await page.goto('/app')
-  await expect(page.getByText('Not connected')).toBeVisible()
+  await expect(page.getByText('Not connected').first()).toBeVisible()
 })
 
 test('connects the injected wallet and reads Mezo testnet', async ({ page }) => {
   await injectWallet(page, EMPTY)
   await page.goto('/app')
   await page.getByRole('button', { name: 'Connect wallet' }).first().click()
+  await page.getByRole('dialog').getByRole('button', { name: /MetaMask|Browser wallet/ }).first().click()
   await expect(page.getByTestId('account').first()).toContainText('0x0000')
   await expect(page.getByText('No trove on this wallet')).toBeVisible({ timeout: 20_000 })
-  await page.getByRole('link', { name: 'Draw' }).click()
+  await page.getByRole('link', { name: 'Draw', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Draw' })).toBeVisible()
-  await page.getByRole('link', { name: 'Revoke' }).click()
+  await page.getByRole('link', { name: 'Revoke', exact: true }).click()
   await expect(page.getByText('Nothing to revoke.')).toBeVisible()
 })

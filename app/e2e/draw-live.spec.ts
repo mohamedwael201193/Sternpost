@@ -8,6 +8,7 @@ test.describe.configure({ mode: 'serial', timeout: 300_000 })
 async function open(page: any) {
   await page.goto('/app/draw')
   await page.getByRole('button', { name: 'Connect wallet' }).first().click()
+  await page.getByRole('dialog').getByRole('button', { name: /MetaMask|Browser wallet/ }).first().click()
   await expect(page.getByLabel(/Amount/)).toBeVisible({ timeout: 60_000 })
 }
 
