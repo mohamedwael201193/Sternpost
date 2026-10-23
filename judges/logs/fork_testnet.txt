@@ -1,0 +1,15 @@
+Compiling 1 files with Solc 0.8.24
+Solc 0.8.24 finished in 12.74s
+Compiler run successful!
+
+Ran 7 tests for test/fork/Fork.t.sol:ForkTest
+[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 2120800)
+[PASS] test_fork_defend() (gas: 1939634)
+[PASS] test_fork_directBypassReverts() (gas: 987450)
+[PASS] test_fork_nonceRace() (gas: 998849)
+[PASS] test_fork_revokeBurnsNonce() (gas: 718147)
+[PASS] test_fork_safeDraw_previewMatches() (gas: 924845)
+[PASS] test_fork_unsafeDrawRefused() (gas: 1050835)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 12.43s (12.37s CPU time)
+
+Ran 1 test suite in 12.43s (12.43s CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)
