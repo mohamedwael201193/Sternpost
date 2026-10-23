@@ -7,7 +7,7 @@ export function Nav() {
     <header className="sticky top-0 z-40 border-b border-ink/15 bg-paper/80 backdrop-blur-md">
       <nav className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-6 lg:px-10">
         <a href="/" className="display text-[1.7rem] leading-none">Sternpost</a>
-        <ul className="hidden items-center gap-10 md:flex">
+        <ul className="hidden items-center gap-10 lg:flex">
           {LINKS.map(([l, h]) => (
             <li key={l}><a href={h} className="caps ink-link text-ink/85 hover:text-ink">{l}</a></li>
           ))}
