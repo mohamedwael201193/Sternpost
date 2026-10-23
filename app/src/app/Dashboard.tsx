@@ -35,22 +35,22 @@ export default function Dashboard() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
-        <div className="min-h-screen grain grid md:grid-cols-[240px_1fr]">
-          <aside className="border-r border-ink/15 bg-paper/60 backdrop-blur-[2px] md:sticky md:top-0 md:h-screen flex md:flex-col">
+        <div className="min-h-screen grain grid lg:grid-cols-[240px_1fr] overflow-x-clip">
+          <aside className="hidden lg:flex flex-col border-r border-ink/15 bg-paper/60 backdrop-blur-[2px] sticky top-0 h-screen">
             <Link to="/" className="flex items-center gap-3 px-6 py-6">
               <svg viewBox="0 0 32 32" className="w-9 h-9 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="16" cy="6" r="2.6" /><path d="M16 8.6V28M10 13h12M5 19c0 5 5 9 11 9s11-4 11-9M5 19l-2 2M5 19l3 1M27 19l2 2M27 19l-3 1" /></svg>
               <span><span className="display text-[30px] leading-none block">Sternpost</span>
                 <span className="caps text-[9px] tracking-[.12em] whitespace-nowrap text-magenta block mt-1">Borrow. Spend. Govern.</span>
                 <span className="caps text-[8px] text-muted block">on Mezo</span></span>
             </Link>
-            <nav className="flex md:flex-col gap-1 p-3 md:px-5 overflow-x-auto" aria-label="Dashboard">
+            <nav className="flex flex-col gap-1 py-3 px-5" aria-label="Dashboard">
               {NAV.map(([to, label, d]) => (
                 <NavLink key={label} to={'/app' + (to ? '/' + to : '')} end className={({ isActive }) => `flex items-center gap-4 px-4 py-3 rounded-xl text-[15px] transition ${isActive ? 'bg-ink text-paper shadow-[0_8px_20px_-10px_rgba(23,19,15,.7)]' : 'hover:text-magenta hover:bg-paper2/70'}`}>
                   {I(d)}{label}
                 </NavLink>
               ))}
             </nav>
-            <div className="mt-auto p-5 hidden md:block">
+            <div className="mt-auto p-5">
               <a href="https://mezo.org" target="_blank" rel="noreferrer" className="plate rounded-xl p-4 flex flex-col gap-2 hover:border-magenta transition">
                 <span className="flex items-center gap-3"><Token sym="MEZO" size={30} /><span className="text-xs leading-tight">Powered by<br /><b className="caps text-[12px]">Mezo</b></span></span>
                 <span className="text-[11px] text-muted">Bitcoin-backed. Mezo-secured.</span>
@@ -58,15 +58,22 @@ export default function Dashboard() {
               <div className="text-[11px] text-muted mt-4">Sternpost v0.1.0 · <span className="text-magenta">Testnet</span> · chain 31611</div>
             </div>
           </aside>
-          <main className="p-6 md:px-10 md:py-8 max-w-[1440px] w-full">
-            <header className="flex flex-wrap items-start justify-between gap-6 mb-4">
+          <main className="min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-10 lg:py-8 max-w-[1440px] w-full">
+            <div className="lg:hidden flex items-center justify-between gap-3 mb-4">
+              <Link to="/" className="flex items-center gap-2 min-w-0" aria-label="Sternpost home">
+                <svg viewBox="0 0 32 32" className="w-7 h-7 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="16" cy="6" r="2.6" /><path d="M16 8.6V28M10 13h12M5 19c0 5 5 9 11 9s11-4 11-9" /></svg>
+                <span className="display text-2xl leading-none">Sternpost</span>
+              </Link>
+              <span className="flex items-center gap-2 text-xs text-magenta"><span className="w-2 h-2 rounded-full bg-signal" />Testnet</span>
+            </div>
+            <header className="flex flex-wrap items-start justify-between gap-4 lg:gap-6 mb-4">
               {home ? <div>
                 <div className="caps text-[11px] tracking-[.24em] text-magenta">Chartroom</div>
-                <h1 className="display text-5xl md:text-6xl leading-none mt-1">Dashboard</h1>
+                <h1 className="display text-4xl sm:text-5xl lg:text-6xl leading-none mt-1">Dashboard</h1>
                 <p className="text-muted mt-2">Borrow MUSD against BTC. Spend. Govern. All on Mezo.</p>
               </div> : <div className="caps text-[11px] tracking-[.24em] text-magenta pt-2">Chartroom</div>}
-              <div className="flex items-start gap-6">
-                <div className="text-sm hidden sm:block"><div>Sternpost · Chartroom</div><div className="flex items-center gap-2 text-magenta"><span className="w-2 h-2 rounded-full bg-signal" />Testnet live</div></div>
+              <div className="flex items-start gap-6 ml-auto">
+                <div className="text-sm hidden lg:block"><div>Sternpost · Chartroom</div><div className="flex items-center gap-2 text-magenta"><span className="w-2 h-2 rounded-full bg-signal" />Testnet live</div></div>
                 <ConnectButton />
               </div>
             </header>
@@ -80,6 +87,13 @@ export default function Dashboard() {
               <Route path="*" element={<div className="border border-dashed border-ink/25 p-10 text-center"><div className="caps text-[11px] text-magenta">404</div><h1 className="display text-4xl mt-1">No such dashboard page</h1><Link className="pill mt-6 inline-flex" to="/app">Back to Home</Link></div>} />
             </Routes>
           </main>
+          <nav aria-label="Dashboard (mobile)" data-testid="bottom-nav" className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-6 border-t border-ink/15 bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+            {NAV.map(([to, label, d]) => (
+              <NavLink key={label} to={'/app' + (to ? '/' + to : '')} end className={({ isActive }) => `flex flex-col items-center gap-1 py-2.5 text-[10px] ${isActive ? 'text-magenta' : 'text-ink/70'}`}>
+                {I(d)}<span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
         </div>
       </QueryClientProvider>
     </WagmiProvider>
