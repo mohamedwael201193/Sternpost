@@ -24,6 +24,7 @@ export function useLimits(t: Trove, app?: Address) {
   const feePerWad = (fee?.result as bigint | undefined) ?? 0n
   const perDraw = authorized ? p![2] : undefined
   const remaining = authorized ? (rem?.result as bigint | undefined) : undefined
-  const safe = floorRoom !== undefined ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
+  // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
+  const safe = floorRoom !== undefined && q.data ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
   return { loaded: !!q.data, authorized, perDraw, remaining, floorRoom, feePerWad, safe }
 }

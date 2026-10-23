@@ -32,7 +32,7 @@ export default function Draw() {
   const [ok, reason, icrAfter] = preview.data ?? [undefined, '', undefined]
   const projected = icrAfter ?? local
   const lim = useLimits(t, appAddr)
-  useEffect(() => { if (!touched && lim.safe && lim.safe.suggest > 0n) setAmount(fmt(lim.safe.suggest, 18, 2).replace(/,/g, '')) }, [touched, lim.safe?.suggest])
+  useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const pick = (v: string) => { setTouched(true); setAmount(v) }
 
   return (

@@ -40,7 +40,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const after = icrAfter ?? local
   const lim = useLimits(t, t.address)
   // Start from a value the Governor will accept instead of a fixed number that may exceed the cap.
-  useEffect(() => { if (!touched && lim.safe && lim.safe.suggest > 0n) setAmount(fmt(lim.safe.suggest, 18, 2).replace(/,/g, '')) }, [touched, lim.safe?.suggest])
+  useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const over = lim.safe && wei > lim.safe.max ? wei - lim.safe.max : 0n
   const debtAfter = t.debt !== undefined && wei > 0n ? t.debt + wei + (fee.data ?? 0n) : undefined
   const d = useDrawSend(t)
