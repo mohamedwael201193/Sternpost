@@ -233,10 +233,9 @@ contract SternpostGovernor {
     function revoke(uint256 burnDeadline, bytes calldata burnSig) external payable onlyBorrower nonReentrant {
         frozen = true;
         delete _standby;
-        bool burned;
-        if (burnSig.length != 0) {
+        bool burned = burnSig.length != 0;
+        if (burned) {
             signatures.addCollWithSignature{value: msg.value}(address(0), address(0), borrower, burnSig, burnDeadline);
-            burned = true;
         }
         emit Revoked(burned, signatures.getNonce(borrower));
     }
@@ -266,7 +265,7 @@ contract SternpostGovernor {
         if (address(savings) == address(0)) revert NoSavings();
         if (amount == 0 || amount > buffer - parked) revert ZeroAmount();
         parked += amount;
-        musd.approve(address(savings), amount);
+        _approve(address(savings), amount);
         savings.deposit(amount);
         emit ReserveParked(amount);
     }
@@ -342,7 +341,7 @@ contract SternpostGovernor {
     function heal(uint256 amount, uint256 deadline, bytes calldata repaySig) external nonReentrant {
         if (amount == 0 || excess() < amount) revert NoExcess();
         uint256 before = icr();
-        musd.approve(address(signatures), amount);
+        _approve(address(signatures), amount);
         signatures.repayMUSDWithSignature(amount, address(0), address(0), borrower, repaySig, deadline);
         emit Healed(msg.sender, amount, before, icr());
     }
@@ -355,16 +354,20 @@ contract SternpostGovernor {
         if (s.amount == 0) revert NotArmed();
         delete _standby;
         uint256 liquid = buffer - parked;
-        if (liquid < s.amount) _unpark(s.amount - liquid);
         buffer -= s.amount;
         frozen = true;
-        musd.approve(address(signatures), s.amount);
+        if (liquid < s.amount) _unpark(s.amount - liquid);
+        _approve(address(signatures), s.amount);
         signatures.repayMUSDWithSignature(s.amount, address(0), address(0), borrower, s.signature, s.deadline);
         uint256 after_ = icr();
         emit Defended(msg.sender, s.amount, before, after_);
     }
 
     // ---------------------------------------------------------------- internals
+    function _approve(address spender, uint256 amount) internal {
+        if (!musd.approve(spender, amount)) revert TransferFailed();
+    }
+
     function _unpark(uint256 amount) internal {
         if (amount == 0 || amount > parked) revert ZeroAmount();
         parked -= amount;
