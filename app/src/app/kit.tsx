@@ -85,3 +85,19 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTx> }) {
     </div>
   )
 }
+
+/** True when the account is a Mezo Passport smart account behind a Bitcoin wallet (OrangeKit connector). */
+export function useIsBtcAccount() {
+  return useAccount().connector?.type === 'orangekit'
+}
+
+/** Mezo verifies draw signatures with ECDSA.recover only (no EIP-1271), and OrangeKit can't sign EIP-712. */
+export function BtcSignNote({ className = '' }: { className?: string }) {
+  if (!useIsBtcAccount()) return null
+  return (
+    <p role="note" className={`text-xs border border-signal/40 bg-signal/5 text-ink rounded-lg px-3 py-2 leading-relaxed ${className}`}>
+      <b className="text-signal">Bitcoin wallet connected.</b> You can view and fund this Mezo account, but drawing MUSD needs an
+      EIP-712 signature from an EVM key: Mezo checks it with ECDSA only, and Bitcoin wallets can't produce one. Connect MetaMask, Taho or another EVM wallet to draw.
+    </p>
+  )
+}
