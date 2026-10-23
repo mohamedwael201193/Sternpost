@@ -1,0 +1,11 @@
+Compiling 1 files with Solc 0.8.24
+Solc 0.8.24 finished in 9.69s
+Compiler run successful!
+
+Ran 3 tests for test/fork/RouterFork.t.sol:RouterForkTest
+[PASS] test_fork_save_depositsIntoLiveSmusd() (gas: 1016639)
+[PASS] test_fork_save_disabledRouteRefused() (gas: 107523)
+[PASS] test_fork_save_overPerDrawRefused() (gas: 103414)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 9.71s (1.90s CPU time)
+
+Ran 1 test suite in 9.71s (9.71s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)
