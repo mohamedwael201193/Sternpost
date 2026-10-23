@@ -3,10 +3,15 @@ import { usePublicClient, useSignTypedData, useWriteContract } from 'wagmi'
 import type { Address, Hex } from 'viem'
 import { useTx } from './kit'
 import type { Trove } from './useTrove'
-import { governorFullAbi, signaturesAbi } from '../lib/abi'
+import { governorFullAbi, routerAbi, signaturesAbi } from '../lib/abi'
 import { humanRevert } from '../lib/errors'
-import { MEZO } from '../lib/chain'
-import { drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../lib/sig'
+import { MEZO, ROUTER } from '../lib/chain'
+import { addCollTypes, drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../lib/sig'
+
+/** Where the drawn MUSD goes: to you (Keep), into sMUSD savings (Save), or swapped to BTC and added back as collateral (Loop). */
+export type Route = 'keep' | 'save' | 'loop'
+/** Loop min-out below the live DEX quote. */
+export const LOOP_SLIPPAGE_BPS = 100n
 
 /** Re-sign the withdraw if fewer than this many seconds remain before we can hand it to the wallet. */
 export const MIN_LEFT_S = 45n
@@ -35,7 +40,9 @@ export function useDrawSend(t: Trove) {
     return localNow() + s
   }
 
-  async function go(wei: bigint, app: Address, payee: Address) {
+  async function go(wei: bigint, app: Address, payee: Address, route: Route = 'keep') {
+    const routed = route !== 'keep' && !!ROUTER
+    if (routed) payee = ROUTER!
     const self = app.toLowerCase() === t.address?.toLowerCase()
     setErr(''); setBundle(''); setDeadline(undefined); tx.reset()
     try {
@@ -46,6 +53,15 @@ export function useDrawSend(t: Trove) {
       setStep('Signature 1 of 2: standby repay (nonce + 1)…')
       const m0 = drawMessages({ amount: wei, borrower, governor, nonce, now: await chainNow() })
       const healSig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: m0.heal })
+      // Loop: the swapped BTC is added back with an AddColl at nonce + 1; its amount is also the swap's min-out.
+      let coll = 0n, addCollSig: Hex = '0x', addCollDeadline = 0n
+      if (route === 'loop' && ROUTER) {
+        const q = await client!.readContract({ address: ROUTER, abi: routerAbi, functionName: 'quoteSwap', args: [wei] })
+        coll = q - (q * LOOP_SLIPPAGE_BPS) / 10000n
+        addCollDeadline = (await chainNow()) + 600n
+        setStep('Extra signature: add the swapped BTC as collateral (nonce + 1)…')
+        addCollSig = await signTypedDataAsync({ domain: mezoDomain(), types: addCollTypes, primaryType: 'AddColl', message: { assetAmount: coll, borrower, nonce: nonce + 1n, deadline: addCollDeadline } }) as Hex
+      }
       // 2) Withdraw: deadline taken from chain time right before this signature. Re-sign once if it ran low.
       for (let attempt = 1; ; attempt++) {
         setStep(attempt === 1 ? 'Signature 2 of 2: withdraw (window starts now)…' : 'Withdraw window ran low, re-signing with a fresh deadline…')
@@ -57,6 +73,17 @@ export function useDrawSend(t: Trove) {
         const args = [wei, payee, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const
         if (!self) {
           setBundle(JSON.stringify({ governor, amount: String(wei), payee, withdrawDeadline: String(m.withdraw.deadline), withdrawSig, healDeadline: String(m0.heal.deadline), healSig }, null, 2))
+          break
+        }
+        if (routed) {
+          const call = route === 'save'
+            ? { address: ROUTER!, abi: routerAbi, functionName: 'drawAndSave' as const, args: [governor, wei, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const }
+            : { address: ROUTER!, abi: routerAbi, functionName: 'loop' as const, args: [governor, [{ amount: wei, withdrawDeadline: m.withdraw.deadline, withdrawSig: withdrawSig as Hex, healDeadline: m0.heal.deadline, healSig: healSig as Hex, collAmount: coll, addCollDeadline, addCollSig }]] as const }
+          setStep('Checking the route with the router (simulation)…')
+          try { await client!.simulateContract({ account: borrower, ...(call as any) }) }
+          catch (e) { if (/Signature expired/.test(humanRevert(e)) && attempt < 3) continue; throw e }
+          setStep('')
+          await tx.run(() => writeContractAsync({ ...(call as any), gas: 3_000_000n }))
           break
         }
         setStep('Checking the draw with the Governor (simulation)…')
