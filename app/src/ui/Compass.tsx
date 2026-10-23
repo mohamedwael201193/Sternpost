@@ -1,8 +1,8 @@
 /** Glowing magenta Bitcoin compass rose that sits on the stern. Rose turns slowly; static under reduced motion. */
-export function Compass({ size = 150 }: { size?: number }) {
+export function Compass() {
   const pts = Array.from({ length: 16 }, (_, i) => i * 22.5)
   return (
-    <svg viewBox="0 0 200 200" width={size} height={size} className="compass-glow overflow-visible" aria-hidden>
+    <svg viewBox="0 0 200 200" className="compass-glow overflow-visible w-full h-auto" aria-hidden>
       <defs>
         <radialGradient id="cg" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#FF4D86" stopOpacity=".35" /><stop offset="1" stopColor="#FF004D" stopOpacity="0" /></radialGradient>
       </defs>
