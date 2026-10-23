@@ -18,7 +18,6 @@ export function Hero() {
 
   return (
     <section className="relative overflow-hidden min-h-[calc(100svh-64px)] flex items-center">
-      <div className="contours absolute inset-0 opacity-90" aria-hidden />
       <div className="hairgrid absolute inset-0 [mask-image:linear-gradient(to_bottom,#000_70%,transparent)]" aria-hidden />
       <div className="relative mx-auto grid max-w-[1280px] items-center gap-6 px-6 pb-16 pt-14 lg:grid-cols-[1fr_1.15fr] lg:px-10 lg:pb-24 lg:pt-20">
         <div className="relative z-10">

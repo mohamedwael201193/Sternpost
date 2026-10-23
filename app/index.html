@@ -10,6 +10,9 @@
     <title>Sternpost — credit that steers itself</title>
   </head>
   <body class="bg-paper text-ink">
+    <!-- Hero contour field painted before JS so the first frame is not blank; removed on dashboard routes. -->
+    <div id="hero-bg" class="contours" aria-hidden="true" style="position:absolute;top:64px;left:0;right:0;height:calc(100svh - 64px);opacity:.9;z-index:-1;pointer-events:none"></div>
+    <script>if (location.pathname.startsWith('/app')) document.getElementById('hero-bg').remove()</script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
