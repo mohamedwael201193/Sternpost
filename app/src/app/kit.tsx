@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useAccount, useConnect, useSwitchChain, usePublicClient } from 'wagmi'
 import type { Hash } from 'viem'
+import { humanRevert } from '../lib/errors'
 import { mezoTestnet } from '../lib/chain'
 import { txUrl } from '../lib/proofs'
 
@@ -68,10 +69,19 @@ export function useTx() {
       const hash = await fn()
       set({ phase: 'pending', hash })
       const r = await client!.waitForTransactionReceipt({ hash })
-      set({ phase: r.status === 'success' ? 'success' : 'reverted', hash })
-      return r.status === 'success'
+      if (r.status === 'success') { set({ phase: 'success', hash }); return true }
+      // A mined revert carries no reason in its receipt. Replay the same call with eth_call at that block
+      // to recover it, and say that is what we did.
+      let msg = 'Reason unavailable.'
+      try {
+        const t = await client!.getTransaction({ hash })
+        await client!.call({ account: t.from, to: t.to!, data: t.input, value: t.value, blockNumber: r.blockNumber })
+        msg = 'Replay at that block did not revert (state changed); reason unknown.'
+      } catch (e) { msg = `${humanRevert(e)} (reason recovered by replaying the call at block ${r.blockNumber}, not read from the receipt)` }
+      set({ phase: 'reverted', hash, msg })
+      return false
     } catch (e: any) {
-      set({ phase: 'error', msg: (e?.shortMessage || e?.message || String(e)).split('\n')[0] })
+      set({ phase: 'error', msg: humanRevert(e) })
       return false
     }
   }
@@ -80,7 +90,7 @@ export function useTx() {
 
 export function TxStatus({ tx }: { tx: ReturnType<typeof useTx> }) {
   if (tx.phase === 'idle') return null
-  const label = { signing: 'Waiting for your signature…', pending: 'Submitted. Waiting for a block…', success: 'Confirmed on Mezo testnet.', reverted: 'Reverted on-chain.', error: tx.msg, idle: '' }[tx.phase]
+  const label = { signing: 'Waiting for your signature…', pending: 'Submitted. Waiting for a block…', success: 'Confirmed on Mezo testnet.', reverted: `Reverted on-chain. ${tx.msg ?? ''}`, error: tx.msg, idle: '' }[tx.phase]
   const tone = tx.phase === 'success' ? 'border-safe text-safe' : tx.phase === 'reverted' || tx.phase === 'error' ? 'border-signal text-signal' : 'border-ink/30'
   return (
     <div role="status" className={`mt-4 border-l-2 pl-3 text-sm ${tone}`}>
