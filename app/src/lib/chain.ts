@@ -17,6 +17,9 @@ export const MEZO = {
   troveManager: '0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0',
   musd: '0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503',
   smusd: '0x6f461c68B2c5492C0F5CCEc5a264d692aA7A8e16',
+  // MEZO token. Sources: mezo.org/docs/users/resources/contracts-reference (MEZO token and bridge),
+  // explorer.test.mezo.org/token/0x7B7c…0001; verified on rpc.test.mezo.org: symbol MEZO, 18 decimals.
+  mezo: '0x7B7c000000000000000000000000000000000001',
 } as const satisfies Record<string, Address>
 
 type Deployments = { factory?: Address; governor?: Address; spendWallet?: Address }
