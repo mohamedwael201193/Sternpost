@@ -98,9 +98,9 @@ contract RouterTest is RouterBase {
         assertEq(borrower.balance - b0, q - ls[0].collAmount);
     }
     function test_loop_threeLegs() public {
-        uint256 c0 = tm.coll(borrower); SternpostRouter.Leg[] memory ls = _legs(3, 100e18);
-        vm.prank(borrower); uint256 added = rt.loop(address(g), ls);
-        assertEq(tm.coll(borrower) - c0, added); assertEq(_n(), 6);
+        // Capped at 2: a third leg fails inside Mezo's price precompile on testnet.
+        SternpostRouter.Leg[] memory ls = _legs(3, 100e18);
+        vm.prank(borrower); vm.expectRevert(abi.encodeWithSelector(SternpostRouter.BadLegs.selector, 3)); rt.loop(address(g), ls);
     }
     function test_loop_maxLegs() public {
         SternpostRouter.Leg[] memory ls = _legs(4, 10e18);
@@ -119,10 +119,10 @@ contract RouterTest is RouterBase {
         assertEq(_n(), n, "atomic"); assertEq(tm.coll(borrower), c0); assertEq(tm.debt(borrower), d0);
     }
     function test_loop_routerFloorCheck_independentOfGovernor() public {
-        // Defense in depth: if collateral price feed moves between the governor's check and the router's
-        // (simulated by pricing the trove lower mid-loop), the router re-checks the floor itself.
+        // Defense in depth: if the trove changes between the governor's check and the router's
+        // (simulated by bumping its debt mid-swap), the router re-checks the floor itself.
         SternpostRouter.Leg[] memory ls = _legs(1, 100e18);
-        dex.setReenter(address(pf), abi.encodeCall(MockPriceFeed.set, (50_000e18)));
+        dex.setReenter(address(tm), abi.encodeCall(MockTroveManager.setTrove, (borrower, tm.coll(borrower), tm.debt(borrower) * 10)));
         vm.prank(borrower); vm.expectPartialRevert(SternpostRouter.Unsafe.selector); rt.loop(address(g), ls);
     }
     function test_loop_slippageUsesSignedCollAmount() public {
