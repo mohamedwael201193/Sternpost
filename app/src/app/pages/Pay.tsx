@@ -1,4 +1,5 @@
-import { useReadContract, useReadContracts } from 'wagmi'
+import { useState } from 'react'
+import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from 'wagmi'
 import { zeroAddress, type Address } from 'viem'
 import { Card, Empty, NeedsWallet } from '../kit'
 import { useTrove } from '../useTrove'
@@ -7,6 +8,7 @@ import { MEZO, STERNPOST } from '../../lib/chain'
 import { fmt } from '../../lib/icr'
 import { PROOFS, addrUrl, txUrl } from '../../lib/proofs'
 import { useApiList } from '../api'
+import { payFromSpendWallet } from '../x402'
 
 const spendAbi = [
   { type: 'function', name: 'agent', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
@@ -57,10 +59,11 @@ function Wallets({ owner }: { owner: Address }) {
         const [bal, agent, exp] = (reads.data ?? []).slice(i * 3, i * 3 + 3)
         const a = agent?.result as Address | undefined
         return (
-          <div key={w} className="py-3 border-t border-ink/15 grid sm:grid-cols-3 gap-2 text-sm">
+          <div key={w} className="py-3 border-t border-ink/15 grid sm:grid-cols-3 gap-2 text-sm items-center">
             <a className="ink-link mono text-xs" href={addrUrl(w)} target="_blank" rel="noreferrer">{w.slice(0, 10)}…{w.slice(-4)}</a>
             <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : '—'}</b> MUSD</span>
             <span className="text-xs">{!a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
+            <PayRow wallet={w} agent={a} />
           </div>
         )
       })}
@@ -82,5 +85,32 @@ function Receipts({ payer }: { payer?: string }) {
         </div>
       ))}
     </Card>
+  )
+}
+
+function PayRow({ wallet, agent }: { wallet: Address; agent?: Address }) {
+  const { address } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
+  const [s, set] = useState<{ phase: 'idle' | 'busy' | 'done' | 'error'; msg?: string; tx?: string; ok?: boolean }>({ phase: 'idle' })
+  const isAgent = !!agent && !!address && agent.toLowerCase() === address.toLowerCase()
+  if (!isAgent) return <p className="sm:col-span-3 text-xs text-muted">Only this wallet's agent can sign its x402 payments. Connect as {agent && agent !== zeroAddress ? `${agent.slice(0, 8)}…` : 'the agent'} to pay from it; you, the owner, can sweep or revoke it from the SDK.</p>
+  async function go() {
+    set({ phase: 'busy' })
+    try {
+      const r = await payFromSpendWallet({ wallet, agent: address!, walletClient: walletClient!, publicClient: publicClient! })
+      const tx = r.settlement?.transaction as string | undefined
+      let ok: boolean | undefined
+      if (tx) ok = (await publicClient!.waitForTransactionReceipt({ hash: tx as `0x${string}` })).status === 'success'
+      if (r.status !== 200) set({ phase: 'error', msg: `API answered ${r.status}${r.body?.error ? `: ${r.body.error}` : ''}`, tx })
+      else set({ phase: 'done', tx, ok })
+    } catch (e: any) { set({ phase: 'error', msg: (e?.shortMessage || e?.message || String(e)).split('\n')[0] }) }
+  }
+  return (
+    <div className="sm:col-span-3">
+      <button className="pill" disabled={s.phase === 'busy' || !walletClient} onClick={go}>{s.phase === 'busy' ? 'Signing and settling…' : 'Pay for the desk brief (x402)'}</button>
+      {s.phase === 'error' && <p className="text-xs text-signal mt-2">{s.msg}</p>}
+      {s.tx && <p className="text-xs mt-2">Settlement tx <a className="ink-link mono" href={txUrl(s.tx)} target="_blank" rel="noreferrer">{s.tx.slice(0, 10)}…</a>{s.ok === undefined ? '' : s.ok ? ' (receipt: success)' : ' (receipt: reverted)'}</p>}
+    </div>
   )
 }
