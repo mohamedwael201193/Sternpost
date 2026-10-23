@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Db } from "../db/pool.js";
+import { verifyMessage } from "viem";
 import { address, parseBody, uintString } from "../lib/validate.js";
+
+/** Exact text the borrower signs (EIP-191) to change a request. Bound to id, status, borrower and a short expiry. */
+export const requestStatusMessage = (id: number, status: string, borrower: string, expiry: number) =>
+  `Sternpost: mark draw request #${id} ${status}\nBorrower: ${borrower.toLowerCase()}\nExpires: ${expiry}`;
+const MAX_SIG_TTL = 600;
 
 const appSchema = z.object({
   name: z.string().trim().min(2).max(64),
@@ -15,7 +21,11 @@ const requestSchema = z.object({
   amount: uintString,
   reason: z.string().max(280).optional(),
 });
-const statusSchema = z.object({ status: z.enum(["approved", "rejected", "drawn"]) });
+const statusSchema = z.object({
+  status: z.enum(["approved", "rejected", "drawn"]),
+  expiry: z.number().int().positive(),
+  signature: z.string().regex(/^0x[0-9a-fA-F]{130,}$/),
+});
 
 export type RequestHook = (r: { id: number; borrower: string; app_address: string; amount: string; reason?: string | null }) => Promise<void>;
 
@@ -67,6 +77,17 @@ export function appsRoutes(db: Db, onRequest?: RequestHook) {
     if (!Number.isInteger(id) || id <= 0) return c.json({ error: "validation_error" }, 400);
     const body = await parseBody(c, statusSchema);
     if (body instanceof Response) return body;
+    const now = Math.floor(Date.now() / 1000);
+    if (body.expiry <= now || body.expiry > now + MAX_SIG_TTL) return c.json({ error: "signature_expired" }, 401);
+    const cur = (await db.query("SELECT borrower, status FROM draw_requests WHERE id = $1", [id])).rows[0];
+    if (!cur || cur.status !== "pending") return c.json({ error: "not_found_or_final" }, 404);
+    const ok = await verifyMessage({
+      address: cur.borrower,
+      message: requestStatusMessage(id, body.status, cur.borrower, body.expiry),
+      signature: body.signature as `0x${string}`,
+    }).catch(() => false);
+    if (!ok) return c.json({ error: "bad_signature" }, 401);
+    // Replay-safe: the signature names one request and one status, and a request leaves 'pending' exactly once.
     const { rows } = await db.query(
       "UPDATE draw_requests SET status = $1, updated_at = now() WHERE id = $2 AND status = 'pending' RETURNING *",
       [body.status, id],
