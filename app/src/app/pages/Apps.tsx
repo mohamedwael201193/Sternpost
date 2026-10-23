@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useReadContract, useWriteContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove } from '../useTrove'
 import { governorAbi } from '../../lib/abi'
 import { fmt } from '../../lib/icr'
-import { useApiList } from '../api'
+import { setRequestStatus, useApiList } from '../api'
 
 export default function Apps() {
   const t = useTrove()
@@ -18,7 +18,7 @@ export default function Apps() {
       <NeedsWallet what="manage app budgets">
         {!t.governor ? <Empty title="No Governor yet">Create your Governor on Home first. Budgets live on it.</Empty> : (
           <div className="grid lg:grid-cols-2 gap-8">
-            <Authorize governor={t.governor} preset={params.get('app') ?? ''} presetAmount={params.get('amount')} />
+            <Authorize governor={t.governor} preset={params.get('app') ?? ''} presetAmount={params.get('amount')} requestId={params.get('request')} />
             <div className="space-y-6">
               <Card title="Check an app">
                 <input aria-label="App address" placeholder="0x… app address" value={lookup} onChange={(e) => setLookup(e.target.value.trim())} className="mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full" />
@@ -52,7 +52,8 @@ function Policy({ governor, app }: { governor: Address; app: Address }) {
   )
 }
 
-function Authorize({ governor, preset, presetAmount }: { governor: Address; preset: string; presetAmount: string | null }) {
+function Authorize({ governor, preset, presetAmount, requestId }: { governor: Address; preset: string; presetAmount: string | null; requestId: string | null }) {
+  const [marked, setMarked] = useState<'' | 'ok' | 'fail'>('')
   const [app, setApp] = useState(preset)
   const [budget, setBudget] = useState(presetAmount ? fmt(BigInt(presetAmount)).replace(/,/g, '') : '100')
   const [cap, setCap] = useState('50')
@@ -60,6 +61,9 @@ function Authorize({ governor, preset, presetAmount }: { governor: Address; pres
   const [payee, setPayee] = useState('')
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
+  useEffect(() => {
+    if (tx.phase === 'success' && requestId && !marked) setRequestStatus(requestId, 'approved').then((ok) => setMarked(ok ? 'ok' : 'fail'))
+  }, [tx.phase, requestId, marked])
   let err = ''
   try {
     if (!isAddress(app)) err = 'Enter the app address.'
@@ -85,12 +89,14 @@ function Authorize({ governor, preset, presetAmount }: { governor: Address; pres
         }))}>Approve</button>
       </div>
       <TxStatus tx={tx} />
+      {requestId && <p className="text-xs text-muted mt-2">{marked === 'ok' ? `Request #${requestId} marked approved.` : marked === 'fail' ? `Request #${requestId} was not pending; its status is unchanged.` : `Approving this budget also marks request #${requestId} approved.`}</p>}
     </Card>
   )
 }
 
 function RequestList({ borrower }: { borrower?: string }) {
-  const q = useApiList<{ id: number; app_address: string; amount: string; status: string; reason?: string }>('requests', borrower ? `/v1/requests?borrower=${borrower}` : null)
+  const [tick, setTick] = useState(0)
+  const q = useApiList<{ id: number; app_address: string; amount: string; status: string; reason?: string }>('requests', borrower ? `/v1/requests?borrower=${borrower}&_=${tick}` : null)
   return (
     <Card title="Requests">
       {q.state === 'off' && <p className="text-sm text-muted">Apps can post draw requests through the Sternpost API. It is not configured on this deployment.</p>}
@@ -99,7 +105,12 @@ function RequestList({ borrower }: { borrower?: string }) {
       {q.items.map((r) => (
         <div key={r.id} className="py-3 border-t border-ink/15 text-sm flex justify-between gap-3">
           <span><span className="mono text-xs">{r.app_address.slice(0, 10)}…</span> asks <b>{fmt(BigInt(r.amount))} MUSD</b>{r.reason && <span className="text-muted"> · {r.reason}</span>}</span>
-          <span className="caps text-[11px]">{r.status}</span>
+          {r.status === 'pending' ? (
+            <span className="flex gap-2 shrink-0">
+              <Link className="pill" to={`/app/apps?app=${r.app_address}&amount=${r.amount}&request=${r.id}`}>Review</Link>
+              <button className="pill-ghost" onClick={async () => { await setRequestStatus(r.id, 'rejected'); setTick((n) => n + 1) }}>Reject</button>
+            </span>
+          ) : <span className="caps text-[11px]">{r.status}</span>}
         </div>
       ))}
     </Card>
