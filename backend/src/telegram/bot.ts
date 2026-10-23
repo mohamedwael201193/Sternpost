@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { formatUnits, verifyMessage } from "viem";
 import type { Db } from "../db/pool.js";
-import type { Keyboard, TelegramApi } from "./api.js";
+import { notModified, type Keyboard, type TelegramApi } from "./api.js";
+import { HELP, WELCOME, addr, backRow, balancesText, linkPrompt, linked, mainMenu, navRow, notLinked, parseCallback, requestKeyboard, requestText, stamp, statusText } from "./ui.js";
 import type { ChainReader, Hex } from "./chain.js";
 
 export interface BotDeps {
@@ -16,30 +17,29 @@ export interface BotDeps {
 
 export interface Update {
   message?: { chat: { id: number }; text?: string };
-  callback_query?: { id: string; data?: string; message?: { chat: { id: number } } };
+  callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id?: number } };
 }
 
 export const linkMessage = (code: string) => `Link Telegram to Sternpost\nCode: ${code}`;
 const addrRe = /^0x[0-9a-fA-F]{40}$/;
 const sigRe = /^0x[0-9a-fA-F]{130,}$/;
-const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 export const ratio = (x: bigint) => (Number(x / 10n ** 14n) / 10_000).toFixed(2);
 export const amt = (x: bigint) => Number(formatUnits(x, 18)).toLocaleString("en-US", { maximumFractionDigits: 4 });
 
-const HELP = [
-  "<b>Sternpost</b> watches your Mezo trove and your agent's MUSD draws.",
-  "/link connect your wallet (you sign one message, no transaction)",
-  "/status ICR, floor, defend line and buffer",
-  "/balances MUSD and MEZO in your wallet",
-  "/requests pending agent draw requests",
-  "/revoke open the app to freeze all draws",
-  "/unlink disconnect this chat",
-  "The bot never holds keys. Every approval and revoke is signed by you in your wallet and enforced on chain.",
-].join("\n");
+/** Where a reply goes: a fresh message, or (from a button) an edit of the message that holds the button. */
+type Ctx = { chatId: number; messageId?: number };
 
 export function createBot(d: BotDeps) {
   const margin = BigInt(d.alertMarginBps ?? 1000);
   const ttl = d.linkTtlSec ?? 600;
+
+  /** Edit in place when we can; fall back to a new message. A no-op edit (Refresh with no change) is fine. */
+  const reply = async (c: Ctx, text: string, kb?: Keyboard) => {
+    if (c.messageId !== undefined && d.tg.edit) {
+      try { return await d.tg.edit(c.chatId, c.messageId, text, kb); } catch (e) { if (notModified(e)) return; }
+    }
+    return d.tg.send(c.chatId, text, kb);
+  };
 
   const user = async (chatId: number) =>
     (await d.db.query<{ address: Hex; governor: Hex | null }>("SELECT address, governor FROM tg_users WHERE chat_id = $1", [chatId])).rows[0];
@@ -52,22 +52,15 @@ export function createBot(d: BotDeps) {
   };
 
   const requestCard = (r: { id: number; app_address: string; amount: string; reason?: string | null }): [string, Keyboard] => [
-    `<b>Draw request #${r.id}</b>\nApp ${short(r.app_address)} asks <b>${amt(BigInt(r.amount))} MUSD</b>${r.reason ? `\nReason: ${escape(r.reason)}` : ""}\n\nApprove signs an on-chain budget for this app in your wallet. Nothing moves until that transaction lands.`,
-    [
-      [{ text: "Approve in wallet", url: `${d.appUrl}/app/apps?app=${r.app_address}&amount=${r.amount}&request=${r.id}` }],
-      [{ text: "I signed, verify", callback_data: `verify:${r.id}` }, { text: "Deny", callback_data: `deny:${r.id}` }],
-    ],
+    requestText({ id: r.id, app_address: r.app_address, amountFmt: amt(BigInt(r.amount)), reason: r.reason }),
+    requestKeyboard(d.appUrl, r),
   ];
 
-  async function startLink(chatId: number) {
+  async function startLink(chatId: number, c: Ctx = { chatId }) {
     const code = randomBytes(8).toString("hex");
     await d.db.query("DELETE FROM tg_link_codes WHERE chat_id = $1 OR expires_at < now()", [chatId]);
     await d.db.query(`INSERT INTO tg_link_codes (code, chat_id, expires_at) VALUES ($1, $2, now() + ($3 || ' seconds')::interval)`, [code, chatId, String(ttl)]);
-    await d.tg.send(
-      chatId,
-      `Sign this message with your borrower wallet to link it (valid ${Math.round(ttl / 60)} min):\n<code>${linkMessage(code)}</code>\n\nOpen the signing page, or sign it anywhere and send:\n<code>/verify 0xYourAddress 0xSignature</code>`,
-      [[{ text: "Sign in wallet", url: `${d.apiUrl}/tg/link?code=${code}` }]],
-    );
+    await reply(c, ...linkPrompt(linkMessage(code), Math.round(ttl / 60), `${d.apiUrl}/tg/link?code=${code}`));
     return code;
   }
 
@@ -89,74 +82,96 @@ export function createBot(d: BotDeps) {
        ON CONFLICT (chat_id) DO UPDATE SET address = EXCLUDED.address, governor = EXCLUDED.governor, alerted_at = NULL, last_request_id = EXCLUDED.last_request_id`,
       [owner, a, g, Number(max)],
     );
-    await d.tg.send(owner, `Linked ${short(a)}${g ? `. Governor ${short(g)}.` : ". No governor yet: create one in the app."}\nTry /status.`);
+    await d.tg.send(owner, linked(a, g), mainMenu(d.appUrl));
     return { ok: true as const, address: a, chatId: owner };
   }
 
-  async function status(chatId: number) {
-    const u = await user(chatId);
-    if (!u) return d.tg.send(chatId, "No wallet linked. Send /link first.");
-    const g = await governorFor(chatId, u.address, u.governor);
-    if (!g) return d.tg.send(chatId, `Wallet ${short(u.address)} has no Sternpost governor yet.`, [[{ text: "Open app", url: `${d.appUrl}/app` }]]);
+  async function status(c: Ctx) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
+    const g = await governorFor(c.chatId, u.address, u.governor);
+    if (!g) return reply(c, `🧭 <b>Trove status</b>\n\nWallet ${addr(u.address)} has no Sternpost governor yet. Create one in the app.`, [[{ text: "🗺 Open app", url: `${d.appUrl}/app` }], navRow("status")]);
     const s = await d.chain.status(g);
     const near = s.icr < (s.floor * (10_000n + margin)) / 10_000n;
-    return d.tg.send(
-      chatId,
-      [
-        `<b>${s.frozen ? "FROZEN" : near ? "Near floor" : "Healthy"}</b>  ·  governor ${short(g)}`,
-        `ICR ${ratio(s.icr)}  ·  floor ${ratio(s.floor)}  ·  defend ${ratio(s.defend)}`,
-        `Buffer ${amt(s.buffer)} MUSD`,
-      ].join("\n"),
-      [[{ text: "Dashboard", url: `${d.appUrl}/app` }]],
+    return reply(
+      c,
+      statusText(s.frozen ? "frozen" : near ? "near" : "healthy", g, { icr: ratio(s.icr), floor: ratio(s.floor), defend: ratio(s.defend), buffer: amt(s.buffer) }),
+      [[{ text: "🗺 Dashboard", url: `${d.appUrl}/app` }], navRow("status")],
     );
   }
 
-  async function balances(chatId: number) {
-    const u = await user(chatId);
-    if (!u) return d.tg.send(chatId, "No wallet linked. Send /link first.");
+  async function balances(c: Ctx) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
     const b = await d.chain.balances(u.address);
-    return d.tg.send(chatId, `Wallet ${short(u.address)}\nMUSD ${amt(b.musd)}\nMEZO ${amt(b.mezo)}`);
+    return reply(c, balancesText(u.address, amt(b.musd), amt(b.mezo)), [navRow("balances")]);
   }
 
-  async function requests(chatId: number) {
-    const u = await user(chatId);
-    if (!u) return d.tg.send(chatId, "No wallet linked. Send /link first.");
+  async function requests(c: Ctx) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
     const { rows } = await d.db.query("SELECT * FROM draw_requests WHERE borrower = $1 AND status = 'pending' ORDER BY id DESC LIMIT 5", [u.address]);
-    if (!rows.length) return d.tg.send(chatId, "No pending requests.");
-    for (const r of rows) await d.tg.send(chatId, ...requestCard(r));
+    if (!rows.length) return reply(c, `📜 <b>Requests</b>\n\nNo pending requests. Your agents have not asked for MUSD.\n\n${stamp()}`, [navRow("requests")]);
+    // One card per request so each keeps its own approve / verify / deny buttons; nav goes on the last card.
+    for (const [i, r] of rows.entries()) {
+      const [text, kb] = requestCard(r);
+      const lastCard = i === rows.length - 1;
+      await (i === 0 ? reply(c, text, lastCard ? [...kb, navRow("requests")] : kb) : d.tg.send(c.chatId, text, lastCard ? [...kb, navRow("requests")] : kb));
+    }
   }
 
-  async function revoke(chatId: number) {
-    const u = await user(chatId);
-    if (!u) return d.tg.send(chatId, "No wallet linked. Send /link first.");
-    return d.tg.send(chatId, "Revoke freezes every draw and burns your outstanding Mezo signature nonce. You sign it in your wallet; the bot cannot do it for you.", [
+  async function revoke(c: Ctx) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
+    return reply(c, "🛑 <b>Revoke</b>\n\nRevoke freezes every draw and burns your outstanding Mezo signature nonce. You sign it in your wallet; the bot cannot do it for you.", [
       [{ text: "Revoke in wallet", url: `${d.appUrl}/app/revoke` }],
+      backRow(),
     ]);
   }
 
-  /** Deny is a plain refusal; verify reads the on-chain allowance and only then marks the request approved. */
-  async function callback(cb: NonNullable<Update["callback_query"]>) {
-    const chatId = cb.message?.chat.id;
-    const m = /^(deny|verify):(\d+)$/.exec(cb.data ?? "");
-    if (!chatId || !m) return d.tg.answer(cb.id, "Unknown action");
+  const menu = (c: Ctx) => reply(c, WELCOME, mainMenu(d.appUrl));
+
+  async function cancelLink(c: Ctx) {
+    await d.db.query("DELETE FROM tg_link_codes WHERE chat_id = $1", [c.chatId]);
+    return reply(c, "✖️ <b>Link cancelled</b>\n\nThe code is void. Tap Link wallet whenever you are ready.", mainMenu(d.appUrl));
+  }
+
+  /** Menu buttons navigate in place; deny/verify read the DB and chain before changing anything. */
+  async function callback(q: NonNullable<Update["callback_query"]>) {
+    const chatId = q.message?.chat.id;
+    const p = parseCallback(q.data);
+    if (!chatId || !p) return d.tg.answer(q.id, "Unknown action");
+    const c: Ctx = { chatId, messageId: q.message?.message_id };
+    if (p.kind === "menu") {
+      await d.tg.answer(q.id);
+      switch (p.action) {
+        case "menu": return menu(c);
+        case "help": return reply(c, HELP, [backRow()]);
+        case "link": return void (await startLink(chatId, c));
+        case "cancel": return cancelLink(c);
+        case "status": return status(c);
+        case "balances": return balances(c);
+        case "requests": return requests(c);
+      }
+    }
     const u = await user(chatId);
-    const req = (await d.db.query("SELECT * FROM draw_requests WHERE id = $1", [Number(m[2])])).rows[0];
-    if (!u || !req || req.borrower !== u.address) return d.tg.answer(cb.id, "Not your request");
-    if (req.status !== "pending") return d.tg.answer(cb.id, `Already ${req.status}`);
-    if (m[1] === "deny") {
+    const req = (await d.db.query("SELECT * FROM draw_requests WHERE id = $1", [p.id])).rows[0];
+    if (!u || !req || req.borrower !== u.address) return d.tg.answer(q.id, "Not your request");
+    if (req.status !== "pending") return d.tg.answer(q.id, `Already ${req.status}`);
+    if (p.op === "deny") {
       await d.db.query("UPDATE draw_requests SET status = 'rejected', updated_at = now() WHERE id = $1 AND status = 'pending'", [req.id]);
-      await d.tg.answer(cb.id, "Denied");
-      return d.tg.send(chatId, `Request #${req.id} denied. The app has no new budget.`);
+      await d.tg.answer(q.id, "Denied");
+      return reply(c, `✖️ <b>Request #${req.id} denied</b>\n\nThe app has no new budget.`, [navRow("requests")]);
     }
     const g = await governorFor(chatId, u.address, u.governor);
-    if (!g) return d.tg.answer(cb.id, "No governor on chain");
+    if (!g) return d.tg.answer(q.id, "No governor on chain");
     const [a, now] = await Promise.all([d.chain.allowance(g, req.app_address as Hex), d.chain.now()]);
     if (a.expiry <= now || a.remaining < BigInt(req.amount)) {
-      return d.tg.answer(cb.id, "Not on chain yet. Sign the budget in your wallet first.");
+      return d.tg.answer(q.id, "Not on chain yet. Sign the budget in your wallet first.");
     }
     await d.db.query("UPDATE draw_requests SET status = 'approved', updated_at = now() WHERE id = $1 AND status = 'pending'", [req.id]);
-    await d.tg.answer(cb.id, "Verified on chain");
-    return d.tg.send(chatId, `Request #${req.id} approved. On-chain budget left for this app: ${amt(a.remaining)} MUSD.`);
+    await d.tg.answer(q.id, "Verified on chain");
+    return reply(c, `✅ <b>Request #${req.id} approved</b>\n\nOn-chain budget left for this app: <b>${amt(a.remaining)} MUSD</b>.`, [navRow("requests")]);
   }
 
   async function handle(up: Update) {
@@ -164,33 +179,36 @@ export function createBot(d: BotDeps) {
     const msg = up.message;
     if (!msg?.text) return;
     const chatId = msg.chat.id;
+    const c: Ctx = { chatId };
     const [cmd, ...args] = msg.text.trim().split(/\s+/);
     switch (cmd.split("@")[0].toLowerCase()) {
       case "/start":
+      case "/menu":
+        return menu(c);
       case "/help":
-        return d.tg.send(chatId, HELP);
+        return d.tg.send(chatId, HELP, [backRow()]);
       case "/link":
         return void (await startLink(chatId));
       case "/verify": {
         const code = (await d.db.query<{ code: string }>("SELECT code FROM tg_link_codes WHERE chat_id = $1 AND expires_at > now()", [chatId])).rows[0]?.code;
-        if (!code) return d.tg.send(chatId, "No active link code. Send /link first.");
+        if (!code) return d.tg.send(chatId, ...notLinkedCode());
         const r = await completeLink(code, args[0] ?? "", args[1] ?? "", chatId);
-        if (!r.ok) return d.tg.send(chatId, r.error === "bad_signature" ? "Signature does not match that address." : "Usage: /verify 0xAddress 0xSignature");
+        if (!r.ok) return d.tg.send(chatId, r.error === "bad_signature" ? "⚠️ Signature does not match that address." : "⚠️ Usage: <code>/verify 0xAddress 0xSignature</code>", [backRow()]);
         return;
       }
       case "/status":
-        return status(chatId);
+        return status(c);
       case "/balances":
-        return balances(chatId);
+        return balances(c);
       case "/requests":
-        return requests(chatId);
+        return requests(c);
       case "/revoke":
-        return revoke(chatId);
+        return revoke(c);
       case "/unlink":
         await d.db.query("DELETE FROM tg_users WHERE chat_id = $1", [chatId]);
-        return d.tg.send(chatId, "Unlinked. No data about this chat is kept.");
+        return d.tg.send(chatId, "✂️ <b>Unlinked</b>\n\nNo data about this chat is kept.", mainMenu(d.appUrl));
       default:
-        return d.tg.send(chatId, HELP);
+        return d.tg.send(chatId, HELP, mainMenu(d.appUrl));
     }
   }
 
@@ -216,7 +234,7 @@ export function createBot(d: BotDeps) {
           const near = s.icr < (s.floor * (10_000n + margin)) / 10_000n;
           const recent = u.alerted_at && Date.now() - new Date(u.alerted_at).getTime() < 3_600_000;
           if (near && !recent) {
-            await d.tg.send(chatId, `<b>ICR alert</b>: ${ratio(s.icr)} is close to your floor ${ratio(s.floor)} (defend ${ratio(s.defend)}). New draws that cross the floor revert on chain. Add collateral or repay to widen the gap.`, [[{ text: "Open dashboard", url: `${d.appUrl}/app` }], [{ text: "Revoke in wallet", url: `${d.appUrl}/app/revoke` }]]);
+            await d.tg.send(chatId, `🚨 <b>ICR alert</b>\n\nICR ${ratio(s.icr)} is close to your floor ${ratio(s.floor)} (defend ${ratio(s.defend)}). New draws that cross the floor revert on chain. Add collateral or repay to widen the gap.`, [[{ text: "🗺 Open dashboard", url: `${d.appUrl}/app` }, { text: "🛑 Revoke in wallet", url: `${d.appUrl}/app/revoke` }], navRow("status")]);
             await d.db.query("UPDATE tg_users SET alerted_at = now() WHERE chat_id = $1", [chatId]);
             alerts++;
           } else if (!near && u.alerted_at) {
@@ -240,4 +258,4 @@ export function createBot(d: BotDeps) {
 }
 export type Bot = ReturnType<typeof createBot>;
 
-const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const notLinkedCode = (): [string, Keyboard] => ["⚠️ No active link code. Send /link first.", [backRow()]];

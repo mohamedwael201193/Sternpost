@@ -168,7 +168,7 @@ describe("draw request approvals", () => {
   beforeEach(async () => { await link(); });
   it("/requests lists pending requests with approve/verify/deny buttons", async () => {
     await msg("/requests");
-    expect(last().text).toBe("No pending requests.");
+    expect(last().text).toContain("No pending requests.");
     const r = await addRequest(5n * E18, "<b>x</b>");
     await msg("/requests");
     expect(last().text).toContain("5 MUSD");
