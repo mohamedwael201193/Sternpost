@@ -10,7 +10,7 @@ Live: **https://sternpost-api.vercel.app** · DB: Render Postgres 16 (`sternpost
 |---|---|---|
 | GET | `/health` | DB + chain head check |
 | GET/POST | `/v1/apps` | App registry |
-| GET/POST | `/v1/requests` · PATCH `/v1/requests/:id` | Draw requests (pending → approved/rejected/drawn, once) |
+| GET/POST | `/v1/requests` · PATCH `/v1/requests/:id` | Draw requests. PATCH needs the borrower's EIP-191 signature over `requestStatusMessage(id, status, borrower, expiry)` (expiry ≤ 10 min); pending → final once |
 | GET `/v1/policies/:governor` · PUT `/v1/policies` | Policy mirror (floor ≥ 110% MCR, defend ≥ floor) |
 | GET | `/v1/activity?contract=&event=&limit=` | Indexed Factory / Governor / SpendWallet events |
 | POST | `/v1/indexer/sync` | Catch-up sync (throttled, for serverless) |
