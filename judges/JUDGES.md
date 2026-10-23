@@ -11,9 +11,10 @@ git clone https://github.com/mohamedwael201193/Sternpost && cd Sternpost/contrac
 
 | What | Command | Result |
 |------|---------|--------|
-| Unit, fuzz, invariant tests (mocks) | `cd contracts && forge test` | 33 pass |
+| Unit, fuzz, invariant tests (mocks) | `cd contracts && forge test --no-match-path 'test/fork/*'` | 56 pass |
 | Fork tests against the real Mezo testnet | `cd contracts && ./script/fork.sh testnet` | 7/7 pass ([log](logs/fork_testnet.txt)) |
 | Fork tests against the real Mezo mainnet | `cd contracts && ./script/fork.sh mainnet` | 7/7 pass ([log](logs/fork_mainnet.txt)) |
+| Live bytecode equals this repo's build | `cd contracts && forge build && python3 script/bytecode-match.py` | 3/3 MATCH ([why not explorer-verified](VERIFY.md)) |
 | SDK tests (EIP-712 parity with Solidity, nonce coordination) | `cd sdk && npm ci && npm test` | 9 pass |
 | Live testnet flow | `cd sdk && MEZO_TESTNET_PK=0x… npm run e2e` | 16 txs, [table](TESTNET_TXS.md) |
 | Paid API over x402, paid from the SpendWallet | `cd backend && AGENT_PK=0x… SPEND_WALLET=0x… node scripts/pay-brief.mjs` | HTTP 200 + settlement tx |
@@ -22,14 +23,14 @@ git clone https://github.com/mohamedwael201193/Sternpost && cd Sternpost/contrac
 
 | Proof | Tx |
 |-------|----|
-| Factory deployed | [0x8206c91c…](https://explorer.test.mezo.org/tx/0x8206c91ca528588c27002e408b5c0b45c95b3a21ee1f84f3fe49aeaac5c26e0a) |
-| Safe draw by an app key, paid to its SpendWallet | [0x656b1ed4…](https://explorer.test.mezo.org/tx/0x656b1ed43e5661c9c9b264b8e263a57e5ffcf6e2fe43a0094fdbce4230f22247) |
-| Unsafe draw refused on-chain (`Unsafe`) | [0xa489db6a…](https://explorer.test.mezo.org/tx/0xa489db6ab1602ba8c2140ebe0451b2d3a84148491f43c37d8e9d73a83f47dd78) |
-| Direct Mezo submission blocked (`BypassBlocked` via ActivePool) | [0xcb54e35d…](https://explorer.test.mezo.org/tx/0xcb54e35d4608952fa0b1a1b379870dee8cf55eeefcae4c22c82690c9cba6aed1) |
-| Revoke + nonce burn | [0xda372cf8…](https://explorer.test.mezo.org/tx/0xda372cf83477fa33dce7d504681b13d6dcf1845427539b15f7ff746a1a60274e) |
-| A signature from before the revoke is dead (`BadHeal`) | [0xe783e1f4…](https://explorer.test.mezo.org/tx/0xe783e1f4223c0a9c9bd9544b17691a89ae6d02650f57319ac7d98459175614b5) |
-| x402 settle from the SpendWallet (SDK `pay`, facilitator) | [0xfdd4c73c…](https://explorer.test.mezo.org/tx/0xfdd4c73ca9a8b85c62f801a0e1f0363196bfa1a6a5c01fc3e3d557598fb98f09) |
-| x402 purchase of the paid API brief at sternpost-api.vercel.app, from the SpendWallet to the treasury `0xFbB4b0edf723Dc4Ef4d5AeDdA5c12e5d598AE757` | [0x6ec3ca88…](https://explorer.test.mezo.org/tx/0x6ec3ca884a6040e830f9d7548567323f1c42a09a37fed6d534448fcc7637b46b) |
+| Factory deployed | [0xfc32c758…](https://explorer.test.mezo.org/tx/0xfc32c7584b4c14b12f2d171d787b5bc6a5098d79535bd3c967923ef37c53c50c) |
+| Safe draw by an app key, paid to its SpendWallet | [0xba4eb129…](https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523) |
+| Unsafe draw refused on-chain (`Unsafe`) | [0xf3920683…](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf) |
+| Direct Mezo submission blocked (`BypassBlocked` via ActivePool) | [0xfd93314c…](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2) |
+| Revoke + nonce burn | [0xf0763cf4…](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb) |
+| A signature from before the revoke is dead (`BadHeal`) | [0x1938e472…](https://explorer.test.mezo.org/tx/0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f) |
+| x402 settle from the SpendWallet (SDK `pay`, facilitator) | [0x4833c4a8…](https://explorer.test.mezo.org/tx/0x4833c4a878d7efc6a7d7c47baca8a6901b12dfa7e3ca63d9985a5b565f114140) |
+| x402 purchase of the paid API brief at sternpost-api.vercel.app, from the SpendWallet to the treasury `0xFbB4b0edf723Dc4Ef4d5AeDdA5c12e5d598AE757` | [0x2a6d515c…](https://explorer.test.mezo.org/tx/0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06) |
 
 Addresses and every hash are in [`shared/deployments/testnet.json`](../shared/deployments/testnet.json).
 
@@ -37,4 +38,5 @@ Addresses and every hash are in [`shared/deployments/testnet.json`](../shared/de
 
 - The gate depends on Mezo's ActivePool calling the recipient with `sendCollateral(recipient, 0)` during a withdraw. If Mezo removes that callback, `draw()` fails closed (`CallbackMismatch`): draws stop, and nothing can be stolen. A fork test covers this.
 - Mezo uses one signature nonce per borrower, so any other signed action disarms the defend standby. The SDK detects this, and `rearm()` restores it.
+- Governor branch coverage is 93.6%. The three branches never hit are the `nonReentrant` re-entry revert, the `AmountMismatch` guard (both unreachable with an honest MUSD), and a modifier branch that the IR-minimum coverage mode reports even though tests hit it.
 - Everything here runs on testnet. The mainnet fork tests run against the real mainnet contracts, but nothing is deployed on mainnet.
