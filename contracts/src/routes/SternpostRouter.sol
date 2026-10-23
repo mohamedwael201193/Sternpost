@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {IERC20Min, IBorrowerOperationsSignatures} from "../interfaces/IMezo.sol";
+import {IERC20Min, IBorrowerOperationsSignatures, IPriceFeed, ITroveManager} from "../interfaces/IMezo.sol";
 import {IMUSDSavingsRate, IMezoRouter, IGovernorView, IFactoryView} from "../interfaces/IRoutes.sol";
 
 /// @title SternpostRouter
@@ -24,7 +24,8 @@ contract SternpostRouter {
     uint8 public constant ROUTE_SAVE = 1;
     uint8 public constant ROUTE_SWAP = 2;
     uint8 public constant ROUTE_LOOP = 4;
-    uint256 public constant MAX_LEGS = 3;
+    /// @dev 2, not more: on Mezo testnet a third leg fails inside the price precompile (observed 2026-10-23).
+    uint256 public constant MAX_LEGS = 2;
     uint256 public constant MAX_SWAP_WINDOW = 300; // seconds
 
     /// @notice One loop leg. Nonces: withdrawSig at n, healSig and addCollSig both at n+1 (the AddColl consumes n+1,
@@ -187,6 +188,11 @@ contract SternpostRouter {
         uint256 m0 = musd.balanceOf(address(this));
         uint256 n0 = address(this).balance;
         uint256 totalIn = 0;
+        // Mezo's price precompile fails if queried again late in a long tx, so read the price once: it cannot change
+        // within one transaction, and every leg's ICR is then computed from the trove manager at that price.
+        uint256 price = IPriceFeed(g.priceFeed()).fetchPrice();
+        ITroveManager tm = ITroveManager(g.troveManager());
+        uint256 floor = g.floorICR();
         for (uint256 i; i < legs.length; ++i) {
             Leg calldata l = legs[i];
             if (l.collAmount == 0) revert ZeroAmount();
@@ -202,8 +208,7 @@ contract SternpostRouter {
             signatures.addCollWithSignature{value: l.collAmount}(
                 address(0), address(0), b, l.addCollSig, l.addCollDeadline
             );
-            uint256 icrAfter = g.icr();
-            uint256 floor = g.floorICR();
+            uint256 icrAfter = tm.getCurrentICR(b, price);
             if (icrAfter < floor) revert Unsafe(icrAfter, floor);
 
             uint256 surplus = got - l.collAmount;

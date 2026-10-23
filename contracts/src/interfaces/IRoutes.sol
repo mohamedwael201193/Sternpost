@@ -36,6 +36,8 @@ interface IGovernorView {
     function borrower() external view returns (address);
     function icr() external view returns (uint256);
     function floorICR() external view returns (uint256);
+    function troveManager() external view returns (address);
+    function priceFeed() external view returns (address);
     function draw(
         uint256 amount,
         address payee,
