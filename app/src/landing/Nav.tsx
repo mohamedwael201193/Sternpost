@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-const LINKS = [['How it works', '#how'], ['Safety', '#floor'], ['Proof', '#proof'], ['Docs', 'https://github.com/mohamedwael201193/Sternpost#readme'], ['FAQ', '#faq']] as const
+const LINKS = [['How it works', '#how'], ['Safety', '#floor'], ['Routes', '#routes'], ['Proof', '#proof'], ['Docs', 'https://github.com/mohamedwael201193/Sternpost#readme'], ['FAQ', '#faq']] as const
 
 export function Nav() {
   return (

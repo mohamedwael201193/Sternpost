@@ -1,6 +1,7 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import { Link } from 'react-router-dom'
 import { RoseRule } from '../ui/Rose'
+import { TelegramButton } from './Telegram'
 
 // Overlay coordinates share the plate's 1179×1380 space; labels live in the extra right margin.
 const NOTES = [
@@ -33,6 +34,7 @@ export function Hero() {
           <motion.div {...fade(.5)} className="mt-10 flex flex-wrap gap-3">
             <Link to="/app" className="pill">Open the dashboard <span aria-hidden>→</span></Link>
             <a href="#proof" className="pill-ghost">See it on testnet</a>
+            <TelegramButton />
           </motion.div>
         </div>
 

@@ -10,7 +10,7 @@ const QA = [
 
 export function Faq() {
   return (
-    <Plate id="faq" n="VII" kicker="Margin notes" title={<>Questions, <em>answered in the margin.</em></>}>
+    <Plate id="faq" n="XI" kicker="Margin notes" title={<>Questions, <em>answered in the margin.</em></>}>
       <div className="divide-y divide-ink/15 border-y border-ink/25">
         {QA.map(([q, a]) => (
           <details key={q} className="group py-6">
