@@ -1,9 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { useAccount, useConnect, useSwitchChain, usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
 import type { Hash } from 'viem'
 import { humanRevert } from '../lib/errors'
 import { mezoTestnet } from '../lib/chain'
 import { txUrl } from '../lib/proofs'
+import { ConnectButton } from './connect'
+
+export { ConnectButton }
 
 export function Card({ title, children, className = '', aside }: { title?: ReactNode; children: ReactNode; className?: string; aside?: ReactNode }) {
   return (
@@ -30,25 +33,6 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
       <div className="display italic text-xl">{title}</div>
       {children && <div className="text-sm text-muted mt-2 max-w-md mx-auto">{children}</div>}
     </div>
-  )
-}
-
-export function ConnectButton({ className = 'pill' }: { className?: string }) {
-  const { isConnected, chainId, address } = useAccount()
-  const { connect, connectors, isPending, error } = useConnect()
-  const { switchChain } = useSwitchChain()
-  if (isConnected && chainId !== mezoTestnet.id)
-    return <button className={className} onClick={() => switchChain({ chainId: mezoTestnet.id })}>Switch to Mezo testnet</button>
-  if (isConnected) return <span className="mono text-xs" data-testid="account">{address!.slice(0, 6)}…{address!.slice(-4)}</span>
-  const c = connectors[0]
-  return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <button className={className} disabled={!c || isPending} onClick={() => c && connect({ connector: c, chainId: mezoTestnet.id })}>
-        {isPending ? 'Waiting for wallet…' : 'Connect wallet'}
-      </button>
-      {!c && <span className="text-xs text-muted">No browser wallet found. Install MetaMask.</span>}
-      {error && <span className="text-xs text-signal">{error.message.split('\n')[0]}</span>}
-    </span>
   )
 }
 
