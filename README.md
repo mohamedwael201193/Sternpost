@@ -60,7 +60,7 @@ The full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts
 | SternpostFactory | `0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980` |
 | Demo governor | `0x9eEa9762ED3c1dE2308c800687558064DFf0B832` |
 | Demo SpendWallet | `0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA` |
-| SternpostRouter | `0x7550a53Cc5510B192A3B486368B8330D1CC7284c` |
+| SternpostRouter | `0xEC30280134f06668f35753D640c6760984179674` (v1 `0x7550a53C…` superseded) |
 
 ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
 
@@ -73,7 +73,7 @@ ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`s
 | Keep | plain governed draw to the payee | see [flow](judges/TESTNET_TXS.md) |
 | Save | draw → deposit to Mezo sMUSD savings → shares to borrower | [`0x2e775fc4…`](https://explorer.test.mezo.org/tx/0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311) |
 | Swap | draw → MUSD/BTC pool on the Mezo DEX with a min-out | [`0x8f1cffa6…`](https://explorer.test.mezo.org/tx/0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91) |
-| Loop | draw → swap to BTC → add as collateral to the same trove, up to 3 legs, floor re-checked after each | [`0xcf9a5b39…`](https://explorer.test.mezo.org/tx/0xcf9a5b39f26efe769eb15ab82d789ab7d331236180e65a62e15ae89091e4e5dd) |
+| Loop | draw → swap to BTC → add as collateral to the same trove, up to 2 legs, floor re-checked after each | 2 legs: [`0x589fd815…`](https://explorer.test.mezo.org/tx/0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1) |
 
 Exact approvals reset to zero and a residue check close every route. Check it yourself with `judges/verify-routes.sh`.
 
@@ -81,7 +81,7 @@ Exact approvals reset to zero and a residue check close every route. Check it yo
 
 | | |
 |---|---|
-| Contract tests (unit, fuzz, invariant) | 85 passing (router: 25 unit, 3 fuzz, 1 no-residue invariant) |
+| Contract tests (unit, fuzz, invariant) | 85 passing (router: 25 unit, 3 fuzz, 1 no-residue invariant); Save route fork test against live sMUSD: 3 passing |
 | Fork tests on real Mezo **testnet** and **mainnet** | 7/7 each ([logs](judges/logs)) |
 | SDK tests (EIP-712 digests equal Solidity) | 9 passing |
 | Coverage | Factory 100% lines and branches, SpendWallet 100%, Governor 100% lines and 93.6% branches ([report](judges/coverage.txt)) |
@@ -105,7 +105,7 @@ The Sign in sheet follows testnet.mezo.org: Xverse and Unisat first, then MetaMa
 
 ## Honest limits
 
-The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. A loop leg's AddColl signature uses the heal nonce, so the standby must be re-armed after a loop. Router swap/loop are proven live, not on forks, because forks lack Mezo's BTC precompile. Sternpost is unaudited and runs on testnet only. The explorer would not accept source verification for any contract while we tried, so `judges/VERIFY.md` shows a byte-for-byte match instead. Details are in the [threat model](docs/THREAT_MODEL.md).
+The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. A loop leg's AddColl signature uses the heal nonce, so the standby must be re-armed after a loop. Router swap/loop are proven live, not on forks, because forks lack Mezo's BTC precompile. Loops are capped at 2 legs: on Mezo testnet a third leg fails inside the price precompile. Sternpost is unaudited and runs on testnet only. The explorer would not accept source verification for any contract while we tried, so `judges/VERIFY.md` shows a byte-for-byte match instead. Details are in the [threat model](docs/THREAT_MODEL.md).
 
 ## License
 
