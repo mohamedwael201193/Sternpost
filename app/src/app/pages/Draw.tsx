@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { usePublicClient, useReadContract, useSignTypedData, useWriteContract } from 'wagmi'
-import { isAddress, parseUnits, zeroAddress, type Address, type Hex } from 'viem'
+import { useReadContract } from 'wagmi'
+import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Gauge } from '../../ui/Gauge'
-import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
+import { Card, Empty, NeedsWallet, TxStatus } from '../kit'
 import { useTrove } from '../useTrove'
-import { borrowerOpsAbi, governorAbi, governorFullAbi, signaturesAbi } from '../../lib/abi'
-import { humanRevert } from '../../lib/errors'
+import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
+import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
 import { REASONS, WAD, pct, projectedIcr } from '../../lib/icr'
-import { DRAW_WINDOW_S, drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../../lib/sig'
+import { DRAW_WINDOW_S } from '../../lib/sig'
 
 const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
@@ -64,65 +64,14 @@ function Verdict({ ok, reason, loading }: { ok?: boolean; reason: string; loadin
   )
 }
 
-/** Re-sign the withdraw if fewer than this many seconds remain before we can hand it to the wallet. */
-const MIN_LEFT_S = 45n
-
 function Sign({ t, wei, app, payee, ok, fields }: {
   t: ReturnType<typeof useTrove>; wei: bigint; app: Address; payee: Address; ok: boolean
   fields: { amount: string; setAmount: (s: string) => void; app: string; setApp: (s: string) => void; payee: string; setPayee: (s: string) => void }
 }) {
-  const client = usePublicClient()
-  const { signTypedDataAsync } = useSignTypedData()
-  const { writeContractAsync } = useWriteContract()
-  const tx = useTx()
-  const [bundle, setBundle] = useState<string>('')
-  const [err, setErr] = useState('')
-  const [step, setStep] = useState('')
-  const [deadline, setDeadline] = useState<bigint>()
-  const [skew, setSkew] = useState(0n) // chain time minus local time, seconds
-  const busy = !!step || tx.phase === 'signing' || tx.phase === 'pending'
+  const { go: send, tx, bundle, err, step, deadline, skew, busy } = useDrawSend(t)
   const self = app.toLowerCase() === t.address?.toLowerCase()
   const f = 'mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full mt-1'
-
-  const localNow = () => BigInt(Math.floor(Date.now() / 1000))
-  async function chainNow() {
-    const b = await client!.getBlock({ blockTag: 'latest' })
-    const s = b.timestamp - localNow(); setSkew(s)
-    return localNow() + s
-  }
-
-  async function go() {
-    setErr(''); setBundle(''); setDeadline(undefined); tx.reset()
-    try {
-      const borrower = t.address!, governor = t.governor!
-      setStep('Reading your Mezo nonce…')
-      const nonce = await client!.readContract({ address: MEZO.signatures, abi: signaturesAbi, functionName: 'getNonce', args: [borrower] })
-      // 1) Standby repay first: its deadline is 24 h, so time spent here does not eat the withdraw window.
-      setStep('Signature 1 of 2: standby repay (nonce + 1)…')
-      const m0 = drawMessages({ amount: wei, borrower, governor, nonce, now: await chainNow() })
-      const healSig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: m0.heal })
-      // 2) Withdraw: deadline taken from chain time right before this signature. Re-sign once if it ran low.
-      for (let attempt = 1; ; attempt++) {
-        setStep(attempt === 1 ? 'Signature 2 of 2: withdraw (window starts now)…' : 'Withdraw window ran low, re-signing with a fresh deadline…')
-        const m = drawMessages({ amount: wei, borrower, governor, nonce, now: await chainNow() })
-        setDeadline(m.withdraw.deadline)
-        const withdrawSig = await signTypedDataAsync({ domain: mezoDomain(), types: withdrawTypes, primaryType: 'WithdrawMUSD', message: m.withdraw })
-        const left = m.withdraw.deadline - (await chainNow())
-        if (left < MIN_LEFT_S) { if (attempt < 3) continue; throw new Error('Signature expired') }
-        const args = [wei, payee, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const
-        if (!self) {
-          setBundle(JSON.stringify({ governor, amount: String(wei), payee, withdrawDeadline: String(m.withdraw.deadline), withdrawSig, healDeadline: String(m0.heal.deadline), healSig }, null, 2))
-          break
-        }
-        setStep('Checking the draw with the Governor (simulation)…')
-        try { await client!.simulateContract({ account: borrower, address: governor, abi: governorFullAbi, functionName: 'draw', args }) }
-        catch (e) { if (/Signature expired/.test(humanRevert(e)) && attempt < 3) continue; throw e }
-        setStep('')
-        await tx.run(() => writeContractAsync({ address: governor, abi: governorFullAbi, functionName: 'draw', args, gas: 1_750_000n }))
-        break
-      }
-    } catch (e) { setErr(humanRevert(e)) } finally { setStep('') }
-  }
+  const go = () => send(wei, app, payee)
   const sent = tx.phase === 'success' || tx.phase === 'reverted'
   return (
     <Card title="Sign the draw">
