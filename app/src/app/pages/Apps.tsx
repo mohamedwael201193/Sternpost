@@ -82,7 +82,7 @@ function Authorize({ governor, preset, presetAmount, requestId }: { governor: Ad
     <Card title="Approve an app">
       <div className="grid gap-4">
         <label className="caps text-[11px] text-muted">App address<input className={f} value={app} onChange={(e) => setApp(e.target.value.trim())} placeholder="0x…" /></label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="caps text-[11px] text-muted">Budget (MUSD)<input className={f} value={budget} onChange={(e) => setBudget(e.target.value)} inputMode="decimal" /></label>
           <label className="caps text-[11px] text-muted">Per draw<input className={f} value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" /></label>
           <label className="caps text-[11px] text-muted">Days<input className={f} value={days} onChange={(e) => setDays(e.target.value)} inputMode="numeric" /></label>
@@ -126,9 +126,9 @@ function RequestList({ borrower }: { borrower?: string }) {
 
 const D: any = deployments
 const NAMES: Record<string, string> = Object.fromEntries(([
-  [D.sternpost.SternpostRouter, 'Sternpost Router v2'], [D.sternpost.SternpostRouterV1, 'Sternpost Router v1'],
+  [D.sternpost.SternpostRouter?.address ?? D.sternpost.SternpostRouter, 'Sternpost Router v2'], [D.sternpost.SternpostRouterV1?.address ?? D.sternpost.SternpostRouterV1, 'Sternpost Router v1'],
   [D.sternpost.spendWallet, 'Spend wallet'], [D.liveFlow?.app, 'Demo app'],
-] as [string | undefined, string][]).filter(([a]) => a).map(([a, n]) => [a!.toLowerCase(), n]))
+] as [unknown, string][]).filter(([a]) => typeof a === 'string' && a.startsWith('0x')).map(([a, n]) => [(a as string).toLowerCase(), n]))
 
 /** Every app that currently holds a budget on this Governor, found from AppAuthorized/AppRemoved logs and read live. */
 function AuthorizedApps({ governor, me }: { governor: Address; me?: Address }) {
