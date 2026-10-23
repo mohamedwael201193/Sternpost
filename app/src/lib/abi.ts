@@ -53,7 +53,9 @@ export const governorFullAbi = [...governorAbi, ...governorErrorsAbi] as unknown
 export const routerAbi = parseAbi([
   'struct Leg { uint256 amount; uint256 withdrawDeadline; bytes withdrawSig; uint256 healDeadline; bytes healSig; uint256 collAmount; uint256 addCollDeadline; bytes addCollSig; }',
   'function drawAndSave(address governor, uint256 amount, uint256 withdrawDeadline, bytes withdrawSig, uint256 healDeadline, bytes healSig) returns (uint256)',
+  'function drawAndSwap(address governor, uint256 amount, uint256 minBtcOut, uint256 withdrawDeadline, bytes withdrawSig, uint256 healDeadline, bytes healSig) returns (uint256)',
   'function loop(address governor, Leg[] legs) returns (uint256)',
+  'function setRoutes(uint8 mask)',
   'function quoteSwap(uint256 musdIn) view returns (uint256)',
   'function routesOf(address) view returns (uint8)',
 ])
