@@ -8,7 +8,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (/node_modules\/(wagmi|viem|@wagmi|@tanstack|ox|abitype|@noble|@scure)/.test(id)) return 'chain'
           if (id.includes('node_modules/react')) return 'react'
         },
       },
