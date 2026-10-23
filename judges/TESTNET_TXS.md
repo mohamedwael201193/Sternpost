@@ -30,7 +30,19 @@ Mezo charges at least half the gas limit on a reverted tx, so gasUsed on the thr
 
 The first run of the hardened flow stopped after step 2 because of a gas-estimate bug in `createSpendWallet`, fixed in `2e79dfc`. A later re-run stopped after `revoke()`. Before the final run the script called `unfreeze()` ([`0x92743630…`](https://explorer.test.mezo.org/tx/0x92743630495e9a6b099d8c9f365a9b0f8e27ee92783d268e2225a44438c84c8b)). Those earlier partial txs are on-chain but not listed here.
 
-## Routes after a draw (SternpostRouter `0x7550a53Cc5510B192A3B486368B8330D1CC7284c`)
+## Routes after a draw, v2 (SternpostRouter `0xEC30280134f06668f35753D640c6760984179674`)
+
+v2 reads the oracle price once per loop. On Mezo testnet, calling the price precompile again late in a long tx reverts with empty data, so v1 could not run 2 legs. The price cannot change inside one tx, so the cached value is exact. Legs are capped at 2: a third leg still fails inside Mezo's precompile (the governor's own price read), seen in an `eth_call` simulation.
+
+| # | Step | Tx |
+|---|---|---|
+| 1 | Deploy SternpostRouter v2 | [`0x846a7d75…`](https://explorer.test.mezo.org/tx/0x846a7d75e4ca4925b58c1cafedbe40a11d61280b30d9ea03721c696e7ffcf61c) |
+| 2 | governor.authorizeApp(router, budget 200, per draw 20, payee = router) | [`0x641e9410…`](https://explorer.test.mezo.org/tx/0x641e94107b9ca7fed1e82d860ea8909bf2394a8a8bb0233fad541c763987e379) |
+| 3 | router.setRoutes(SAVE \| SWAP \| LOOP) | [`0x5384e716…`](https://explorer.test.mezo.org/tx/0x5384e71634e5281cf972f29484701e0b4021bf3386b24dfab2b52c638f881635) |
+| 4 | **Loop, 2 legs**: 2 x (draw 10 MUSD -> swap -> addColl), floor re-checked after each leg; signer nonce 25 -> 29 | [`0x589fd815…`](https://explorer.test.mezo.org/tx/0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1) |
+| 5 | governor.rearm at nonce 29 (standby live again) | [`0x3d535a3f…`](https://explorer.test.mezo.org/tx/0x3d535a3f98a1c1b4649490876fbf28e8b956c0349a62862b846600b327c36d4c) |
+
+## Routes after a draw, v1 (SternpostRouter `0x7550a53Cc5510B192A3B486368B8330D1CC7284c`, superseded)
 
 | # | Step | Tx |
 |---|---|---|
