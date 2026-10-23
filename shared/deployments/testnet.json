@@ -16,6 +16,12 @@
       "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
       "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
       "note": "pre-hardening deployment, superseded"
+    },
+    "SternpostRouter": {
+      "address": "0x7550a53Cc5510B192A3B486368B8330D1CC7284c",
+      "tx": "0x2dd7809a87a7ca0b65d1e9acd4147b8656c0c87642ba81986f0ed01aed1a6f0c",
+      "block": 16311651,
+      "routesEnabledMask": 7
     }
   },
   "mezo": {
@@ -26,7 +32,11 @@
     "ActivePool": "0x143A063F62340DA3A8bEA1C5642d18C6D0F7FF51",
     "MUSD": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
     "sMUSD": "0x6f461c68B2c5492C0F5CCEc5a264d692aA7A8e16",
-    "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+    "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "DexRouter": "0x9a1ff7FE3a0F69959A3fBa1F1e5ee18e1A9CD7E9",
+    "DexFactory": "0x4947243CC818b627A5D06d14C4eCe7398A23Ce1A",
+    "MUSD_BTC_Pool": "0xd16A5Df82120ED8D626a1a15232bFcE2366d6AA9",
+    "BTC": "0x7b7C000000000000000000000000000000000000"
   },
   "x402": {
     "facilitator": "https://facilitator.vativ.io",
@@ -140,5 +150,31 @@
         "block": 16310278
       }
     ]
-  }
+  },
+  "routeFlow": [
+    {
+      "step": "authorizeApp(router, 100 MUSD budget, 25 per draw, payee=router)",
+      "tx": "0x4dc0422b68fed65221dead590b8ae4f7313f6f29fecb45b473a8c68b6a661f54"
+    },
+    {
+      "step": "router.setRoutes(SAVE|SWAP|LOOP)",
+      "tx": "0x6f91930f4aaf40d08e7aec173b180caea8c1360d18d4191d66317cefdda5bc8a"
+    },
+    {
+      "step": "drawAndSave(5 MUSD -> sMUSD)",
+      "tx": "0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311"
+    },
+    {
+      "step": "drawAndSwap(5 MUSD -> BTC, 1% min-out)",
+      "tx": "0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91"
+    },
+    {
+      "step": "loop(1 leg: draw 5 MUSD -> swap -> addColl)",
+      "tx": "0xcf9a5b39f26efe769eb15ab82d789ab7d331236180e65a62e15ae89091e4e5dd"
+    },
+    {
+      "step": "governor.rearm after loop",
+      "tx": "0x7bad78e81a88966cd42ec3041120c6ae3e6da81bde707436487bb58c977e4c21"
+    }
+  ]
 }
