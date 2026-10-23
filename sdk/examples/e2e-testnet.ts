@@ -56,13 +56,15 @@ if (!gov) {
   gov = (await sp.governorOf(borrower.account.address))!;
 }
 out.governor = gov;
+// re-runs: a previous run may have stopped while the governor was frozen
+if ((await sp.state(gov)).frozen) await wait("setup: unfreeze() left over from an interrupted run", await sp.unfreeze(borrower, gov));
 console.log("governor", gov, "ICR", formatEther((await sp.state(gov)).icr));
 
 // 2. spend wallet for the agent
 const now = (await pub.getBlock()).timestamp;
 let wallets = await pub.readContract({ address: A.factory, abi: sternpostFactoryAbi, functionName: "walletsOf", args: [borrower.account.address] }) as readonly Address[];
 if (wallets.length === 0) {
-  await wait("createSpendWallet(agent, 30d)", await writePadded(pub as never, borrower, { address: A.factory, abi: sternpostFactoryAbi, functionName: "createSpendWallet", args: [agent.address, now + 30n * 86400n] }));
+  await wait("createSpendWallet(agent, 30d)", await writePadded(pub as never, borrower, { address: A.factory, abi: sternpostFactoryAbi, functionName: "createSpendWallet", args: [agent.address, now + 30n * 86400n] }, 3_000_000n));
   wallets = await pub.readContract({ address: A.factory, abi: sternpostFactoryAbi, functionName: "walletsOf", args: [borrower.account.address] }) as readonly Address[];
 }
 const wallet = wallets[wallets.length - 1];
@@ -73,8 +75,8 @@ await wait("authorizeApp(budget 1500, perDraw 1000, payee=SpendWallet)", await s
 
 // 4. reserve buffer (for defend) and park part of it in sMUSD
 await wait("MUSD.approve(governor)", await writePadded(pub as never, borrower, { address: A.musd, abi: erc20, functionName: "approve", args: [gov, maxUint256] }));
-await wait("fund(20 MUSD buffer)", await writePadded(pub as never, borrower, { address: gov, abi: sternpostGovernorAbi, functionName: "fund", args: [parseEther("20")] }));
-await wait("parkReserve(5 MUSD -> sMUSD)", await writePadded(pub as never, borrower, { address: gov, abi: sternpostGovernorAbi, functionName: "parkReserve", args: [parseEther("5")] }));
+await wait("fund(20 MUSD buffer)", await writePadded(pub as never, borrower, { address: gov, abi: sternpostGovernorAbi, functionName: "fund", args: [parseEther("20")] }, 400_000n));
+await wait("parkReserve(5 MUSD -> sMUSD)", await writePadded(pub as never, borrower, { address: gov, abi: sternpostGovernorAbi, functionName: "parkReserve", args: [parseEther("5")] }, 600_000n));
 
 // 5. safe draw
 const safe = parseEther("10");
