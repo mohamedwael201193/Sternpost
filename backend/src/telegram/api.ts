@@ -5,7 +5,12 @@ export type Keyboard = Button[][];
 export interface TelegramApi {
   send(chatId: number, text: string, keyboard?: Keyboard): Promise<void>;
   answer(callbackId: string, text?: string): Promise<void>;
+  /** Rewrites a message in place (menu navigation). Optional so simple clients and mocks can omit it. */
+  edit?(chatId: number, messageId: number, text: string, keyboard?: Keyboard): Promise<void>;
 }
+
+/** Telegram returns 400 "message is not modified" when an edit is a no-op; that is success for us. */
+export const notModified = (e: unknown) => /not modified/i.test(String(e));
 
 export function telegramApi(token: string, f: typeof fetch = fetch): TelegramApi {
   const call = async (method: string, body: unknown) => {
@@ -14,7 +19,11 @@ export function telegramApi(token: string, f: typeof fetch = fetch): TelegramApi
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`telegram_${method}_${r.status}`);
+    if (!r.ok) {
+      let j: { description?: string } | null = null;
+      try { j = (await r.json()) as { description?: string }; } catch { /* non-JSON error body */ }
+      throw new Error(`telegram_${method}_${r.status}${j?.description ? `: ${j.description}` : ""}`);
+    }
   };
   return {
     send: (chatId, text, keyboard) =>
@@ -24,6 +33,15 @@ export function telegramApi(token: string, f: typeof fetch = fetch): TelegramApi
         parse_mode: "HTML",
         disable_web_page_preview: true,
         ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+      }),
+    edit: (chatId, messageId, text, keyboard) =>
+      call("editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: keyboard ?? [] },
       }),
     answer: (callbackId, text) => call("answerCallbackQuery", { callback_query_id: callbackId, text }),
   };
