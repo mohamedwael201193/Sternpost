@@ -41,3 +41,28 @@ body::before {
 .hero-bg { position: absolute; top: 64px; left: 0; right: 0; height: calc(100svh - 64px); opacity: .9; z-index: -1; pointer-events: none; }
 .dash-bg { position: fixed; inset: 64px 0 0 0; z-index: -1; pointer-events: none; }
 @media (min-width: 768px) { .dash-bg { inset: 0 0 0 240px; } }
+
+/* ---------- Dashboard v2: hero draw form, compass glow, route lines ---------- */
+@property --sweep { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes sweep { to { --sweep: 360deg; } }
+.glow-card { position: relative; isolation: isolate; }
+.glow-card::before {
+  content: ''; position: absolute; inset: -1.5px; border-radius: inherit; z-index: -1;
+  background: conic-gradient(from var(--sweep), #A3204F 0deg, #FF4D86 60deg, rgba(163,32,79,.15) 140deg, rgba(163,32,79,.15) 220deg, #FF4D86 300deg, #A3204F 360deg);
+  animation: sweep 6s linear infinite;
+}
+.glow-card::after {
+  content: ''; position: absolute; inset: -18px; border-radius: 28px; z-index: -2; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255,0,77,.22), transparent 75%); filter: blur(10px);
+  animation: breathe 4.5s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.rose-spin { transform-origin: 50% 50%; transform-box: fill-box; animation: spin-slow 60s linear infinite; }
+.compass-glow { filter: drop-shadow(0 0 10px rgba(255,0,77,.55)) drop-shadow(0 0 28px rgba(255,0,77,.35)); animation: breathe 4.5s ease-in-out infinite; }
+@keyframes march { to { stroke-dashoffset: -40; } }
+.route-line { stroke-dasharray: 3 7; animation: march 2.4s linear infinite; }
+.ship-ink { mix-blend-mode: multiply; filter: sepia(.35) contrast(1.05); }
+@media (prefers-reduced-motion: reduce) {
+  .glow-card::before, .glow-card::after, .rose-spin, .compass-glow, .route-line { animation: none; }
+}
