@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useReadContract, useWriteContract } from 'wagmi'
+import { useQuery } from '@tanstack/react-query'
+import { usePublicClient, useReadContract, useReadContracts, useWriteContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove } from '../useTrove'
 import { governorAbi } from '../../lib/abi'
 import { fmt } from '../../lib/icr'
+import { DEPLOY_BLOCK } from '../../lib/chain'
+import { addrUrl } from '../../lib/proofs'
+import deployments from '../../../../shared/deployments/testnet.json'
 import { useSetRequestStatus, useApiList } from '../api'
 
 export default function Apps() {
@@ -20,6 +24,7 @@ export default function Apps() {
           <div className="grid lg:grid-cols-2 gap-8">
             <Authorize governor={t.governor} preset={params.get('app') ?? ''} presetAmount={params.get('amount')} requestId={params.get('request')} />
             <div className="space-y-6">
+              <AuthorizedApps governor={t.governor} me={t.address} />
               <Card title="Check an app">
                 <input aria-label="App address" placeholder="0x… app address" value={lookup} onChange={(e) => setLookup(e.target.value.trim())} className="mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full" />
                 {isAddress(lookup) && <Policy governor={t.governor} app={lookup} />}
@@ -100,10 +105,10 @@ function RequestList({ borrower }: { borrower?: string }) {
   const setRequestStatus = useSetRequestStatus()
   const q = useApiList<{ id: number; app_address: string; amount: string; status: string; reason?: string }>('requests', borrower ? `/v1/requests?borrower=${borrower}&_=${tick}` : null)
   return (
-    <Card title="Requests">
+    <Card title="Requests" aside={<span className="caps text-[10px] text-muted">posted by apps via the API</span>}>
       {q.state === 'off' && <p className="text-sm text-muted">Apps can post draw requests through the Sternpost API. It is not configured on this deployment.</p>}
       {q.state === 'error' && <p className="text-sm text-signal">API unreachable.</p>}
-      {q.state === 'ok' && !q.items.length && <p className="text-sm text-muted">No requests yet.</p>}
+      {q.state === 'ok' && !q.items.length && <p className="text-sm text-muted">No pending requests from apps. Budgets you already granted are listed under Authorized apps.</p>}
       {q.items.map((r) => (
         <div key={r.id} className="py-3 border-t border-ink/15 text-sm flex justify-between gap-3">
           <span><span className="mono text-xs">{r.app_address.slice(0, 10)}…</span> asks <b>{fmt(BigInt(r.amount))} MUSD</b>{r.reason && <span className="text-muted"> · {r.reason}</span>}</span>
@@ -116,5 +121,61 @@ function RequestList({ borrower }: { borrower?: string }) {
         </div>
       ))}
     </Card>
+  )
+}
+
+const D: any = deployments
+const NAMES: Record<string, string> = Object.fromEntries(([
+  [D.sternpost.SternpostRouter, 'Sternpost Router v2'], [D.sternpost.SternpostRouterV1, 'Sternpost Router v1'],
+  [D.sternpost.spendWallet, 'Spend wallet'], [D.liveFlow?.app, 'Demo app'],
+] as [string | undefined, string][]).filter(([a]) => a).map(([a, n]) => [a!.toLowerCase(), n]))
+
+/** Every app that currently holds a budget on this Governor, found from AppAuthorized/AppRemoved logs and read live. */
+function AuthorizedApps({ governor, me }: { governor: Address; me?: Address }) {
+  const client = usePublicClient()
+  const logs = useQuery({
+    queryKey: ['authorized-apps', governor], enabled: !!client, refetchInterval: 30_000,
+    queryFn: async () => {
+      const ev = await client!.getContractEvents({ address: governor, abi: governorAbi, eventName: 'AppAuthorized', fromBlock: DEPLOY_BLOCK })
+      return [...new Set(ev.map((e) => (e.args as { app: Address }).app.toLowerCase() as Address))]
+    },
+  })
+  const apps = logs.data ?? []
+  const pol = useReadContracts({ allowFailure: true, contracts: apps.map((a) => ({ address: governor, abi: governorAbi, functionName: 'appPolicy', args: [a] }) as const), query: { enabled: apps.length > 0 } })
+  const rows = apps.map((a, i) => ({ a, p: pol.data?.[i]?.result as readonly [bigint, bigint, bigint, bigint, Address] | undefined })).filter((r) => r.p && r.p[3] > 0n)
+  return (
+    <Card title="Authorized apps" aside={<span className="caps text-[10px] text-muted">on your Governor</span>}>
+      {(logs.isLoading || pol.isLoading) && <p className="text-sm text-muted">Reading your Governor…</p>}
+      {logs.error && <p className="text-sm text-signal">Could not read Governor logs from the RPC.</p>}
+      {logs.data && !pol.isLoading && !rows.length && <p className="text-sm text-muted">No app holds a budget right now.</p>}
+      <ul data-testid="authorized-apps">
+        {rows.map(({ a, p }) => <AppRow key={a} governor={governor} app={a} p={p!} self={a === me?.toLowerCase()} onDone={() => pol.refetch()} />)}
+      </ul>
+    </Card>
+  )
+}
+
+function AppRow({ governor, app, p, self, onDone }: { governor: Address; app: Address; p: readonly [bigint, bigint, bigint, bigint, Address]; self: boolean; onDone: () => void }) {
+  const [budget, spent, perDraw, expiry, payee] = p
+  const { writeContractAsync } = useWriteContract()
+  const tx = useTx()
+  const [sure, setSure] = useState(false)
+  const expired = Number(expiry) * 1000 < Date.now()
+  const name = self ? 'This wallet (self draws)' : NAMES[app] ?? 'App'
+  return (
+    <li className="py-3 border-t border-ink/15 text-sm">
+      <div className="flex flex-wrap justify-between gap-2">
+        <span><b>{name}</b> <a className="ink-link mono text-xs text-muted" href={addrUrl(app)} target="_blank" rel="noreferrer">{app.slice(0, 6)}…{app.slice(-4)}</a></span>
+        {!sure ? <button className="pill-ghost text-xs" onClick={() => setSure(true)}>Revoke</button> : (
+          <span className="flex gap-2">
+            <button className="pill text-xs" onClick={async () => { setSure(false); if (await tx.run(() => writeContractAsync({ address: governor, abi: governorAbi, functionName: 'removeApp', args: [app] }))) onDone() }}>Confirm revoke</button>
+            <button className="pill-ghost text-xs" onClick={() => setSure(false)}>Cancel</button>
+          </span>)}
+      </div>
+      <div className="mono text-xs mt-1 text-muted">
+        budget {fmt(budget)} · remaining <b className="text-ink">{fmt(budget - spent)}</b> · per draw {fmt(perDraw)} MUSD · {expired ? <b className="text-signal">expired</b> : `expires ${new Date(Number(expiry) * 1000).toLocaleDateString()}`} · payee {payee === zeroAddress ? 'any' : `${payee.slice(0, 6)}…`}
+      </div>
+      <TxStatus tx={tx} />
+    </li>
   )
 }
