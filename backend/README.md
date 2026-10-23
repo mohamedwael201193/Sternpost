@@ -17,6 +17,11 @@ Live: **https://sternpost-api.vercel.app** · DB: Render Postgres 16 (`sternpost
 | GET | `/v1/receipts?payer=` · `/v1/receipts/:tx` | x402 settlement receipts |
 | GET | `/v1/paid/brief` | **x402-paid** endpoint: 402 challenge → facilitator verify → settle → content |
 | GET | `/v1/paid/price` | Current price/asset/payTo |
+| POST | `/telegram/webhook` | Telegram updates (requires `X-Telegram-Bot-Api-Secret-Token`) |
+| GET | `/tg/link?code=` · POST `/v1/telegram/link` | Wallet-link signing page and signature check (EIP-191) |
+| GET/POST | `/v1/telegram/tick` | Alert and request sweep (`Authorization: Bearer $CRON_SECRET`) |
+
+The Telegram routes are mounted only when `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `FACTORY_ADDRESS` are all set. See the Telegram section of the root README.
 
 ## x402 flow
 `GET /v1/paid/brief` returns `402` with a `PAYMENT-REQUIRED` header (scheme `exact`, `eip155:31611`, MUSD, Permit2). The client retries with `PAYMENT-SIGNATURE`; the server verifies and settles through `facilitator.vativ.io`, stores a receipt, and returns `PAYMENT-RESPONSE`. If the facilitator broadcasts but times out reading the receipt, the server confirms the tx on chain itself.
