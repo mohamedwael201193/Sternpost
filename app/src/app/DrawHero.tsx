@@ -6,13 +6,18 @@ import { Link } from 'react-router-dom'
 import { Token } from '../ui/Token'
 import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
-import { useDrawSend } from './useDrawSend'
+import { useDrawSend, type Route } from './useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
-import { MEZO } from '../lib/chain'
+import { MEZO, ROUTER } from '../lib/chain'
 import { REASONS, WAD, fmt, maxSafeDraw, pct, projectedIcr } from '../lib/icr'
 import { DRAW_WINDOW_S } from '../lib/sig'
 
 const toPct = (v?: bigint) => (v === undefined ? undefined : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
+const ROUTES: [Route, string, string][] = [
+  ['keep', 'Keep', 'MUSD goes to your wallet.'],
+  ['save', 'Save', 'MUSD goes into Mezo sMUSD savings; the shares are yours.'],
+  ['loop', 'Loop', 'MUSD is swapped to BTC (1% max slippage) and added back as collateral. Re-arm the standby after.'],
+]
 const LO = 100, HI = 500
 const pos = (p?: number) => (p === undefined ? 0 : (Math.min(Math.max(p, LO), HI) - LO) / (HI - LO) * 100)
 
@@ -20,6 +25,7 @@ const pos = (p?: number) => (p === undefined ? 0 : (Math.min(Math.max(p, LO), HI
 export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero({ t }, ref) {
   const reduce = useReducedMotion()
   const [amount, setAmount] = useState('10')
+  const [route, setRoute] = useState<Route>('keep')
   const wei = useMemo(() => { try { return parseUnits(amount || '0', 18) } catch { return 0n } }, [amount])
   const self = (t.address ?? '0x0000000000000000000000000000000000000000') as Address
   const fee = useReadContract({ address: MEZO.borrowerOperations, abi: borrowerOpsAbi, functionName: 'getBorrowingFee', args: [wei], query: { enabled: wei > 0n } })
@@ -75,12 +81,24 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
           <dt>Current</dt><dd className="mono text-magenta">{flo !== undefined ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right">{t.icr ? pct(t.icr) : '—'}</dd>
           <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? pct(after) : '—'}</dd>
         </dl>
+        {ROUTER && (
+          <fieldset className="mt-5">
+            <legend className="caps text-[10px] text-muted">Then</legend>
+            <div role="radiogroup" className="mt-1 grid grid-cols-3 gap-1 rounded-xl border border-ink/20 p-1" data-testid="hero-route">
+              {ROUTES.map(([k, label, hint]) => (
+                <button key={k} type="button" role="radio" aria-checked={route === k} title={hint} onClick={() => setRoute(k)}
+                  className={`rounded-lg py-2 text-xs caps transition ${route === k ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}>{label}</button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted mt-1">{ROUTES.find((r) => r[0] === route)![2]}</p>
+          </fieldset>
+        )}
         {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}</p>}
 
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />
             : !ready ? <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>
-            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct} onClick={() => d.go(wei, self, self)}>
+            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct} onClick={() => d.go(wei, self, self, route)}>
                 {d.busy ? 'Signing…' : 'Sign & send'} <span aria-hidden>→</span>
               </button>}
           <Ring deadline={d.deadline} skew={d.skew} active={!!d.deadline && !d.sent && !d.err} />
