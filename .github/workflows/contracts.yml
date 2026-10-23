@@ -1,0 +1,29 @@
+name: contracts
+on:
+  push: { branches: [main], paths: ["contracts/**", ".github/workflows/contracts.yml"] }
+  pull_request: { paths: ["contracts/**"] }
+permissions: { contents: read }
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: contracts } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: forge-std
+        run: git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+      - run: forge build --sizes
+      - name: unit, fuzz, invariant (fork tests skip without FORK_ON)
+        run: forge test -vv
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install slither-analyzer
+      - name: slither (src only, fail on high)
+        working-directory: contracts
+        run: slither . --filter-paths "lib|test|script" --fail-high
