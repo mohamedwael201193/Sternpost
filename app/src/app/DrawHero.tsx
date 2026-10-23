@@ -7,6 +7,7 @@ import { Token } from '../ui/Token'
 import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
 import { useDrawSend, type Route } from './useDrawSend'
+import { EnableRoutes, useRoutesReady } from './EnableRoutes'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
 import { MEZO, ROUTER } from '../lib/chain'
 import { REASONS, WAD, fmt, maxSafeDraw, pct, projectedIcr } from '../lib/icr'
@@ -16,7 +17,8 @@ const toPct = (v?: bigint) => (v === undefined ? undefined : v >= 2n ** 200n ? 9
 const ROUTES: [Route, string, string][] = [
   ['keep', 'Keep', 'MUSD goes to your wallet.'],
   ['save', 'Save', 'MUSD goes into Mezo sMUSD savings; the shares are yours.'],
-  ['loop', 'Loop', 'MUSD is swapped to BTC (1% max slippage) and added back as collateral. Re-arm the standby after.'],
+  ['swap', 'Swap', 'MUSD is swapped to BTC (1% max slippage) and sent to your wallet.'],
+  ['loop', 'Loop', 'MUSD is swapped to BTC (1% max slippage) and added back as collateral. The app asks you to re-arm the standby right after.'],
 ]
 const LO = 100, HI = 500
 const pos = (p?: number) => (p === undefined ? 0 : (Math.min(Math.max(p, LO), HI) - LO) / (HI - LO) * 100)
@@ -35,6 +37,8 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const after = icrAfter ?? local
   const avail = t.hasTrove && t.price && t.floor ? maxSafeDraw(t.coll!, t.price, t.debt!, t.floor) : undefined
   const d = useDrawSend(t)
+  const routesReady = useRoutesReady(t)
+  const blocked = route !== 'keep' && !routesReady.ready
   const btcAcct = useIsBtcAccount()
   const ready = t.isConnected && t.hasTrove && !!t.governor
   const cur = toPct(t.icr), aft = wei > 0n ? toPct(after) : cur, flo = toPct(t.floor)
@@ -84,13 +88,14 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         {ROUTER && (
           <fieldset className="mt-5">
             <legend className="caps text-[10px] text-muted">Then</legend>
-            <div role="radiogroup" className="mt-1 grid grid-cols-3 gap-1 rounded-xl border border-ink/20 p-1" data-testid="hero-route">
+            <div role="radiogroup" className="mt-1 grid grid-cols-4 gap-1 rounded-xl border border-ink/20 p-1" data-testid="hero-route">
               {ROUTES.map(([k, label, hint]) => (
                 <button key={k} type="button" role="radio" aria-checked={route === k} title={hint} onClick={() => setRoute(k)}
                   className={`rounded-lg py-2 text-xs caps transition ${route === k ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}>{label}</button>
               ))}
             </div>
             <p className="text-[11px] text-muted mt-1">{ROUTES.find((r) => r[0] === route)![2]}</p>
+            {ready && route !== 'keep' && <EnableRoutes t={t} />}
           </fieldset>
         )}
         {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}</p>}
@@ -98,7 +103,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />
             : !ready ? <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>
-            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct} onClick={() => d.go(wei, self, self, route)}>
+            : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct || blocked} onClick={() => d.go(wei, self, self, route)}>
                 {d.busy ? 'Signing…' : 'Sign & send'} <span aria-hidden>→</span>
               </button>}
           <Ring deadline={d.deadline} skew={d.skew} active={!!d.deadline && !d.sent && !d.err} />
@@ -107,6 +112,9 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         {d.err && <p className="text-xs mt-3 text-signal" role="alert">{d.err}</p>}
         <BtcSignNote className="mt-3" />
         <TxStatus tx={d.tx} />
+        {d.rearmTx.phase !== 'idle' && <p className="caps text-[10px] text-muted mt-3">Re-arm standby</p>}
+        <TxStatus tx={d.rearmTx} />
+        {d.rearmTx.phase === 'success' && <p className="text-xs mt-2 text-safe" role="status">Standby re-armed at your new nonce. defend() can protect you again.</p>}
       </div>
     </section>
   )
