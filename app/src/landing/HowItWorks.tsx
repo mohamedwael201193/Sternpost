@@ -3,10 +3,9 @@ import { useRef } from 'react'
 import { Plate } from './Plate'
 
 const STEPS = [
-  { t: 'Your trove', s: 'Stays in your EOA', d: 'BTC collateral and MUSD debt never leave your wallet. You sign typed messages, not custody.', x: 120 },
-  { t: 'Governor', s: 'Checks the floor', d: 'The app asks for an amount. The Governor withdraws, reads live ICR, and reverts below your floor.', x: 440 },
-  { t: 'Spend wallet', s: 'ERC-1271 budget', d: 'MUSD lands in a capped wallet the agent can sign for, never your trove.', x: 760 },
-  { t: 'API', s: 'Paid via x402', d: 'The agent pays per request. The receipt is a settlement transaction on Mezo.', x: 1080 },
+  { t: 'Set the floor', s: 'Once, from your wallet', d: 'Create your Governor, pick a floor ICR and a defend line, and give each app a budget, a per-draw cap and an expiry. Your trove never moves.', x: 200 },
+  { t: 'Sign a draw', s: 'One click: Sign & send', d: 'You sign a short-lived Mezo withdraw that names the Governor, plus a standby repay. The app or agent submits it.', x: 600 },
+  { t: 'Governor decides', s: 'Same transaction', d: 'It withdraws, reads live ICR and pays out only at or above your floor. Otherwise the whole transaction reverts.', x: 1000 },
 ]
 
 /** Animated beam (after Magic UI's Animated Beam), drawn in ink and driven by scroll. */
@@ -16,28 +15,28 @@ export function HowItWorks() {
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start 80%', 'end 40%'] })
   const len = useTransform(scrollYProgress, [0, 1], [0, 1])
   return (
-    <Plate id="how" n="III" kicker="How it works" title={<>One signed request. <em>Four stations.</em> One floor.</>}>
+    <Plate id="how" n="IV" kicker="How it works" title={<>Three steps. <em>One floor.</em></>}>
       <div ref={ref} className="relative">
         <svg viewBox="0 0 1200 140" className="hidden w-full md:block" aria-hidden>
-          <path d="M120 70 C 280 10, 280 130, 440 70 S 600 10, 760 70 S 920 130, 1080 70" fill="none" stroke="#17130F" strokeOpacity=".18" strokeWidth="1.5" strokeDasharray="4 6" />
-          <motion.path d="M120 70 C 280 10, 280 130, 440 70 S 600 10, 760 70 S 920 130, 1080 70" fill="none" stroke="#A3204F" strokeWidth="2.4"
+          <path d="M200 70 C 400 10, 400 130, 600 70 S 800 10, 1000 70" fill="none" stroke="#17130F" strokeOpacity=".18" strokeWidth="1.5" strokeDasharray="4 6" />
+          <motion.path d="M200 70 C 400 10, 400 130, 600 70 S 800 10, 1000 70" fill="none" stroke="#A3204F" strokeWidth="2.4"
             style={{ pathLength: reduce ? 1 : len }} />
           {!reduce && (
             <circle r="5" fill="#A3204F">
-              <animateMotion dur="4.5s" repeatCount="indefinite" path="M120 70 C 280 10, 280 130, 440 70 S 600 10, 760 70 S 920 130, 1080 70" />
+              <animateMotion dur="4.5s" repeatCount="indefinite" path="M200 70 C 400 10, 400 130, 600 70 S 800 10, 1000 70" />
             </circle>
           )}
           {STEPS.map((s, i) => (
             <g key={s.t}>
               <circle cx={s.x} cy="70" r="30" fill="#F3EBDD" stroke="#17130F" strokeWidth="1.4" />
-              <text x={s.x} y="80" textAnchor="middle" className="display" fontSize="28" fill="#17130F">{['I', 'II', 'III', 'IV'][i]}</text>
+              <text x={s.x} y="80" textAnchor="middle" className="display" fontSize="28" fill="#17130F">{['1', '2', '3'][i]}</text>
             </g>
           ))}
         </svg>
-        <ol className="mt-8 grid gap-10 md:grid-cols-4">
+        <ol className="mt-8 grid gap-10 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <li key={s.t} className="border-t border-ink/25 pt-5">
-              <p className="caps text-magenta md:hidden">{['I', 'II', 'III', 'IV'][i]}</p>
+              <p className="caps text-magenta md:hidden">{['1', '2', '3'][i]}</p>
               <h3 className="display text-3xl">{s.t}</h3>
               <p className="caps mt-1 text-muted">{s.s}</p>
               <p className="mt-4 text-ink/75">{s.d}</p>
