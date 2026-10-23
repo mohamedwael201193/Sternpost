@@ -167,8 +167,8 @@ Measured on 2026-10-23 from this repo.
 
 ## Fit for the tracks
 
-- **Track 1:** a MUSD credit product built on Mezo's own borrowing primitives. It makes signed withdraws safe to delegate, and routes MUSD into sMUSD, the Mezo DEX and back into collateral.
-- **Track 2:** an agent-ready payment rail. AI agents get a bounded MUSD budget, pay x402 APIs from an EIP-1271 SpendWallet ([`0x2a6d515c…`](https://explorer.test.mezo.org/tx/0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06)), and are reachable through the Telegram bot.
+- **Track 1: DeFi (Borrowing, Lending, Looping, and Yield).** Governed MUSD borrowing against a Mezo trove with an on-chain floor, Save into sMUSD, Swap on the Mezo DEX, and Loop back into collateral (see [Live proof](#live-proof)).
+- **Track 2: Access and Distribution for MUSD/MEZO.** The [Telegram bot](https://t.me/sternpost_bot) for monitoring and approvals, x402 MUSD payments for agents from an EIP-1271 SpendWallet, and Mezo-style multi-wallet access (Xverse, Unisat, MetaMask, WalletConnect and more).
 
 ## Telegram
 
