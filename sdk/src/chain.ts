@@ -11,7 +11,7 @@ export const mezoTestnet: Chain = defineChain({
 
 /** Addresses on Mezo testnet (31611). Mezo contracts are official; Sternpost's are ours. */
 export const testnetAddresses = {
-  factory: "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
+  factory: "0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980",
   signatures: "0xD757e3646AF370b15f32EB557F0F8380Df7D639e",
   troveManager: "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0",
   musd: "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
