@@ -62,7 +62,6 @@ body::before {
 .compass-glow { filter: drop-shadow(0 0 10px rgba(255,0,77,.55)) drop-shadow(0 0 28px rgba(255,0,77,.35)); animation: breathe 4.5s ease-in-out infinite; }
 @keyframes march { to { stroke-dashoffset: -40; } }
 .route-line { stroke-dasharray: 3 7; animation: march 2.4s linear infinite; }
-.ship-ink { mix-blend-mode: multiply; filter: sepia(.35) contrast(1.05); }
 @media (prefers-reduced-motion: reduce) {
   .glow-card::before, .glow-card::after, .rose-spin, .compass-glow, .route-line { animation: none; }
 }
