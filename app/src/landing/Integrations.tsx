@@ -12,7 +12,7 @@ const MEZO = [
 
 export function Integrations() {
   return (
-    <Plate id="integrations" n="VI" kicker="Built on Mezo" title={<>Native to Mezo. <em>No new token, no new custody.</em></>} className="bg-paper2/60">
+    <Plate id="integrations" n="X" kicker="Built on Mezo" title={<>Native to Mezo. <em>No new token, no new custody.</em></>} className="bg-paper2/60">
       <div className="grid gap-12 lg:grid-cols-2">
         <Reveal>
           <ul className="grid grid-cols-2 gap-px border border-ink/20 bg-ink/20 sm:grid-cols-3">

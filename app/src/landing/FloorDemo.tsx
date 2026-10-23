@@ -15,7 +15,7 @@ export function FloorDemo() {
   const now = Number((COLL * PRICE * 100n) / DEBT / WAD)
   const after = Number((v.icrAfter * 100n) / WAD)
   return (
-    <Plate id="floor" n="IV" kicker="Safety floor" title={<>Try to sink it. <em>The floor holds.</em></>} className="bg-paper2/60">
+    <Plate id="floor" n="V" kicker="Safety floor" title={<>Try to sink it. <em>The floor holds.</em></>} className="bg-paper2/60">
       <div className="grid items-center gap-12 lg:grid-cols-[1fr_1fr]">
         <div className="flex justify-center"><Gauge value={now} floor={floor} projected={after} size={380} /></div>
         <div className="plate p-8">
