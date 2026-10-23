@@ -77,6 +77,7 @@ export default function Dashboard() {
               <Route path="pay" element={<Pay />} />
               <Route path="activity" element={<Activity />} />
               <Route path="revoke" element={<Revoke />} />
+              <Route path="*" element={<div className="border border-dashed border-ink/25 p-10 text-center"><div className="caps text-[11px] text-magenta">404</div><h1 className="display text-4xl mt-1">No such dashboard page</h1><Link className="pill mt-6 inline-flex" to="/app">Back to Home</Link></div>} />
             </Routes>
           </main>
         </div>
