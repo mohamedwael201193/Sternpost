@@ -4,6 +4,9 @@ import { createPool } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
 import { createApp } from "./app.js";
 import { Indexer } from "./indexer/indexer.js";
+import { telegramApi } from "./telegram/api.js";
+import { viemChain, type Hex } from "./telegram/chain.js";
+import { createBot } from "./telegram/bot.js";
 
 /** Builds the full runtime (db, chain client, app, optional indexer) from config. Shared by server and serverless entries. */
 export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {}) {
@@ -18,9 +21,22 @@ export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {})
     indexer = new Indexer(db, client as any, { factory: cfg.FACTORY_ADDRESS as `0x${string}`, startBlock: start });
     await indexer.loadTracked();
   }
+  let telegram;
+  if (cfg.TELEGRAM_BOT_TOKEN && cfg.TELEGRAM_WEBHOOK_SECRET && cfg.FACTORY_ADDRESS) {
+    const bot = createBot({
+      db,
+      tg: telegramApi(cfg.TELEGRAM_BOT_TOKEN),
+      chain: viemChain(client as any, { factory: cfg.FACTORY_ADDRESS as Hex, musd: cfg.MUSD_ADDRESS as Hex, mezo: cfg.MEZO_ADDRESS as Hex }),
+      appUrl: cfg.APP_URL,
+      apiUrl: cfg.PUBLIC_API_URL,
+      alertMarginBps: cfg.TELEGRAM_ALERT_MARGIN_BPS,
+    });
+    telegram = { bot, webhookSecret: cfg.TELEGRAM_WEBHOOK_SECRET, cronSecret: cfg.CRON_SECRET };
+  }
   const app = createApp({
     db,
     indexer,
+    telegram,
     corsOrigins: cfg.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     rateLimitPerMin: cfg.RATE_LIMIT_PER_MIN,
     version: (process.env.RENDER_GIT_COMMIT ?? process.env.VERCEL_GIT_COMMIT_SHA)?.slice(0, 7),

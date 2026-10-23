@@ -13,6 +13,7 @@ import type { PaywallOpts } from "./x402/paywall.js";
 import type { Indexer } from "./indexer/indexer.js";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger.js";
+import { telegramRoutes, type TelegramRouteOpts } from "./routes/telegram.js";
 
 export interface AppDeps {
   db: Db;
@@ -22,6 +23,7 @@ export interface AppDeps {
   snapshot: () => Promise<ChainSnapshot>;
   version?: string;
   indexer?: Pick<Indexer, "tick">;
+  telegram?: TelegramRouteOpts;
 }
 
 const originAllowed = (origin: string, list: string[]) =>
@@ -64,7 +66,8 @@ export function createApp(d: AppDeps) {
     return c.json({ status: "ok", stored });
   });
 
-  app.route("/v1", appsRoutes(d.db));
+  app.route("/v1", appsRoutes(d.db, d.telegram?.bot.notifyRequest));
+  if (d.telegram) app.route("/", telegramRoutes(d.telegram));
   app.route("/v1", policiesRoutes(d.db));
   app.route("/v1", activityRoutes(d.db));
   app.route("/v1", receiptsRoutes(d.db));
