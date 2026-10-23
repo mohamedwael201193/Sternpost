@@ -17,7 +17,9 @@ const requestSchema = z.object({
 });
 const statusSchema = z.object({ status: z.enum(["approved", "rejected", "drawn"]) });
 
-export function appsRoutes(db: Db) {
+export type RequestHook = (r: { id: number; borrower: string; app_address: string; amount: string; reason?: string | null }) => Promise<void>;
+
+export function appsRoutes(db: Db, onRequest?: RequestHook) {
   const r = new Hono();
 
   r.get("/apps", async (c) => {
@@ -55,6 +57,8 @@ export function appsRoutes(db: Db) {
       "INSERT INTO draw_requests (app_address, borrower, amount, reason) VALUES ($1,$2,$3,$4) RETURNING *",
       [body.appAddress, body.borrower, body.amount, body.reason ?? null],
     );
+    // Push to linked Telegram chats; a notification failure never fails the request (the cron sweep retries).
+    if (onRequest) await onRequest(rows[0]).catch(() => undefined);
     return c.json({ request: rows[0] }, 201);
   });
 
