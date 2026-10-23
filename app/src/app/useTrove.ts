@@ -26,6 +26,7 @@ export function useTrove() {
       { address: MEZO.musd, abi: erc20Abi, functionName: 'balanceOf', args: [who] },
       { address: MEZO.smusd, abi: erc20Abi, functionName: 'balanceOf', args: [who] },
       { address: MEZO.signatures, abi: signaturesAbi, functionName: 'getNonce', args: [who] },
+      { address: MEZO.mezo, abi: erc20Abi, functionName: 'balanceOf', args: [who] },
     ],
     query: { enabled, ...live },
   })
@@ -42,7 +43,7 @@ export function useTrove() {
   })
   const btc = useBalance({ address: who, query: { enabled, ...live } })
 
-  const [tm, price, musd, smusd, nonce] = core.data ?? []
+  const [tm, price, musd, smusd, nonce, mezo] = core.data ?? []
   const t = tm?.result as readonly bigint[] | undefined
   const coll = t ? t[0] + t[3] : undefined
   const debt = t ? t[1] + t[2] + t[4] + t[5] : undefined
@@ -58,7 +59,7 @@ export function useTrove() {
     frozen: frozen?.result as boolean | undefined,
     standby: standby?.result as readonly [bigint, bigint, bigint, boolean] | undefined,
     nonce: nonce?.result as bigint | undefined,
-    balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined },
+    balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined, mezo: mezo?.result as bigint | undefined },
     loading: core.isLoading || gov.isLoading,
     refetch: () => { core.refetch(); gv.refetch(); gov.refetch(); btc.refetch() },
   }
