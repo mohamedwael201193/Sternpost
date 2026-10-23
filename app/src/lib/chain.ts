@@ -38,6 +38,9 @@ export const STERNPOST: Deployments = {
   spendWallet: at(d.sternpost.spendWallet),
 }
 
+/** Route adapter (Save / Swap / Loop after a governed draw). */
+export const ROUTER: Address | undefined = at(d.sternpost.SternpostRouter)
+
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'https://sternpost-api.vercel.app'
 
 /** First block worth scanning for Sternpost events (factory deployment). */

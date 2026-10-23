@@ -49,3 +49,11 @@ import governorJson from '../../../shared/abis/SternpostGovernor.json'
 /** Governor ABI plus its custom errors, so viem can decode reverts from simulate/eth_call. */
 export const governorErrorsAbi = (governorJson as readonly any[]).filter((x) => x.type === 'error')
 export const governorFullAbi = [...governorAbi, ...governorErrorsAbi] as unknown as typeof governorAbi
+
+export const routerAbi = parseAbi([
+  'struct Leg { uint256 amount; uint256 withdrawDeadline; bytes withdrawSig; uint256 healDeadline; bytes healSig; uint256 collAmount; uint256 addCollDeadline; bytes addCollSig; }',
+  'function drawAndSave(address governor, uint256 amount, uint256 withdrawDeadline, bytes withdrawSig, uint256 healDeadline, bytes healSig) returns (uint256)',
+  'function loop(address governor, Leg[] legs) returns (uint256)',
+  'function quoteSwap(uint256 musdIn) view returns (uint256)',
+  'function routesOf(address) view returns (uint8)',
+])
