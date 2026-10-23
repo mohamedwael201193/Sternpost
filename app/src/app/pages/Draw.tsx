@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
@@ -9,12 +10,16 @@ import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
 import { REASONS, WAD, pct, projectedIcr } from '../../lib/icr'
 import { DRAW_WINDOW_S } from '../../lib/sig'
+import { useLimits } from '../useLimits'
+import { Limits } from '../Limits'
+import { fmt } from '../../lib/icr'
 
 const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
 export default function Draw() {
   const t = useTrove()
-  const [amount, setAmount] = useState('10')
+  const [amount, setAmount] = useState('')
+  const [touched, setTouched] = useState(false)
   const [app, setApp] = useState('')
   const [payee, setPayee] = useState('')
   const appAddr = (isAddress(app) ? app : t.address ?? zeroAddress) as Address
@@ -26,6 +31,9 @@ export default function Draw() {
   const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
   const [ok, reason, icrAfter] = preview.data ?? [undefined, '', undefined]
   const projected = icrAfter ?? local
+  const lim = useLimits(t, appAddr)
+  useEffect(() => { if (!touched && lim.safe && lim.safe.suggest > 0n) setAmount(fmt(lim.safe.suggest, 18, 2).replace(/,/g, '')) }, [touched, lim.safe?.suggest])
+  const pick = (v: string) => { setTouched(true); setAmount(v) }
 
   return (
     <div className="space-y-8">
@@ -42,12 +50,12 @@ export default function Draw() {
               </div>
               <div className="grid grid-cols-2 text-center mt-4">
                 <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr ? pct(t.icr) : '—'}</div></div>
-                <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`}>{projected ? pct(projected) : '—'}</div></div>
+                <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`}>{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
               </div>
               <Verdict ok={ok} reason={reason} loading={preview.isLoading} />
             </Card>
             <Sign t={t} wei={wei} app={appAddr} payee={payeeAddr} ok={!!ok}
-              fields={{ amount, setAmount, app, setApp, payee, setPayee }} />
+              limits={<Limits t={t} l={lim} onPick={pick} />} fields={{ amount, setAmount: pick, app, setApp, payee, setPayee }} />
           </div>
         )}
       </NeedsWallet>
@@ -65,7 +73,8 @@ function Verdict({ ok, reason, loading }: { ok?: boolean; reason: string; loadin
   )
 }
 
-function Sign({ t, wei, app, payee, ok, fields }: {
+function Sign({ t, wei, app, payee, ok, fields, limits }: {
+  limits: ReactNode
   t: ReturnType<typeof useTrove>; wei: bigint; app: Address; payee: Address; ok: boolean
   fields: { amount: string; setAmount: (s: string) => void; app: string; setApp: (s: string) => void; payee: string; setPayee: (s: string) => void }
 }) {
@@ -78,7 +87,7 @@ function Sign({ t, wei, app, payee, ok, fields }: {
   return (
     <Card title="Sign the draw">
       <div className="grid gap-4">
-        <label className="caps text-[11px] text-muted">Amount (MUSD)<input className={f} value={fields.amount} onChange={(e) => fields.setAmount(e.target.value)} inputMode="decimal" /></label>
+        <label className="caps text-[11px] text-muted">Amount (MUSD)<input className={f} value={fields.amount} onChange={(e) => fields.setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" /></label>{limits}
         <label className="caps text-[11px] text-muted">App (submits the draw)<input className={f} value={fields.app} onChange={(e) => fields.setApp(e.target.value.trim())} placeholder="this wallet" /></label>
         <label className="caps text-[11px] text-muted">Payee<input className={f} value={fields.payee} onChange={(e) => fields.setPayee(e.target.value.trim())} placeholder="this wallet" /></label>
         <p className="text-xs text-muted">Two signatures: first a standby repay for the next nonce (valid 24 h), then a withdraw that can only pay your Governor. Mezo's withdraw window is short by design: the Governor rejects deadlines more than 120 s ahead, and this app uses {String(DRAW_WINDOW_S)} s counted from chain time at the moment you sign it. {self ? 'The draw transaction is sent right after the second signature; confirm it in your wallet before the countdown ends.' : 'Hand the bundle to the app before the countdown ends.'}</p>
