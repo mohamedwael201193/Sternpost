@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 
+const PIVOT = { transformOrigin: '100px 100px', transformBox: 'view-box' } as const
 const MIN = 100, MAX = 500, SWEEP = 270
 const angle = (pct: number) => -135 + (Math.min(Math.max(pct, MIN), MAX) - MIN) / (MAX - MIN) * SWEEP
 const polar = (a: number, r: number) => {
@@ -40,27 +41,27 @@ export function Gauge({ value, floor, projected, size = 320, label = 'Collateral
         })}
         {floor != null && (
           <>
-            <motion.path d={arc(angle(floor), 135, 80)} fill="none" stroke="#A3204F" strokeWidth="6" strokeLinecap="round" strokeOpacity=".9"
+            <motion.path d={arc(-135, angle(floor), 80)} fill="none" stroke="#A3204F" strokeWidth="6" strokeLinecap="round" strokeOpacity=".9"
               initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: 'easeOut' }} />
             <line x1={polar(angle(floor), 88)[0]} y1={polar(angle(floor), 88)[1]} x2={polar(angle(floor), 70)[0]} y2={polar(angle(floor), 70)[1]} stroke="#A3204F" strokeWidth="1.6" />
           </>
         )}
         {projected != null && value != null && (
-          <motion.g initial={false} animate={{ rotate: angle(projected) }} style={{ originX: '100px', originY: '100px' }} transition={{ type: 'spring', stiffness: 120, damping: 18 }}>
+          <motion.g initial={false} animate={{ rotate: angle(projected) }} style={PIVOT} transition={{ type: 'spring', stiffness: 120, damping: 18 }}>
             <line x1="100" y1="100" x2="100" y2="30" stroke={unsafe ? '#FF004D' : '#2F7D4F'} strokeWidth="1.2" strokeDasharray="3 2" />
           </motion.g>
         )}
         {value != null && (
-          <motion.g initial={reduce ? false : { rotate: -135 }} animate={{ rotate: angle(value) }} style={{ originX: '100px', originY: '100px' }}
+          <motion.g initial={reduce ? false : { rotate: -135 }} animate={{ rotate: angle(value) }} style={PIVOT}
             transition={{ type: 'spring', stiffness: 70, damping: 14, delay: .2 }}>
             <path d="M100 30 L106 100 L100 108 L94 100 Z" fill="#A3204F" stroke="#17130F" strokeWidth=".8" />
           </motion.g>
         )}
+        {floor != null && <text x="100" y="176" textAnchor="middle" className="display" fontStyle="italic" fontSize="9" fill="#A3204F">Floor {floor.toFixed(0)}%</text>}
         <circle cx="100" cy="100" r="7" fill="#EFE5D3" stroke="#17130F" strokeWidth="1.6" />
         <text x="100" y="146" textAnchor="middle" className="display" fontSize="25" fill="#17130F">{value == null ? '—' : `${value >= 1000 ? '999+' : value.toFixed(0)}%`}</text>
         <text x="100" y="160" textAnchor="middle" fontSize="5.6" letterSpacing="1.4" fill="#6B6153">{label.toUpperCase()}</text>
       </svg>
-      {floor != null && <figcaption className="absolute -right-2 top-6 display italic text-magenta text-lg">Floor {floor.toFixed(0)}%</figcaption>}
     </figure>
   )
 }
