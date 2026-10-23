@@ -18,10 +18,18 @@
       "note": "pre-hardening deployment, superseded"
     },
     "SternpostRouter": {
+      "address": "0xEC30280134f06668f35753D640c6760984179674",
+      "tx": "0x846a7d75e4ca4925b58c1cafedbe40a11d61280b30d9ea03721c696e7ffcf61c",
+      "block": 16311860,
+      "routesEnabledMask": 7,
+      "maxLegs": 2
+    },
+    "SternpostRouterV1": {
       "address": "0x7550a53Cc5510B192A3B486368B8330D1CC7284c",
       "tx": "0x2dd7809a87a7ca0b65d1e9acd4147b8656c0c87642ba81986f0ed01aed1a6f0c",
       "block": 16311651,
-      "routesEnabledMask": 7
+      "routesEnabledMask": 7,
+      "note": "superseded: fetched the price per leg, which fails on Mezo for 2+ legs"
     }
   },
   "mezo": {
@@ -153,28 +161,44 @@
   },
   "routeFlow": [
     {
-      "step": "authorizeApp(router, 100 MUSD budget, 25 per draw, payee=router)",
+      "step": "v1 authorizeApp(router, 100 MUSD budget, 25 per draw, payee=router)",
       "tx": "0x4dc0422b68fed65221dead590b8ae4f7313f6f29fecb45b473a8c68b6a661f54"
     },
     {
-      "step": "router.setRoutes(SAVE|SWAP|LOOP)",
+      "step": "v1 router.setRoutes(SAVE|SWAP|LOOP)",
       "tx": "0x6f91930f4aaf40d08e7aec173b180caea8c1360d18d4191d66317cefdda5bc8a"
     },
     {
-      "step": "drawAndSave(5 MUSD -> sMUSD)",
+      "step": "v1 drawAndSave(5 MUSD -> sMUSD)",
       "tx": "0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311"
     },
     {
-      "step": "drawAndSwap(5 MUSD -> BTC, 1% min-out)",
+      "step": "v1 drawAndSwap(5 MUSD -> BTC, 1% min-out)",
       "tx": "0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91"
     },
     {
-      "step": "loop(1 leg: draw 5 MUSD -> swap -> addColl)",
+      "step": "v1 loop(1 leg: draw 5 MUSD -> swap -> addColl)",
       "tx": "0xcf9a5b39f26efe769eb15ab82d789ab7d331236180e65a62e15ae89091e4e5dd"
     },
     {
-      "step": "governor.rearm after loop",
+      "step": "v1 governor.rearm after loop",
       "tx": "0x7bad78e81a88966cd42ec3041120c6ae3e6da81bde707436487bb58c977e4c21"
+    },
+    {
+      "step": "v2 authorizeApp(router, 200 MUSD budget, 20 per draw, payee=router)",
+      "tx": "0x641e94107b9ca7fed1e82d860ea8909bf2394a8a8bb0233fad541c763987e379"
+    },
+    {
+      "step": "v2 router.setRoutes(SAVE|SWAP|LOOP)",
+      "tx": "0x5384e71634e5281cf972f29484701e0b4021bf3386b24dfab2b52c638f881635"
+    },
+    {
+      "step": "v2 loop(2 legs: 2x draw 10 MUSD -> swap -> addColl)",
+      "tx": "0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1"
+    },
+    {
+      "step": "v2 governor.rearm after the 2-leg loop",
+      "tx": "0x3d535a3f98a1c1b4649490876fbf28e8b956c0349a62862b846600b327c36d4c"
     }
   ]
 }
