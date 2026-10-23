@@ -89,6 +89,28 @@ ABIs are in [`shared/abis`](shared/abis), and addresses plus every tx are in [`s
 
 The app connects any EVM wallet the browser announces (EIP-6963), plus Coinbase Wallet. WalletConnect turns on when `VITE_WC_PROJECT_ID` is set. Bitcoin wallets (Xverse, Unisat, OKX Bitcoin) are listed as read-only: Mezo's BorrowerOperationsSignatures checks plain ECDSA signatures and has no EIP-1271 path, so a smart account behind a BTC wallet cannot sign a draw.
 
+## Telegram bot
+
+Sternpost's Telegram bot reports your trove and lets you approve or deny agent draws from chat. It never holds a key. Every action that moves funds is a transaction you sign in your own wallet, and the governor contract enforces it.
+
+| Command | What it does |
+|---|---|
+| `/link` | Binds your wallet to the chat. You sign one message (no gas), bound to a single-use code that expires in 10 minutes. |
+| `/status` | Live ICR, floor, defend line, buffer and frozen state, read from the governor on chain. |
+| `/balances` | MUSD and MEZO in the linked wallet. |
+| `/requests` | Pending agent draw requests. |
+| `/revoke` | Opens the app's Revoke page, where you sign the freeze and nonce burn. |
+| `/unlink` | Deletes the chat binding. |
+
+- **Approvals:** a new draw request arrives as a card with three buttons:
+  - **Approve in wallet** opens the app so you can sign `authorizeApp` with the budget.
+  - **I signed, verify** reads `appPolicy` on chain. It marks the request approved only if the remaining budget covers the amount and the authorization has not expired.
+  - **Deny** rejects the request; the app gets no new budget.
+
+  Clicking a button in chat never grants an allowance; only the on-chain transaction does.
+- **Alerts:** the bot warns you, at most once an hour, when ICR comes within 10% of your floor (`TELEGRAM_ALERT_MARGIN_BPS`). Requests are pushed as soon as they are posted. A cron sweep catches anything missed.
+- **Setup:** set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` and `FACTORY_ADDRESS` on the API, then run `node backend/scripts/telegram-setup.mjs`. The routes stay unmounted until a token is set.
+
 ## Honest limits
 
 The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. Sternpost is unaudited and runs on testnet only. The explorer would not accept source verification for any contract while we tried, so `judges/VERIFY.md` shows a byte-for-byte match instead. Details are in the [threat model](docs/THREAT_MODEL.md).
