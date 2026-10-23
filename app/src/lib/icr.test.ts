@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WAD, icr, judgeDraw, maxSafeDraw, pct } from './icr'
+import { WAD, icr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
 
 const price = 100_000n * WAD // $100k BTC
 const coll = WAD // 1 BTC
@@ -31,5 +31,22 @@ describe('icr math', () => {
     expect(judgeDraw({ ...base, amount: 5n * WAD, perDrawMax: WAD })).toMatchObject({ reason: 'OVER_PER_DRAW' })
     expect(judgeDraw({ ...base, amount: 5n * WAD, remaining: WAD })).toMatchObject({ reason: 'OVER_BUDGET' })
     expect(judgeDraw({ ...base, amount: WAD, frozen: true })).toMatchObject({ reason: 'FROZEN' })
+  })
+})
+
+describe('safeDraw', () => {
+  const W = 10n ** 18n
+  it('per-draw cap binds and is suggested whole', () => {
+    const r = safeDraw({ floorRoom: 431n * W, feePerWad: W / 1000n, perDraw: 5n * W })
+    expect(r).toEqual({ max: 5n * W, limit: 'cap', suggest: 5n * W })
+  })
+  it('floor binds after fee and margin, suggests half', () => {
+    const r = safeDraw({ floorRoom: 100n * W, feePerWad: W / 1000n })
+    expect(r.limit).toBe('floor')
+    expect(r.max).toBe(9890n * 10n ** 16n)
+    expect(r.suggest).toBe(4945n * 10n ** 16n)
+  })
+  it('remaining budget binds', () => {
+    expect(safeDraw({ floorRoom: 100n * W, feePerWad: 0n, perDraw: 50n * W, remaining: 2n * W }).limit).toBe('budget')
   })
 })

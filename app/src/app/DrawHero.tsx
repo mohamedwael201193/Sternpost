@@ -8,9 +8,11 @@ import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
 import { useDrawSend, type Route } from './useDrawSend'
 import { EnableRoutes, useRoutesReady } from './EnableRoutes'
+import { useLimits } from './useLimits'
+import { Limits } from './Limits'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
 import { MEZO, ROUTER } from '../lib/chain'
-import { REASONS, WAD, fmt, maxSafeDraw, pct, projectedIcr } from '../lib/icr'
+import { REASONS, WAD, fmt, pct, projectedIcr } from '../lib/icr'
 import { DRAW_WINDOW_S } from '../lib/sig'
 
 const toPct = (v?: bigint) => (v === undefined ? undefined : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
@@ -26,7 +28,8 @@ const pos = (p?: number) => (p === undefined ? 0 : (Math.min(Math.max(p, LO), HI
 /** The dashboard hero: a single self-submitted draw with a live ratio preview and one Sign & send. */
 export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero({ t }, ref) {
   const reduce = useReducedMotion()
-  const [amount, setAmount] = useState('10')
+  const [amount, setAmount] = useState('')
+  const [touched, setTouched] = useState(false)
   const [route, setRoute] = useState<Route>('keep')
   const wei = useMemo(() => { try { return parseUnits(amount || '0', 18) } catch { return 0n } }, [amount])
   const self = (t.address ?? '0x0000000000000000000000000000000000000000') as Address
@@ -35,7 +38,11 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const [ok, reason, icrAfter] = preview.data ?? [undefined, '', undefined]
   const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
   const after = icrAfter ?? local
-  const avail = t.hasTrove && t.price && t.floor ? maxSafeDraw(t.coll!, t.price, t.debt!, t.floor) : undefined
+  const lim = useLimits(t, t.address)
+  // Start from a value the Governor will accept instead of a fixed number that may exceed the cap.
+  useEffect(() => { if (!touched && lim.safe && lim.safe.suggest > 0n) setAmount(fmt(lim.safe.suggest, 18, 2).replace(/,/g, '')) }, [touched, lim.safe?.suggest])
+  const over = lim.safe && wei > lim.safe.max ? wei - lim.safe.max : 0n
+  const debtAfter = t.debt !== undefined && wei > 0n ? t.debt + wei + (fee.data ?? 0n) : undefined
   const d = useDrawSend(t)
   const routesReady = useRoutesReady(t)
   const blocked = route !== 'keep' && !routesReady.ready
@@ -58,18 +65,15 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         <label htmlFor="hero-amount" className="caps text-[10px] text-muted mt-5 block">Amount</label>
         <div className="mt-1 flex items-center gap-3 rounded-xl border border-ink/25 bg-paper px-4 py-3 focus-within:border-magenta focus-within:shadow-[0_0_0_3px_rgba(229,25,94,.15)] transition">
           <Token sym="MUSD" size={34} />
-          <input id="hero-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+          <input id="hero-amount" inputMode="decimal" value={amount} onChange={(e) => { setTouched(true); setAmount(e.target.value.replace(/[^0-9.]/g, '')) }} placeholder="0.00"
             className="display text-4xl bg-transparent outline-none w-full min-w-0" aria-describedby="hero-avail" />
           <span className="caps text-[12px]">MUSD</span>
         </div>
         <div id="hero-avail" className="flex justify-between mt-2 text-xs">
-          <span className="text-muted">Fee {fee.data !== undefined ? `${fmt(fee.data, 18, 4)} MUSD` : '—'}</span>
-          <span className="text-right"><span className="text-muted">Available above floor </span>
-            {avail !== undefined
-              ? <button className="mono text-magenta ink-link" onClick={() => setAmount(fmt(avail, 18, 2).replace(/,/g, ''))}>{fmt(avail)} MUSD</button>
-              : <span className="mono">—</span>}
-          </span>
+          <span className="text-muted" data-testid="hero-fee">Mezo fee {fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)` : '—'}</span>
+          {over > 0n && <span className="text-signal" data-testid="hero-over">{fmt(over)} MUSD over max safe</span>}
         </div>
+        <Limits t={t} l={lim} onPick={(v) => { setTouched(true); setAmount(v) }} />
 
         <div className="caps text-[10px] text-muted mt-5">Live ratio preview</div>
         <div className="relative mt-2 h-2.5 rounded-full bg-ink/10 overflow-visible" role="img" aria-label={`Current ${cur ?? '—'}%, after draw ${aft ?? '—'}%, floor ${flo ?? '—'}%`}>
@@ -83,7 +87,8 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         </div>
         <dl className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 mt-3 text-sm">
           <dt>Current</dt><dd className="mono text-magenta">{flo !== undefined ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right">{t.icr ? pct(t.icr) : '—'}</dd>
-          <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? pct(after) : '—'}</dd>
+          <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${t.floor && after < t.floor ? ' · below floor' : ''}` : '—'}</dd>
+          <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>
         {ROUTER && (
           <fieldset className="mt-5">
@@ -98,7 +103,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             {ready && route !== 'keep' && <EnableRoutes t={t} />}
           </fieldset>
         )}
-        {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}</p>}
+        {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}{reason === 'OVER_PER_DRAW' && lim.perDraw !== undefined ? ` The cap is ${fmt(lim.perDraw)} MUSD.` : ''}</p>}
 
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />

@@ -56,3 +56,20 @@ export const REASONS: Record<string, string> = {
   APP_EXPIRED: "This app's authorization has expired.",
   PAYEE_NOT_ALLOWED: 'The payee is not the one you approved for this app.',
 }
+
+export type DrawLimit = 'floor' | 'cap' | 'budget'
+/**
+ * Largest draw the Governor will accept: the per-draw cap, the app's remaining budget, and the floor
+ * room after Mezo's fee (feePerWad = fee on 1 MUSD), less a 1% margin for price moves. Rounded down to cents.
+ */
+export function safeDraw(p: { floorRoom: bigint; feePerWad: bigint; perDraw?: bigint; remaining?: bigint }): { max: bigint; limit: DrawLimit; suggest: bigint } {
+  const byFloor = ((p.floorRoom * WAD) / (WAD + p.feePerWad)) * 99n / 100n
+  let max = byFloor, limit: DrawLimit = 'floor'
+  if (p.perDraw !== undefined && p.perDraw < max) { max = p.perDraw; limit = 'cap' }
+  if (p.remaining !== undefined && p.remaining < max) { max = p.remaining; limit = 'budget' }
+  const cent = 10n ** 16n
+  max = (max / cent) * cent
+  // Suggest the full cap/budget when that binds; when only the floor binds, suggest half the room.
+  const suggest = limit === 'floor' ? ((max / 2n) / cent) * cent : max
+  return { max, limit, suggest }
+}
