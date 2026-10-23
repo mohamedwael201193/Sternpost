@@ -74,10 +74,13 @@ export function useTx() {
       // to recover it, and say that is what we did.
       let msg = 'Reason unavailable.'
       try {
-        const t = await client!.getTransaction({ hash })
+        // Mezo's public RPC is load-balanced and sometimes misses a fresh tx; retry briefly.
+        let t: Awaited<ReturnType<NonNullable<typeof client>['getTransaction']>> | undefined
+        for (let i = 0; i < 4 && !t; i++) t = await client!.getTransaction({ hash }).catch(() => new Promise<undefined>((ok) => setTimeout(ok, 1500)))
+        if (!t) throw new Error('tx not found for replay')
         await client!.call({ account: t.from, to: t.to!, data: t.input, value: t.value, blockNumber: r.blockNumber })
         msg = 'Replay at that block did not revert (state changed); reason unknown.'
-      } catch (e) { msg = `${humanRevert(e)} (reason recovered by replaying the call at block ${r.blockNumber}, not read from the receipt)` }
+      } catch (e: any) { msg = /not found for replay/.test(e?.message) ? 'Reason unavailable (RPC did not return the tx for replay).' : `${humanRevert(e)} (reason recovered by replaying the call at block ${r.blockNumber}, not read from the receipt)` }
       set({ phase: 'reverted', hash, msg })
       return false
     } catch (e: any) {
