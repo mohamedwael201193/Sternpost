@@ -8,9 +8,9 @@ import { humanRevert } from '../lib/errors'
 import { MEZO, ROUTER } from '../lib/chain'
 import { addCollTypes, drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../lib/sig'
 
-/** Where the drawn MUSD goes: to you (Keep), into sMUSD savings (Save), or swapped to BTC and added back as collateral (Loop). */
-export type Route = 'keep' | 'save' | 'loop'
-/** Loop min-out below the live DEX quote. */
+/** Where the drawn MUSD goes: to you (Keep), into sMUSD savings (Save), swapped to BTC for you (Swap), or swapped and added back as collateral (Loop). */
+export type Route = 'keep' | 'save' | 'swap' | 'loop'
+/** Swap/Loop min-out below the live DEX quote. */
 export const LOOP_SLIPPAGE_BPS = 100n
 
 /** Re-sign the withdraw if fewer than this many seconds remain before we can hand it to the wallet. */
@@ -26,12 +26,13 @@ export function useDrawSend(t: Trove) {
   const { signTypedDataAsync } = useSignTypedData()
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
+  const rearmTx = useTx()
   const [bundle, setBundle] = useState<string>('')
   const [err, setErr] = useState('')
   const [step, setStep] = useState('')
   const [deadline, setDeadline] = useState<bigint>()
   const [skew, setSkew] = useState(0n) // chain time minus local time, seconds
-  const busy = !!step || tx.phase === 'signing' || tx.phase === 'pending'
+  const busy = !!step || [tx.phase, rearmTx.phase].some((p) => p === 'signing' || p === 'pending')
 
   const localNow = () => BigInt(Math.floor(Date.now() / 1000))
   async function chainNow() {
@@ -44,7 +45,7 @@ export function useDrawSend(t: Trove) {
     const routed = route !== 'keep' && !!ROUTER
     if (routed) payee = ROUTER!
     const self = app.toLowerCase() === t.address?.toLowerCase()
-    setErr(''); setBundle(''); setDeadline(undefined); tx.reset()
+    setErr(''); setBundle(''); setDeadline(undefined); tx.reset(); rearmTx.reset()
     try {
       const borrower = t.address!, governor = t.governor!
       setStep('Reading your Mezo nonce…')
@@ -55,9 +56,11 @@ export function useDrawSend(t: Trove) {
       const healSig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: m0.heal })
       // Loop: the swapped BTC is added back with an AddColl at nonce + 1; its amount is also the swap's min-out.
       let coll = 0n, addCollSig: Hex = '0x', addCollDeadline = 0n
-      if (route === 'loop' && ROUTER) {
+      if ((route === 'loop' || route === 'swap') && ROUTER) {
         const q = await client!.readContract({ address: ROUTER, abi: routerAbi, functionName: 'quoteSwap', args: [wei] })
         coll = q - (q * LOOP_SLIPPAGE_BPS) / 10000n
+      }
+      if (route === 'loop' && ROUTER) {
         addCollDeadline = (await chainNow()) + 600n
         setStep('Extra signature: add the swapped BTC as collateral (nonce + 1)…')
         addCollSig = await signTypedDataAsync({ domain: mezoDomain(), types: addCollTypes, primaryType: 'AddColl', message: { assetAmount: coll, borrower, nonce: nonce + 1n, deadline: addCollDeadline } }) as Hex
@@ -78,12 +81,15 @@ export function useDrawSend(t: Trove) {
         if (routed) {
           const call = route === 'save'
             ? { address: ROUTER!, abi: routerAbi, functionName: 'drawAndSave' as const, args: [governor, wei, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const }
+            : route === 'swap'
+            ? { address: ROUTER!, abi: routerAbi, functionName: 'drawAndSwap' as const, args: [governor, wei, coll, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const }
             : { address: ROUTER!, abi: routerAbi, functionName: 'loop' as const, args: [governor, [{ amount: wei, withdrawDeadline: m.withdraw.deadline, withdrawSig: withdrawSig as Hex, healDeadline: m0.heal.deadline, healSig: healSig as Hex, collAmount: coll, addCollDeadline, addCollSig }]] as const }
           setStep('Checking the route with the router (simulation)…')
           try { await client!.simulateContract({ account: borrower, ...(call as any) }) }
           catch (e) { if (/Signature expired/.test(humanRevert(e)) && attempt < 3) continue; throw e }
           setStep('')
-          await tx.run(() => writeContractAsync({ ...(call as any), gas: 3_000_000n }))
+          const done = await tx.run(() => writeContractAsync({ ...(call as any), gas: 3_000_000n }))
+          if (done && route === 'loop') await rearmAfterLoop(borrower, governor, wei)
           break
         }
         setStep('Checking the draw with the Governor (simulation)…')
@@ -96,6 +102,24 @@ export function useDrawSend(t: Trove) {
       t.refetch()
     } catch (e) { setErr(humanRevert(e)) } finally { setStep('') }
   }
+  /** A loop leg's AddColl spends the standby's nonce, so the standby is dead after a loop. Re-arm it right away. */
+  async function rearmAfterLoop(borrower: Address, governor: Address, fallback: bigint) {
+    setStep('Loop done. Your standby repay used the same nonce, so it is no longer live. Last step: re-arm it…')
+    const [n, sb, buf] = await Promise.all([
+      client!.readContract({ address: MEZO.signatures, abi: signaturesAbi, functionName: 'getNonce', args: [borrower] }),
+      client!.readContract({ address: governor, abi: governorFullAbi, functionName: 'standby' }),
+      client!.readContract({ address: governor, abi: governorFullAbi, functionName: 'buffer' }),
+    ])
+    let amount = sb[0] > 0n ? sb[0] : fallback
+    if (amount > buf) amount = buf
+    if (amount === 0n) { setErr('Loop done, but the buffer is empty, so the standby could not be re-armed. Re-arm it on the Revoke page.'); return }
+    const deadline = (await chainNow()) + 24n * 3600n
+    setStep(`Sign the re-arm: standby repay of up to ${amount / 10n ** 18n} MUSD at your new nonce ${n}…`)
+    await rearmTx.run(async () => {
+      const sig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: { amount, borrower, nonce: n, deadline } })
+      return writeContractAsync({ address: governor, abi: governorFullAbi, functionName: 'rearm', args: [amount, deadline, sig as Hex] })
+    })
+  }
   const sent = tx.phase === 'success' || tx.phase === 'reverted'
-  return { go, tx, bundle, err, step, deadline, skew, busy, sent }
+  return { go, tx, rearmTx, bundle, err, step, deadline, skew, busy, sent }
 }
