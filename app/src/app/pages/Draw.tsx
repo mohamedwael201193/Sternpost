@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react'
-import { useReadContract, useSignTypedData, useWriteContract } from 'wagmi'
+import { useEffect, useMemo, useState } from 'react'
+import { usePublicClient, useReadContract, useSignTypedData, useWriteContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address, type Hex } from 'viem'
 import { Gauge } from '../../ui/Gauge'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove } from '../useTrove'
-import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
+import { borrowerOpsAbi, governorAbi, governorFullAbi, signaturesAbi } from '../../lib/abi'
+import { humanRevert } from '../../lib/errors'
 import { MEZO } from '../../lib/chain'
 import { REASONS, WAD, pct, projectedIcr } from '../../lib/icr'
-import { drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../../lib/sig'
+import { DRAW_WINDOW_S, drawMessages, mezoDomain, repayTypes, withdrawTypes } from '../../lib/sig'
 
 const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
@@ -63,41 +64,91 @@ function Verdict({ ok, reason, loading }: { ok?: boolean; reason: string; loadin
   )
 }
 
+/** Re-sign the withdraw if fewer than this many seconds remain before we can hand it to the wallet. */
+const MIN_LEFT_S = 45n
+
 function Sign({ t, wei, app, payee, ok, fields }: {
   t: ReturnType<typeof useTrove>; wei: bigint; app: Address; payee: Address; ok: boolean
   fields: { amount: string; setAmount: (s: string) => void; app: string; setApp: (s: string) => void; payee: string; setPayee: (s: string) => void }
 }) {
+  const client = usePublicClient()
   const { signTypedDataAsync } = useSignTypedData()
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
   const [bundle, setBundle] = useState<string>('')
   const [err, setErr] = useState('')
+  const [step, setStep] = useState('')
+  const [deadline, setDeadline] = useState<bigint>()
+  const [skew, setSkew] = useState(0n) // chain time minus local time, seconds
+  const busy = !!step || tx.phase === 'signing' || tx.phase === 'pending'
   const self = app.toLowerCase() === t.address?.toLowerCase()
   const f = 'mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full mt-1'
 
-  async function go() {
-    setErr(''); setBundle('')
-    try {
-      const m = drawMessages({ amount: wei, borrower: t.address!, governor: t.governor!, nonce: t.nonce! })
-      const withdrawSig = await signTypedDataAsync({ domain: mezoDomain(), types: withdrawTypes, primaryType: 'WithdrawMUSD', message: m.withdraw })
-      const healSig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: m.heal })
-      const args = [wei, payee, m.withdraw.deadline, withdrawSig as Hex, m.heal.deadline, healSig as Hex] as const
-      if (self) await tx.run(() => writeContractAsync({ address: t.governor!, abi: governorAbi, functionName: 'draw', args }))
-      else setBundle(JSON.stringify({ governor: t.governor, amount: String(wei), payee, withdrawDeadline: String(m.withdraw.deadline), withdrawSig, healDeadline: String(m.heal.deadline), healSig }, null, 2))
-    } catch (e: any) { setErr((e?.shortMessage || e?.message || String(e)).split('\n')[0]) }
+  const localNow = () => BigInt(Math.floor(Date.now() / 1000))
+  async function chainNow() {
+    const b = await client!.getBlock({ blockTag: 'latest' })
+    const s = b.timestamp - localNow(); setSkew(s)
+    return localNow() + s
   }
+
+  async function go() {
+    setErr(''); setBundle(''); setDeadline(undefined); tx.reset()
+    try {
+      const borrower = t.address!, governor = t.governor!
+      setStep('Reading your Mezo nonce…')
+      const nonce = await client!.readContract({ address: MEZO.signatures, abi: signaturesAbi, functionName: 'getNonce', args: [borrower] })
+      // 1) Standby repay first: its deadline is 24 h, so time spent here does not eat the withdraw window.
+      setStep('Signature 1 of 2: standby repay (nonce + 1)…')
+      const m0 = drawMessages({ amount: wei, borrower, governor, nonce, now: await chainNow() })
+      const healSig = await signTypedDataAsync({ domain: mezoDomain(), types: repayTypes, primaryType: 'RepayMUSD', message: m0.heal })
+      // 2) Withdraw: deadline taken from chain time right before this signature. Re-sign once if it ran low.
+      for (let attempt = 1; ; attempt++) {
+        setStep(attempt === 1 ? 'Signature 2 of 2: withdraw (window starts now)…' : 'Withdraw window ran low, re-signing with a fresh deadline…')
+        const m = drawMessages({ amount: wei, borrower, governor, nonce, now: await chainNow() })
+        setDeadline(m.withdraw.deadline)
+        const withdrawSig = await signTypedDataAsync({ domain: mezoDomain(), types: withdrawTypes, primaryType: 'WithdrawMUSD', message: m.withdraw })
+        const left = m.withdraw.deadline - (await chainNow())
+        if (left < MIN_LEFT_S) { if (attempt < 3) continue; throw new Error('Signature expired') }
+        const args = [wei, payee, m.withdraw.deadline, withdrawSig as Hex, m0.heal.deadline, healSig as Hex] as const
+        if (!self) {
+          setBundle(JSON.stringify({ governor, amount: String(wei), payee, withdrawDeadline: String(m.withdraw.deadline), withdrawSig, healDeadline: String(m0.heal.deadline), healSig }, null, 2))
+          break
+        }
+        setStep('Checking the draw with the Governor (simulation)…')
+        try { await client!.simulateContract({ account: borrower, address: governor, abi: governorFullAbi, functionName: 'draw', args }) }
+        catch (e) { if (/Signature expired/.test(humanRevert(e)) && attempt < 3) continue; throw e }
+        setStep('')
+        await tx.run(() => writeContractAsync({ address: governor, abi: governorFullAbi, functionName: 'draw', args, gas: 1_750_000n }))
+        break
+      }
+    } catch (e) { setErr(humanRevert(e)) } finally { setStep('') }
+  }
+  const sent = tx.phase === 'success' || tx.phase === 'reverted'
   return (
     <Card title="Sign the draw">
       <div className="grid gap-4">
         <label className="caps text-[11px] text-muted">Amount (MUSD)<input className={f} value={fields.amount} onChange={(e) => fields.setAmount(e.target.value)} inputMode="decimal" /></label>
         <label className="caps text-[11px] text-muted">App (submits the draw)<input className={f} value={fields.app} onChange={(e) => fields.setApp(e.target.value.trim())} placeholder="this wallet" /></label>
         <label className="caps text-[11px] text-muted">Payee<input className={f} value={fields.payee} onChange={(e) => fields.setPayee(e.target.value.trim())} placeholder="this wallet" /></label>
-        <p className="text-xs text-muted">You sign two messages: a withdraw that can only pay your Governor and expires in under two minutes, and a standby repay for the next nonce. {self ? 'This wallet is the app, so it submits the draw itself.' : 'The signatures go to the app, which submits them.'}</p>
-        <button className="pill self-start" disabled={!ok || t.nonce === undefined || tx.phase === 'signing' || tx.phase === 'pending'} onClick={go}>{self ? 'Sign and submit' : 'Sign for app'}</button>
-        {err && <p className="text-sm text-signal">{err}</p>}
+        <p className="text-xs text-muted">Two signatures: first a standby repay for the next nonce (valid 24 h), then a withdraw that can only pay your Governor. Mezo's withdraw window is short by design: the Governor rejects deadlines more than 120 s ahead, and this app uses {String(DRAW_WINDOW_S)} s counted from chain time at the moment you sign it. {self ? 'The draw transaction is sent right after the second signature; confirm it in your wallet before the countdown ends.' : 'Hand the bundle to the app before the countdown ends.'}</p>
+        <button className="pill self-start" disabled={!ok || t.nonce === undefined || busy} onClick={go}>{self ? 'Sign & send' : 'Sign for app'}</button>
+        {step && <p className="text-sm" role="status">{step}</p>}
+        {deadline && !sent && !err && <Countdown deadline={deadline} skew={skew} />}
+        {err && <p className="text-sm text-signal" role="alert">{err}</p>}
       </div>
       <TxStatus tx={tx} />
-      {bundle && <div className="mt-4"><div className="caps text-[11px] text-muted mb-1">Hand this to the app (expires in ~110 s)</div><textarea readOnly className="mono text-[11px] w-full h-40 border border-ink/30 bg-paper p-2" value={bundle} /></div>}
+      {bundle && <div className="mt-4"><div className="caps text-[11px] text-muted mb-1">Hand this to the app</div><textarea readOnly className="mono text-[11px] w-full h-40 border border-ink/30 bg-paper p-2" value={bundle} /></div>}
     </Card>
+  )
+}
+
+function Countdown({ deadline, skew }: { deadline: bigint; skew: bigint }) {
+  const [now, setNow] = useState(() => BigInt(Math.floor(Date.now() / 1000)) + skew)
+  useEffect(() => { const i = setInterval(() => setNow(BigInt(Math.floor(Date.now() / 1000)) + skew), 1000); return () => clearInterval(i) }, [skew])
+  const left = Number(deadline - now)
+  return (
+    <p data-testid="countdown" className={`mono text-sm ${left < Number(MIN_LEFT_S) ? 'text-signal' : ''}`}>
+      {left > 0 ? `Withdraw signature valid for ${left} s more (chain time).` : 'Withdraw signature has expired; a send now would revert. Press Sign & send again.'}
+    </p>
   )
 }
