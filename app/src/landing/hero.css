@@ -1,0 +1,7 @@
+@keyframes hero-pulse { 0%,100% { opacity: .55; transform: scale(.94) } 50% { opacity: 1; transform: scale(1.06) } }
+@keyframes hero-spin { to { transform: rotate(360deg) } }
+@keyframes hero-flow { to { stroke-dashoffset: -38 } }
+.hero-pulse { animation: hero-pulse 3.2s ease-in-out infinite }
+.hero-spin { animation: hero-spin 40s linear infinite }
+.hero-flow { animation: hero-flow 1.4s linear infinite }
+@media (prefers-reduced-motion: reduce) { .hero-pulse, .hero-spin, .hero-flow { animation: none } }
