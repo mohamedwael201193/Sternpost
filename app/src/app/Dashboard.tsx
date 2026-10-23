@@ -23,17 +23,17 @@ const NAV = [
 ] as const
 
 export default function Dashboard() {
-  // The landing's pre-JS hero background lives in index.html; hide it while the dashboard is mounted.
+  // The contour background lives in index.html (painted before JS); use its soft dashboard variant while mounted.
   useEffect(() => {
     const bg = document.getElementById('hero-bg')
     if (!bg) return
-    bg.style.display = 'none'
-    return () => { bg.style.display = '' }
+    bg.className = 'dash-bg contours-soft'
+    return () => { bg.className = 'hero-bg contours' }
   }, [])
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
-        <div className="min-h-screen grain contours-soft grid md:grid-cols-[240px_1fr]">
+        <div className="min-h-screen grain grid md:grid-cols-[240px_1fr]">
           <aside className="border-r border-ink/20 bg-paper/70 md:sticky md:top-0 md:h-screen flex md:flex-col">
             <Link to="/" className="display text-[34px] px-7 py-6 md:border-b border-ink/20">Sternpost</Link>
             <nav className="flex md:flex-col gap-1 p-3 md:p-5 overflow-x-auto" aria-label="Dashboard">
