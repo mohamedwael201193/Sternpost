@@ -102,7 +102,9 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
   const config = useConfig()
   // Connect first, then ask for Mezo testnet as a separate step. Bundling both into one connect made a slow
   // chain-switch prompt surface as a failed connect even though the account was already linked.
-  const connect = ({ connector }: { connector: Connector }) => connectAsync({ connector })
+  // Injected wallets connect first and switch chain after, so a slow switch prompt never reads as a failed connect.
+  // Other connectors (Bitcoin via OrangeKit, WalletConnect) need the chain up front.
+  const connect = ({ connector }: { connector: Connector }) => connectAsync(connector.type === 'injected' || connector.type === 'metaMask' ? { connector } : { connector, chainId: mezoTestnet.id })
     .then((r) => { if (r.chainId !== mezoTestnet.id) return switchChainAction(config, { chainId: mezoTestnet.id }).catch(() => undefined) })
     .catch(() => undefined)
   const { isConnected } = useAccount()
