@@ -34,4 +34,23 @@ contract SpendWalletTest is Test {
         vm.expectRevert(SpendWallet.OnlyOwner.selector); w.revokeAgent();
         vm.expectRevert(SpendWallet.OnlyOwner.selector); w.setAgent(address(1), 1);
     }
+
+    function test_setBudget_approveFalse_reverts() public {
+        vm.mockCall(address(musd), abi.encodeWithSelector(MockMUSD.approve.selector), abi.encode(false));
+        vm.prank(owner);
+        vm.expectRevert(SpendWallet.TransferFailed.selector);
+        w.setBudget(address(musd), 1e18);
+    }
+    function test_sweep_transferFalse_reverts() public {
+        vm.mockCall(address(musd), abi.encodeWithSelector(MockMUSD.transfer.selector), abi.encode(false));
+        vm.prank(owner);
+        vm.expectRevert(SpendWallet.TransferFailed.selector);
+        w.sweep(address(musd), 1e18);
+    }
+    function test_highS_malleatedSignature_rejected() public view {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(agentPk, keccak256("x"));
+        uint256 n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+        bytes memory mal = abi.encodePacked(r, bytes32(n - uint256(s)), v == 27 ? uint8(28) : uint8(27));
+        assertEq(w.isValidSignature(keccak256("x"), mal), bytes4(0xffffffff));
+    }
 }
