@@ -65,7 +65,7 @@ function Requests({ borrower }: { borrower?: string }) {
       {q.items.slice(0, 3).map((r) => (
         <div key={r.id} className="flex items-center justify-between py-3 border-t border-ink/15">
           <div><div className="mono text-xs">{r.app_address.slice(0, 8)}…</div><div className="display text-lg">{fmt(BigInt(r.amount))} MUSD</div></div>
-          <Link to={`apps?app=${r.app_address}&amount=${r.amount}`} className="pill">Review</Link>
+          <Link to={`/app/apps?app=${r.app_address}&amount=${r.amount}&request=${r.id}`} className="pill">Review</Link>
         </div>
       ))}
     </Card>
