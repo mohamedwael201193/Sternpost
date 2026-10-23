@@ -58,3 +58,15 @@ describe("config", () => {
     expect(() => loadConfig({ X402_PAY_TO: "0x1" })).toThrow();
   });
 });
+
+describe("indexer sync endpoint", () => {
+  it("404 when disabled, runs ticks and throttles when enabled", async () => {
+    const off = (await testApp()).app;
+    expect((await off.request("/v1/indexer/sync", { method: "POST" })).status).toBe(404);
+    let n = 0;
+    const { app } = await testApp({ indexer: { tick: async () => ++n } as any });
+    const r = await app.request("/v1/indexer/sync", { method: "POST" });
+    expect(await r.json()).toEqual({ status: "ok", stored: 15 });
+    expect((await app.request("/v1/indexer/sync", { method: "POST" })).status).toBe(429);
+  });
+});
