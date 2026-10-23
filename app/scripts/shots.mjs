@@ -16,7 +16,7 @@ for (const [i, id] of ['problem', 'how', 'floor', 'proof', 'integrations', 'faq'
 await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
 await p.waitForTimeout(1000)
 await p.screenshot({ path: `${out}/landing-08-footer.png` })
-for (const r of (process.env.ROUTES || '').split(',').filter(Boolean)) {
+for (const r of (process.env.ROUTES ?? '').split(',').filter((x, i, a) => a.length > 1 || x)) {
   await p.goto(base + '/app/' + r, { waitUntil: 'networkidle' })
   await p.waitForTimeout(2000)
   await p.screenshot({ path: `${out}/app-${r || 'home'}.png` })
