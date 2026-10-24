@@ -48,7 +48,7 @@ export default function Home() {
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
         </div>
         {/* Stats */}
-        <div className="xl:col-start-1 xl:row-start-2 grid sm:grid-cols-3 gap-4 self-start relative z-10">
+        <div className="xl:col-start-1 xl:row-start-2 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 self-start relative z-10 min-w-0">
           <StatCard ref={sColl} icon="M12 3v14M7 8h10M5 14a7 7 0 0014 0M12 17v4" k="Collateral" v={t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : '—'} sub={usd(t.coll)} />
           <StatCard ref={sDebt} icon="M12 3a9 9 0 100 18 9 9 0 000-18zM15 9l-2 5-4 1 2-5z" k="Debt" v={t.debt !== undefined ? `${fmt(t.debt)} MUSD` : '—'} sub={t.debt !== undefined ? `≈ $${fmt(t.debt)}` : ''} />
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
@@ -105,11 +105,11 @@ export default function Home() {
 
 const StatCard = forwardRef<HTMLDivElement, { icon: string; k: string; v: ReactNode; sub?: ReactNode }>(function StatCard({ icon, k, v, sub }, ref) {
   return (
-    <div ref={ref} className="plate rounded-xl p-4 transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(163,32,79,.6)]">
+    <div ref={ref} className="plate rounded-xl p-4 min-w-0 transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(163,32,79,.6)]">
       <div className="caps text-[10px] tracking-[.2em] flex items-center gap-2">
         <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><path d={icon} /></svg>{k}
       </div>
-      <div className="display text-2xl mt-2 whitespace-nowrap">{v}</div>
+      <div className="display text-[clamp(1.15rem,1.6vw,1.5rem)] leading-tight mt-2 break-words">{v}</div>
       {sub && <div className="text-xs text-muted mt-1">{sub}</div>}
     </div>
   )
