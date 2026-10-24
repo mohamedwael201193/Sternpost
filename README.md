@@ -185,11 +185,13 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 
 ## Roadmap
 
-| Date | Milestone | Status |
-|---|---|---|
-| Oct 26, 2026 | Wave 1: governor, gate, revoke, routes, x402 on Mezo testnet | Live now |
-| Nov 15, 2026 | Wave 2: deeper routes and agent tooling | Planned |
-| Mar 31, 2027 | External audit, then mainnet | Planned |
+Wave 1 is live on Mezo testnet now.
+
+| When | Milestone |
+|---|---|
+| Wave 2 (November 2026) | Mezo mainnet launch: Governor, Router and SpendWallet with capped limits and source-verified contracts |
+| Next | External audit, then higher caps |
+| Then | More routes into Mezo DeFi (pool liquidity and gauges) and an agent SDK quickstart |
 
 ## Wallets
 
