@@ -103,6 +103,16 @@ Exact approvals reset to zero and a residue check close every route. Check it yo
 
 The Sign in sheet follows testnet.mezo.org: Xverse and Unisat first, then MetaMask, Taho, WalletConnect and any wallet the browser announces (EIP-6963), plus Coinbase Wallet. Bitcoin wallets sign in through Mezo Passport's OrangeKit connectors and get a Mezo smart account that can hold, fund and send. They cannot draw: Mezo's `BorrowerOperationsSignatures` checks the EIP-712 signature with `ECDSA.recover` only (no EIP-1271), and OrangeKit has no `signTypedData`. The Draw screens say so and keep Sign & send disabled for those accounts.
 
+Once connected, the wallet pill opens an account menu: copy address, view on the Mezo explorer, and disconnect (asks to confirm).
+
+## Dashboard
+
+- **Draw** starts from a safe amount, the "Max safe" chip. It is the lowest of three limits: your floor (trove health after the draw plus Mezo's fee), the app's per-draw cap, and its remaining budget. The chip says which one binds.
+- **Apps** lists every authorized app (Router v1/v2, spend wallet, your own self-draw policy) with budget, remaining, per-draw cap, expiry and a per-app revoke. API draw requests are a separate list.
+- **Activity** shows one row per transaction, with an explorer link.
+- Below 1024px the sidebar becomes a bottom nav, and no page scrolls sideways at 390px.
+- `/pay`, `/apps`, `/activity`, `/revoke` and `/draw` redirect to `/app/*`. Other paths get a 404.
+
 ## Honest limits
 
 The gate relies on how Mezo's ActivePool calls back today. If Mezo removes that callback, draws fail closed. Mezo's single shared nonce means concurrent signers invalidate each other. A loop leg's AddColl signature uses the heal nonce, so the standby must be re-armed after a loop. Router swap/loop are proven live, not on forks, because forks lack Mezo's BTC precompile. Loops are capped at 2 legs: on Mezo testnet a third leg fails inside the price precompile. Sternpost is unaudited and runs on testnet only. The explorer would not accept source verification for any contract while we tried, so `judges/VERIFY.md` shows a byte-for-byte match instead. Details are in the [threat model](docs/THREAT_MODEL.md).
