@@ -6,6 +6,11 @@ const MILES = [
   { d: 'Q1 2027', s: 'Planned', t: 'Audit, then mainnet', b: 'External audit of the Governor and Router, then a capped mainnet launch with source-verified contracts.' },
 ]
 
+const TRACKS = [
+  { n: 'Track 1', t: 'DeFi (Borrowing, Lending, Looping, and Yield)', b: 'Governed MUSD borrowing with an on-chain floor, Save into sMUSD, Swap on the Mezo DEX, and Loop back into collateral.' },
+  { n: 'Track 2', t: 'Access and Distribution for MUSD/MEZO', b: 'A Telegram bot for monitoring and approvals, x402 MUSD payments for agents, and Mezo-style multi-wallet access.' },
+]
+
 export function Roadmap() {
   return (
     <Plate id="roadmap" n="IX" kicker="Heading" title={<>The course <em>past the hackathon.</em></>}>
@@ -18,6 +23,15 @@ export function Roadmap() {
           </Reveal>
         ))}
       </ol>
+      <div className="mt-10 grid gap-6 md:grid-cols-2">
+        {TRACKS.map(t => (
+          <div key={t.n} className="border-l-2 border-magenta pl-5">
+            <p className="caps text-xs text-ink/60">{t.n}</p>
+            <h3 className="display mt-1 text-2xl">{t.t}</h3>
+            <p className="mt-2 text-ink/75">{t.b}</p>
+          </div>
+        ))}
+      </div>
     </Plate>
   )
 }
