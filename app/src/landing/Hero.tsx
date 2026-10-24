@@ -28,7 +28,7 @@ export function Hero() {
     <section onMouseMove={onMove} className="relative flex min-h-[calc(100svh-64px)] items-center overflow-hidden">
       <motion.div style={{ x: bgX, y: bgY }} className="contours absolute -inset-8 opacity-70" aria-hidden />
       <div className="hairgrid absolute inset-0 opacity-60 [mask-image:linear-gradient(to_bottom,#000_70%,transparent)]" aria-hidden />
-      <div className="relative mx-auto grid w-full max-w-[1280px] items-center gap-8 px-6 pb-16 pt-12 lg:grid-cols-[1fr_1.05fr] lg:px-10">
+      <div className="relative mx-auto grid w-full max-w-[1280px] items-center gap-8 px-6 pb-16 pt-12 lg:grid-cols-[1fr_1.3fr] lg:px-10">
         <div className="relative z-10">
           <motion.h1 {...fade(0)} className="display text-[clamp(2.8rem,5.6vw,5.2rem)] leading-[1.02] tracking-tight">
             Borrow against Bitcoin.<br />Never sail past the <em>floor.</em>
@@ -45,11 +45,11 @@ export function Hero() {
           </motion.div>
         </div>
 
-        <motion.div style={{ x: shipX, y: shipY }} className="relative mx-auto w-full max-w-[640px]">
+        <motion.div style={{ x: shipX, y: shipY }} className="relative mx-auto w-full max-w-[780px] lg:-my-10">
           <div className="relative" style={{ aspectRatio: '1000 / 960' }}>
             <motion.img src="/art/hero-stern.webp" width={590} height={895} fetchPriority="high"
               alt="Ink blueprint of a ship's stern and rudder with a Bitcoin compass"
-              className="absolute left-0 top-0 h-full mix-blend-multiply" style={{ width: '59%' }}
+              className="absolute left-0 top-0 h-full" style={{ width: '59%' }}
               {...(reduce ? {} : { initial: { clipPath: 'inset(0 0 100% 0)' }, animate: { clipPath: 'inset(0 0 0% 0)' }, transition: { duration: 1.4, ease: [.3, .7, .2, 1] } })} />
             <svg viewBox="0 0 1000 960" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
               <defs>
