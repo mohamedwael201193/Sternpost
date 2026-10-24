@@ -130,8 +130,8 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/7** (Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
 | SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **9/9** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **61/61**, 97.18% statements, 99.29% lines |
-| App unit | `cd app && npx vitest run` | **17/17** |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **72/72** (API, indexer, x402, Telegram bot) |
+| App unit | `cd app && npx vitest run` | **20/20** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |
 
