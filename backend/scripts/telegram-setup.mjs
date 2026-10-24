@@ -11,10 +11,14 @@ const call = async (method, body) => {
 };
 await call("setWebhook", { url: `${base}/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
 await call("setMyCommands", { commands: [
-  { command: "link", description: "Connect your wallet (sign one message)" },
-  { command: "status", description: "ICR, floor, defend line, buffer" },
-  { command: "balances", description: "MUSD and MEZO balances" },
-  { command: "requests", description: "Pending agent draw requests" },
-  { command: "revoke", description: "Freeze all draws (signed in your wallet)" },
+  { command: "start", description: "Main menu" },
+  { command: "link", description: "Connect your wallet" },
+  { command: "status", description: "Trove health" },
+  { command: "balances", description: "MUSD and MEZO" },
+  { command: "requests", description: "Pending draw requests" },
+  { command: "revoke", description: "Freeze all draws" },
   { command: "unlink", description: "Disconnect this chat" },
+  { command: "help", description: "How it works" },
 ] });
+await call("setMyShortDescription", { short_description: "⚓ Watch your Mezo trove and approve agent MUSD draws. Never holds keys." });
+await call("setMyDescription", { description: "⚓ Sternpost is your Mezo trove's chartroom.\n\n🧭 Live ICR, floor and buffer\n🚨 Alerts before you near the floor\n📜 Approve or deny agent MUSD draw requests\n\n🔐 Never holds keys: every approval and revoke is signed in your wallet and enforced on chain." });
