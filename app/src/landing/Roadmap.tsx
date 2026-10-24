@@ -1,9 +1,9 @@
 import { Plate, Reveal } from './Plate'
 
 const MILES = [
-  { d: 'Oct 26, 2026', s: 'Live now', t: 'Wave 1 on testnet', b: 'Governor, Factory, SpendWallet and Router v2 live on Mezo testnet. Dashboard, SDK, x402 API and Telegram bot.' },
-  { d: 'Nov 15, 2026', s: 'Planned', t: 'Wave 2 depth', b: 'More routes into Mezo DeFi (pool liquidity and gauges), bot-driven draw approvals end to end, and an agent SDK quickstart.' },
-  { d: 'Q1 2027', s: 'Planned', t: 'Audit, then mainnet', b: 'External audit of the Governor and Router, then a capped mainnet launch with source-verified contracts.' },
+  { d: 'Wave 2 · November 2026', s: 'Planned', t: 'Mezo mainnet launch', b: 'Governor, Router and SpendWallet on Mezo mainnet with capped limits and source-verified contracts.' },
+  { d: 'Next', s: 'Planned', t: 'Audit, then higher caps', b: 'External audit of the Governor and Router, then higher limits.' },
+  { d: 'Then', s: 'Planned', t: 'Deeper Mezo DeFi', b: 'More routes into Mezo DeFi (pool liquidity and gauges), bot-driven draw approvals end to end, and an agent SDK quickstart.' },
 ]
 
 const TRACKS = [
