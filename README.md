@@ -174,13 +174,22 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 
 [@sternpost_bot](https://t.me/sternpost_bot) is the chat front door to Sternpost. It is linked from the landing page and its footer.
 
+<img src="docs/media/telegram-bot.webp" alt="@sternpost_bot: /start menu and /status for the demo trove" width="820" />
+
+<sub>Rendered from the bot's reply templates in <code>backend/src/telegram/ui.ts</code> with the demo trove's live testnet values.</sub>
+
+- **Link:** `/link` asks for one wallet signature (no gas); the API checks it and binds the chat to your borrower address.
+- **Watch:** `/status` reads ICR, floor, defend line and buffer from your Governor; `/balances` shows MUSD and MEZO.
+- **Approve:** when an app posts a draw request through the API, the bot pushes a card with Approve, View, Verify and Deny. Approving opens the app to sign `authorizeApp`; status changes need your EIP-191 signature.
+- **Alert and revoke:** a cron sweep pings you before ICR nears the floor, with a one-tap link to Revoke. The bot never holds keys.
+
 ## Roadmap
 
 | Date | Milestone | Status |
 |---|---|---|
 | Oct 26, 2026 | Wave 1: governor, gate, revoke, routes, x402 on Mezo testnet | Live now |
 | Nov 15, 2026 | Wave 2: deeper routes and agent tooling | Planned |
-| Q1 2027 | External audit, then mainnet | Planned |
+| Mar 31, 2027 | External audit, then mainnet | Planned |
 
 ## Wallets
 
