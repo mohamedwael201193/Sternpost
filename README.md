@@ -10,7 +10,7 @@
 [![sdk](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml)
 [![backend](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml)
 [![CodeQL](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml)
-[![tests](https://img.shields.io/badge/tests-188%20passing-2ea44f)](#tests)
+[![tests](https://img.shields.io/badge/tests-203%20passing-2ea44f)](#tests)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [**Live app**](https://sternpost-pink.vercel.app) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
@@ -122,7 +122,7 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Measured on 2026-10-23 from this repo.
+Contracts, SDK and backend counts are from the latest green CI runs; fork and app counts from the last local runs. 203 in total (E2E not counted).
 
 | Suite | Command | Result |
 |---|---|---|
