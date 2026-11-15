@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-15T13:43:26.162Z",
-  "sourceCommit": "3374eee7ae2f6d35b88e00fbb5182e9033825551",
+  "generatedAt": "2026-11-15T14:06:27.766Z",
+  "sourceCommit": "bc4770547bbc7e57ca6320c04bb8a621d11e2018",
   "network": "Mezo testnet",
   "chainId": 31611,
   "explorer": "https://explorer.test.mezo.org",
@@ -11,6 +11,11 @@
     "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
     "total.passed is a NON-FORK subtotal (256). Passed incl. fork is 273; distinct declared tests are 270. Never quote 256 as the whole table total."
   ],
+  "consumers": {
+    "count": 0,
+    "readers": [],
+    "note": "No code consumes shared/proof.json yet: app/src/landing/Proof.tsx hardcodes its COUNTS and scripts/sync-proof.mjs reads TESTS.json only. Wiring Proof.tsx and sync-proof to this file is a separate pending task."
+  },
   "deployments": {
     "classic": {
       "factory": {
@@ -22,7 +27,9 @@
         "blockUrl": "https://explorer.test.mezo.org/block/16794393",
         "gasUsed": 4773613,
         "blockscoutVerified": true,
-        "feeRecipientUrl": "https://explorer.test.mezo.org/address/undefined"
+        "feeBps": 10,
+        "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+        "feeRecipientUrl": "https://explorer.test.mezo.org/address/0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
       },
       "governor": {
         "address": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",

@@ -1,7 +1,9 @@
 // generate-proof.mjs — regenerate shared/proof.json from TESTS.json +
 // shared/deployments/testnet.json (plan §7.3/§7.4, task 0.8 refresh hook).
-// The single source of truth for the submission's machine-readable proof
-// record. NEVER hand-edit shared/proof.json: re-run this script instead.
+// The machine-readable proof record for the submission. No code reads
+// shared/proof.json yet — wiring into Proof.tsx/sync-proof is a separate
+// pending task (see the `consumers` field this script emits). NEVER
+// hand-edit shared/proof.json: re-run this script instead.
 //
 // Usage:
 //   node scripts/generate-proof.mjs            # rebuild shared/proof.json
@@ -15,7 +17,11 @@
 //   - deployments.classic + deployments.defend: shared/deployments/testnet.json
 //     (0.9 Classic redeploy, sternpost.classicRedeploy). Addresses are
 //     cross-checked between the top-level sternpost.* entries and the
-//     classicRedeploy.* entries; a mismatch is a hard error.
+//     classicRedeploy.* entries; a mismatch is a hard error. The factory
+//     fee (feeBps/feeRecipient) lives on top-level sternpost.SternpostFactory
+//     — classicRedeploy.factory carries only address/tx/block/gasUsed, so
+//     reading the fee from there silently yields undefined (JSON drops the
+//     keys while addrUrl() stringifies to ".../address/undefined").
 //   - tests: TESTS.json (suites, totals, reconciliation). Self-validated
 //     the same way scripts/sync-proof.mjs does (totals vs suite sums,
 //     reconciliation vs declared counts); a self-inconsistent TESTS.json
@@ -75,6 +81,40 @@ function gitHead() {
     return execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
   } catch {
     return null;
+  }
+}
+
+// Guard against the silently-dropped-undefined defect class (J3-F1):
+// JSON.stringify drops undefined object values, so a missing required
+// field used to vanish from the output while addrUrl(undefined) still
+// emitted ".../address/undefined". Walk the finished proof record and
+// FAIL (non-zero exit, in both write and --check mode) if any value is
+// undefined, any string contains "undefined", or any emitted URL ends
+// in "/undefined" or "/null" (the addrUrl(null)/txUrl(null) variant).
+// Legitimate nulls (undeployed addresses, no-tx lab rows) are values,
+// not URLs, and pass this check.
+function assertNoUndefined(value, path = "proof") {
+  if (value === undefined) {
+    console.error(`generate-proof: REFUSING — ${path} is undefined (a required field was not set)`);
+    process.exit(1);
+  }
+  if (typeof value === "string") {
+    if (value.includes("undefined")) {
+      console.error(`generate-proof: REFUSING — ${path} contains "undefined": ${value}`);
+      process.exit(1);
+    }
+    if (/^https?:\/\/.*\/(undefined|null)$/.test(value)) {
+      console.error(`generate-proof: REFUSING — ${path} is a broken URL: ${value}`);
+      process.exit(1);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => assertNoUndefined(v, `${path}[${i}]`));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) assertNoUndefined(v, `${path}.${k}`);
   }
 }
 
@@ -387,7 +427,7 @@ const PROOF_TABLE = [
       tx: null,
       what: "test_recovery_mode_semantics in lab/test/Lab.t.sol (fork); no named production fork test is mapped in TESTS.json",
     },
-    forkSuites: "TESTS.json fork suites exist (testnet 10/10, mainnet 7/1) but do not name a Recovery Mode test — the 0.8 refresh must map test names",
+    forkSuites: null, // derived in main() from the TESTS.json fork suites (J3-F2); never hardcode the fork strings here
     note: "Production Recovery Mode fork test needs the 1.x fork suite on current main.",
     source: "WAVE2_WIN_PLAN.md §4.5, §7.4",
   },
@@ -505,6 +545,15 @@ function main() {
     console.error("generate-proof: REFUSING — deploy tx mismatch between sternpost.* and sternpost.classicRedeploy.* in testnet.json");
     process.exit(1);
   }
+  // The factory fee lives on sternpost.SternpostFactory, NOT under
+  // classicRedeploy.factory (which has only address/tx/block/gasUsed).
+  // Reading it from classicRedeploy.factory yields undefined and used to
+  // ship a broken ".../address/undefined" link (J3-F1). Require it here;
+  // assertNoUndefined below is the backstop for the whole record.
+  if (typeof s.SternpostFactory.feeBps !== "number" || typeof s.SternpostFactory.feeRecipient !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(s.SternpostFactory.feeRecipient)) {
+    console.error("generate-proof: REFUSING — sternpost.SternpostFactory in testnet.json has no usable feeBps/feeRecipient");
+    process.exit(1);
+  }
 
   // Task 1.9 gate: the account contracts must NOT be silently claimed
   // deployed. If an accounts deployment ever lands, this script must be
@@ -536,6 +585,50 @@ function main() {
     (suite("contracts-fuzz-account")?.passed ?? 0) +
     (suite("contracts-routes")?.passed ?? 0);
 
+  // --- Fork suites: derived, never hardcoded (J3-F2) ----------------------
+  // validateTests() above already proved the reconciliation consistent
+  // with these suites, so a consistently-tampered TESTS.json propagates
+  // here instead of contradicting a hardcoded "10/10". A missing or
+  // not-completed fork suite refuses generation rather than faking rows.
+  const forkTestnet = suite("contracts-fork-testnet");
+  const forkMainnet = suite("contracts-fork-mainnet");
+  for (const [name, s] of [
+    ["contracts-fork-testnet", forkTestnet],
+    ["contracts-fork-mainnet", forkMainnet],
+  ]) {
+    if (!s || s.status !== "completed") {
+      console.error(`generate-proof: REFUSING — TESTS.json has no completed ${name} suite; the forks section cannot be derived`);
+      process.exit(1);
+    }
+  }
+  const forkDeclared = (s) => s.passed + s.failed + s.skipped;
+  const testnetForkDeclared = forkDeclared(forkTestnet);
+  // Display convention, preserved: testnet "passed/declared", mainnet
+  // "passed/skipped". Mainnet declared is the shared declared count
+  // (reconciliation.forkDeclared, validated == testnet declared): the
+  // mainnet suite's own passed+failed+skipped understates it because
+  // forge collapses the 3 RouterForkTest tests into 1 skipped setUp entry.
+  const forkTestnetStr = `${forkTestnet.passed}/${testnetForkDeclared}`;
+  const forkMainnetStr = `${forkMainnet.passed}/${forkMainnet.skipped}`;
+  const mainnetForkDeclared = tests.reconciliation.forkDeclared;
+
+  // Totals for notes[3]: derived from the validated reconciliation, so
+  // the note can never contradict the tests.* values in the same file.
+  const totalPassed = tests.total.passed;
+  const passedInclFork = tests.reconciliation.passedInclFork;
+  const distinctDeclared =
+    tests.reconciliation.nonForkDeclared + tests.reconciliation.forkDeclared + 2;
+
+  // Same defect class (J3-F2) in the §7.4 table: the Recovery Mode row
+  // used to cite the fork strings as a hardcoded literal. Derive them
+  // so a fork tamper cannot leave this row contradicting forks.*.
+  const recoveryRow = PROOF_TABLE.find((r) => r.id === "recovery-mode-fork-test");
+  if (!recoveryRow) {
+    console.error("generate-proof: REFUSING — PROOF_TABLE is missing the recovery-mode-fork-test row");
+    process.exit(1);
+  }
+  recoveryRow.forkSuites = `TESTS.json fork suites exist (testnet ${forkTestnetStr}, mainnet ${forkMainnetStr}) but do not name a Recovery Mode test — the 0.8 refresh must map test names`;
+
   const head = gitHead();
   const proof = {
     schemaVersion: 1,
@@ -546,10 +639,22 @@ function main() {
     explorer: EXPLORER,
     notes: [
       "Testnet only (chain 31611). Sternpost is NOT deployed on mainnet; mainnet rows below are fork-tested, never broadcast.",
-      "TESTS.json is stale: it predates the 1.3/closeAccount/1.6 merges. testsStale=true until task/0.8-refresh re-runs FORK=1 make test-all.",
+      // Conditional (J3-F2): the stale text must never be emitted when
+      // testsStale is false — it used to be an unconditional literal.
+      fresh.stale
+        ? "TESTS.json is stale: it predates the 1.3/closeAccount/1.6 merges. testsStale=true until task/0.8-refresh re-runs FORK=1 make test-all."
+        : "TESTS.json is fresh: no source under contracts/backend/sdk/app/mcp/keeper/scripts changed since the TESTS.json commit and there are no uncommitted changes there; testsStale=false.",
       "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
-      "total.passed is a NON-FORK subtotal (256). Passed incl. fork is 273; distinct declared tests are 270. Never quote 256 as the whole table total.",
+      `total.passed is a NON-FORK subtotal (${totalPassed}). Passed incl. fork is ${passedInclFork}; distinct declared tests are ${distinctDeclared}. Never quote ${totalPassed} as the whole table total.`,
     ],
+    // F3 disclosure: nothing reads this file yet. Wiring Proof.tsx /
+    // sync-proof to it is a separate pending task — until then this
+    // record is not any consumer's source of truth.
+    consumers: {
+      count: 0,
+      readers: [],
+      note: "No code consumes shared/proof.json yet: app/src/landing/Proof.tsx hardcodes its COUNTS and scripts/sync-proof.mjs reads TESTS.json only. Wiring Proof.tsx and sync-proof to this file is a separate pending task.",
+    },
     deployments: {
       classic: {
         factory: {
@@ -561,9 +666,10 @@ function main() {
           blockUrl: blockUrl(cr.factory.block),
           gasUsed: cr.factory.gasUsed,
           blockscoutVerified: true,
-          feeBps: cr.factory.feeBps,
-          feeRecipient: cr.factory.feeRecipient,
-          feeRecipientUrl: addrUrl(cr.factory.feeRecipient),
+          // Fee lives on sternpost.SternpostFactory, NOT classicRedeploy.factory (J3-F1).
+          feeBps: s.SternpostFactory.feeBps,
+          feeRecipient: s.SternpostFactory.feeRecipient,
+          feeRecipientUrl: addrUrl(s.SternpostFactory.feeRecipient),
         },
         governor: {
           address: cr.governor.address,
@@ -642,9 +748,8 @@ function main() {
       total: { passed: tests.total.passed, failed: tests.total.failed, skipped: tests.total.skipped },
       nonForkDeclared: tests.reconciliation.nonForkDeclared,
       forkDeclared: tests.reconciliation.forkDeclared,
-      passedInclFork: tests.reconciliation.passedInclFork,
-      distinctDeclared:
-        tests.reconciliation.nonForkDeclared + tests.reconciliation.forkDeclared + 2,
+      passedInclFork,
+      distinctDeclared,
       distinctDeclaredNote:
         "nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties)",
       contracts: contractsTotal,
@@ -670,12 +775,12 @@ function main() {
         "Declared counts re-checked against contracts/test/account/*.sol on every generation (164 declared = 161 passed + 3 skipped).",
     },
     forks: {
-      testnet: "10/10",
-      mainnet: "7/1",
-      testnetDetail: { passed: 10, failed: 0, skipped: 0, declared: 10 },
-      mainnetDetail: { passed: 7, failed: 0, skipped: 1, declared: 10 },
+      testnet: forkTestnetStr,
+      mainnet: forkMainnetStr,
+      testnetDetail: { passed: forkTestnet.passed, failed: forkTestnet.failed, skipped: forkTestnet.skipped, declared: testnetForkDeclared },
+      mainnetDetail: { passed: forkMainnet.passed, failed: forkMainnet.failed, skipped: forkMainnet.skipped, declared: mainnetForkDeclared },
       mainnetSkippedReason:
-        "Router fork skipped: no router on mainnet (forge collapses the 3 RouterForkTest tests into 1 skipped setUp entry; declared count is the testnet suite's 10)",
+        `Router fork skipped: no router on mainnet (forge collapses the 3 RouterForkTest tests into 1 skipped setUp entry; declared count is the testnet suite's ${testnetForkDeclared})`,
       source: "TESTS.json suites contracts-fork-testnet / contracts-fork-mainnet (FORK=1 run)",
       scope: "Fork-tested against live chain state; nothing broadcast on mainnet.",
     },
@@ -760,6 +865,11 @@ function main() {
       },
     },
   };
+
+  // Backstop for the J3-F1 defect class: refuse rather than emit a
+  // record with a silently-dropped field or an ".../undefined" URL.
+  // Runs in both write and --check mode.
+  assertNoUndefined(proof);
 
   const out = JSON.stringify(proof, null, 2) + "\n";
   const outPath = join(ROOT, "shared/proof.json");
