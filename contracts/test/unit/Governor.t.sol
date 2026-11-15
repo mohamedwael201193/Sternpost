@@ -307,7 +307,7 @@ contract GovernorUnitTest is MockBase {
         assertEq(amt, 100e18);
     }
 
-    // --- Phase 0 chain (0.4): minimum defend line is 1.35e18 (above the 150% CCR with margin) ---
+    // --- Phase 0 chain (0.4): minimum defend line is 1.35e18 (above Mezo's 110% MCR with margin, deliberately below the 150% CCR so defend() must also work in Recovery Mode) ---
     function test_minDefendLine_is135() public {
         vm.prank(address(0x777));
         vm.expectRevert(SternpostGovernor.BadPolicy.selector);

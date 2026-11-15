@@ -40,7 +40,7 @@ contract SternpostGovernor {
     address public immutable feeRecipient;
 
     uint256 public constant MAX_WINDOW = 120; // seconds a withdraw signature may live
-    uint256 public constant MIN_FLOOR = 1.35e18; // defend line must sit above the 150% CCR with margin, never below it
+    uint256 public constant MIN_FLOOR = 1.35e18; // defend line must sit above Mezo's 110% MCR with margin (135% vs 110% MCR); deliberately below the 150% CCR, so defend() must also work in Recovery Mode (repay is allowed there)
     uint256 public constant MAX_FEE_BPS = 50;
     uint256 public constant GAS_COMPENSATION = 200e18; // Mezo musdGasCompensation: repay cannot take debt below this
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
