@@ -67,6 +67,15 @@ contract BatcherMockTM {
 ///         a positive balance (`"CollSurplusPool: No collateral available
 ///         to claim"`), so the live Mezo call may REVERT on zero surplus
 ///         instead of no-op. The Batcher must survive either one.
+/// @dev The mock COLLAPSES the CollSurplusPool into the BO itself: the
+///         surplus lives in `surplus[]`, so the BO answers `getCollateral`
+///         from the same mapping `claimCollateral` pays out of. That is
+///         why `collSurplusPool()` returns `address(this)` — on live Mezo
+///         the BO declares `ICollSurplusPool public collSurplusPool`
+///         (musd repo BO.sol:106) and `getCollateral` returns
+///         `balances[account]`; the real TroveAccount's read-first guard
+///         (1.3 closefix) calls exactly these two getters, so the mock
+///         must expose them or every claim reverts on the missing getter.
 contract BatcherMockBO {
     MockMUSD public musd;
     BatcherMockTM public tm;
@@ -85,6 +94,15 @@ contract BatcherMockBO {
     }
     function setRevertOnZeroSurplus(bool r) external {
         revertOnZeroSurplus = r;
+    }
+    /// @notice Live BO getter (musd repo BO.sol:106). Collapsed mock:
+    ///         the pool IS this contract, see the contract doc above.
+    function collSurplusPool() external view returns (address) {
+        return address(this);
+    }
+    /// @notice Live CollSurplusPool getter, answered from `surplus[]`.
+    function getCollateral(address a) external view returns (uint256) {
+        return surplus[a];
     }
     function minNetDebt() external pure returns (uint256) {
         return 1800e18;
@@ -217,6 +235,18 @@ contract BalanceDropper {
     function claimCollateral() external {
         (bool ok,) = sink.call{value: 0.01 ether}("");
         require(ok);
+    }
+
+    receive() external payable {}
+}
+
+/// @notice Regression mock for the Batcher's best-effort path: an account
+///         whose `claimCollateral()` always reverts. The batch must report
+///         `ok == false, claimed == 0` for it and still settle every good
+///         account in the same batch.
+contract RevertingClaimer {
+    function claimCollateral() external {
+        revert("boom");
     }
 
     receive() external payable {}
@@ -501,10 +531,17 @@ contract BatcherTest is Test {
         _assertBatcherEmpty();
     }
 
-    /// @notice THE J3 CASE, revert flavour: live `BO.claimCollateral` may
-    ///         revert on zero surplus (Liquity's CollSurplusPool requires
-    ///         `balances[account] > 0`). The batch must NOT brick: A claims,
-    ///         B reports `ok == false, claimed == 0`, the call succeeds.
+    /// @notice THE J3 CASE, revert flavour — SUBSUMED by the 1.3 closefix
+    ///         guard. The read-first guard in TroveAccount._claimCollateral
+    ///         (1.3) reads the surplus via BO's collSurplusPool and NO-OPS
+    ///         (emitting CollateralClaimed(0)) when it is zero, so a real
+    ///         TroveAccount clone NEVER reaches the reverting BO call for
+    ///         an already-claimed account: the batch reports `ok == true,
+    ///         claimed == 0` for B. `revertOnZeroSurplus` stays set to
+    ///         prove the guard never reaches the reverting call — if the
+    ///         guard regressed, this test would fail with ok[1] == false.
+    ///         The Batcher's best-effort `ok == false` path itself is
+    ///         preserved by test_claimCollateralBatchReportsRevertingAccount.
     function test_claimCollateralBatchToleratesZeroSurplusRevert() public {
         bo.setRevertOnZeroSurplus(true);
         tm.setStatus(address(accountA), 4);
@@ -514,9 +551,36 @@ contract BatcherTest is Test {
         (bool[] memory ok, uint256[] memory claimed) = batcher.claimCollateralBatch(_twoAccounts());
 
         assertTrue(ok[0], "A still claims");
-        assertFalse(ok[1], "B zero-surplus revert is reported, not propagated");
+        assertTrue(ok[1], "B zero-surplus is no-op'd by the 1.3 guard, never reaches the reverting call");
         assertEq(claimed[0], 0.02 ether);
         assertEq(claimed[1], 0, "nothing claimed for B");
+        _assertBatcherEmpty();
+    }
+
+    /// @notice Regression for the Batcher's best-effort `ok == false`
+    ///         path: an account whose claimCollateral() always reverts
+    ///         must NOT brick the batch. A claims exactly; the reverting
+    ///         account reports `ok == false, claimed == 0`; the batcher
+    ///         stays empty. (The rewritten
+    ///         test_claimCollateralBatchToleratesZeroSurplusRevert no
+    ///         longer exercises this path: the 1.3 guard no-ops zero
+    ///         surplus before any reverting call.)
+    function test_claimCollateralBatchReportsRevertingAccount() public {
+        RevertingClaimer claimer = new RevertingClaimer();
+        bo.setSurplus(address(accountA), 0.02 ether);
+        uint256 balABefore = address(accountA).balance;
+
+        address[] memory accts = new address[](2);
+        accts[0] = address(accountA);
+        accts[1] = address(claimer);
+
+        (bool[] memory ok, uint256[] memory claimed) = batcher.claimCollateralBatch(accts);
+
+        assertTrue(ok[0], "good account still claims");
+        assertFalse(ok[1], "reverting account reports ok == false, not propagated");
+        assertEq(claimed[0], 0.02 ether, "good account claims exactly");
+        assertEq(claimed[1], 0, "nothing claimed for the reverting account");
+        assertEq(address(accountA).balance - balABefore, 0.02 ether);
         _assertBatcherEmpty();
     }
 
