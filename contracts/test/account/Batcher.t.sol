@@ -72,7 +72,7 @@ contract BatcherMockTM {
 ///         from the same mapping `claimCollateral` pays out of. That is
 ///         why `collSurplusPool()` returns `address(this)` — on live Mezo
 ///         the BO declares `ICollSurplusPool public collSurplusPool`
-///         (musd repo BO.sol:106) and `getCollateral` returns
+///         (musd repo BorrowerOperations.sol) and `getCollateral` returns
 ///         `balances[account]`; the real TroveAccount's read-first guard
 ///         (1.3 closefix) calls exactly these two getters, so the mock
 ///         must expose them or every claim reverts on the missing getter.
@@ -95,7 +95,7 @@ contract BatcherMockBO {
     function setRevertOnZeroSurplus(bool r) external {
         revertOnZeroSurplus = r;
     }
-    /// @notice Live BO getter (musd repo BO.sol:106). Collapsed mock:
+    /// @notice Live BO getter (musd repo BorrowerOperations.sol). Collapsed mock:
     ///         the pool IS this contract, see the contract doc above.
     function collSurplusPool() external view returns (address) {
         return address(this);
