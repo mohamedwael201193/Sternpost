@@ -131,8 +131,8 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 |---|---|
 | 1.3 — `draw()` / `drawBySig()` acceptance tests + J3 fixes | acceptance tests [`cac8ef2`](https://github.com/mohamedwael201193/Sternpost/commit/cac8ef2e4f407e3459cf370ffe5ec6d96c243381) + J3 fixes [`b8845bb`](https://github.com/mohamedwael201193/Sternpost/commit/b8845bb40b62969990fab4d57941af21f0b3de3e) |
 | 1.3/1.6 — `closeAccount` tolerates zero surplus on a redeemed trove; Batcher mock fix | `closeAccount` [`026d0c4`](https://github.com/mohamedwael201193/Sternpost/commit/026d0c4984e3922dc83c2d015fc933849ff742cf) + Batcher mock [`47eb2b0`](https://github.com/mohamedwael201193/Sternpost/commit/47eb2b0dc6f13ee614f5c0c97cb01e1e1f749845) |
-| 1.6 — Batcher `promote` / claims + saturating balance delta + `MAX_BATCH` docs (J3) | [`ad48467`](https://github.com/mohamedwael201193/Sternpost/commit/ad48467bb7c66a6fa7b2d666a1ec5baf3295449c) |
-| 0.8 — test-all hardening + [`TESTS.json`](TESTS.json); fresh FORK=1 counts 256 / 270 / 273 / 137 | [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) |
+| 1.6 — Batcher `promote` / claims + saturating balance delta + `MAX_BATCH` docs (J3) | promote / claims [`1dd55ed`](https://github.com/mohamedwael201193/Sternpost/commit/1dd55edee934b7bf0db6b6dc98c70e30d9cd36bf) + saturating delta / `MAX_BATCH` docs [`ad48467`](https://github.com/mohamedwael201193/Sternpost/commit/ad48467bb7c66a6fa7b2d666a1ec5baf3295449c) |
+| 0.8 — test-all hardening + [`TESTS.json`](TESTS.json); fresh FORK=1 counts 256 / 270 / 273 / 137 | hardening [`47d5623`](https://github.com/mohamedwael201193/Sternpost/commit/47d562356c3eba03a2ecb48bd1582874be9abdf2) + counts [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) |
 
 ## Tests
 
