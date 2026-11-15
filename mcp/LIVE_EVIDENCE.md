@@ -74,11 +74,13 @@ Full walk (live test + values script), Wave-1 wallet
 - **rank 241 / 279**, `debtAheadMusd: 426579945.644167063996648951`,
   `icr: 2.3767080790130355`, `frontierIcr: 1.2630549465626084`,
   `tcr: 2.323347471323506`, `complete: true`
-- Rank moved 234 (lab, block 16791591, 271 troves) → 241 (279 troves):
+- Rank moved 234 (lab, 271 troves) → 241 (279 troves):
   the list grew; the rank is read live, not copied. Lab source:
   `build-pack/mezo/lab/LAB_METHODS.md` §9 (Wave-1 wallet rank 234 of
-  271 troves) and plan §3.8; pinned fork block 16791591 per
-  `docs/proof/accounts-2026-11-15.md` and `build-pack/TASK_BOARD.md`.
+  271 troves, no block stated) and plan §3.8. Block 16791591 is the
+  pinned fork block that reproduces the lab ranks (V2 rank 180/271)
+  per `docs/proof/accounts-2026-11-15.md` and `build-pack/TASK_BOARD.md`
+  — it is not the block of the 234 measurement itself.
 
 Deployed Wave 2 Radar (live, `STERNPOST_RADAR` set to
 `0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`):
@@ -249,6 +251,8 @@ Test-name coverage: the committed vitest logs were run with
 fork 6); the counts rest on the logs' summary lines, which agree with
 the `it(` counts in the test files. No `/tmp` pointers: the logs live in the repo. Note:
 `fork-run.log` contains anvil's startup banner with the 10 well-known
-anvil default test private keys — those are public Foundry test keys,
-not secrets, and they are redacted in the committed log (see the
-`[anvil default test keys — public, redacted]` marker).
+anvil default test private keys and the default test mnemonic — those are public Foundry test values,
+not secrets, and both are redacted in the committed log (see the
+`[anvil default test key — public, redacted]` and
+`[anvil default test mnemonic — public, redacted]` markers; the mnemonic
+line shipped un-redacted in 43fa2b51 and was re-redacted in 72447ab).

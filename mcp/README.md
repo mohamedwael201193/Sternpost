@@ -110,7 +110,9 @@ which has no §5.1 equivalent), `NO_402` (the resource did not answer
 402), `SCHEME_MISMATCH` (only `exact` is supported), `VERIFY_FAILED`
 (the facilitator rejected the payment signature), `SETTLE_FAILED`
 (the resource still answers 402 after payment), `REFILL_FAILED`
-(the refill draw reverted on-chain or could not be sent — nothing was paid).
+(the refill draw reverted on-chain or could not be sent — a reverted draw's hash is still returned in `refillTx` for traceability; if the receipt wait itself failed, `refillTx` carries the sent hash, which may still confirm on-chain, so "nothing was paid" is not guaranteed in that case).
+
+Preview→execution gap: `previewDraw` is checked before the draw is sent, but Recovery Mode, the price, or concurrent budget use can change in between — the receipt check after the draw catches a revert, which is then reported as `REFILL_FAILED` with its hash rather than as a success.
 
 ### Internal helpers (not tools)
 

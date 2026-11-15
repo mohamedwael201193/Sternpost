@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -91,8 +91,12 @@ export function rejectCredentialFields(args: unknown): void {
  * The key is read lazily and cached per path (a missing file is re-checked
  * on every call, so a key created later — e.g. by request_session — is
  * picked up); only the 0x + 64-hex value is ever compared, never logged.
+ * The cache is keyed on the file's mtime + size, so an in-place key
+ * replacement (new key written over the same path) invalidates it: the
+ * guard then scans for the NEW key, not the stale one. A server restart
+ * is not needed for rotation — replacing the file is enough.
  */
-let cachedAgentKey: { path: string; key: string } | null = null;
+let cachedAgentKey: { path: string; key: string; mtimeMs: number; size: number } | null = null;
 function agentPrivateKeyValue(): string | null {
   let path: string;
   try {
@@ -100,17 +104,30 @@ function agentPrivateKeyValue(): string | null {
   } catch {
     path = join(homedir(), ".sternpost", "agent.json");
   }
-  if (cachedAgentKey && cachedAgentKey.path === path) return cachedAgentKey.key;
+  let stat: { mtimeMs: number; size: number };
+  try {
+    stat = statSync(path);
+  } catch {
+    // File gone (or unreadable metadata): drop any cached key — a deleted
+    // key must not keep being scanned for, and a missing file is
+    // re-checked on every call so a key created later is picked up.
+    cachedAgentKey = null;
+    return null;
+  }
+  if (cachedAgentKey && cachedAgentKey.path === path && cachedAgentKey.mtimeMs === stat.mtimeMs && cachedAgentKey.size === stat.size) {
+    return cachedAgentKey.key;
+  }
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as { privateKey?: unknown };
     if (typeof parsed.privateKey === "string" && /^0x[0-9a-fA-F]{64}$/.test(parsed.privateKey)) {
-      cachedAgentKey = { path, key: parsed.privateKey };
+      cachedAgentKey = { path, key: parsed.privateKey, mtimeMs: stat.mtimeMs, size: stat.size };
       return parsed.privateKey;
     }
   } catch {
     // No key file (yet), malformed, or unreadable — nothing to scan for.
     // Never throw from the guard: a missing key must not break responses.
   }
+  cachedAgentKey = null;
   return null;
 }
 
@@ -234,6 +251,19 @@ function resolveAccount(ctx: ToolContext, arg?: string): Address | null {
 
 function truncate(text: string, max = 8192): string {
   return text.length > max ? text.slice(0, max) + `…[truncated ${text.length - max} chars]` : text;
+}
+
+/**
+ * Strip credential-looking substrings from a message before it is logged
+ * (or echoed in a rankNote): userinfo in a URL (`https://user:pass@host`,
+ * or a bare token as the userinfo), and api-key/token/secret/password
+ * query params. The rest of the message is kept intact so the log stays
+ * useful for debugging; only the credential-shaped part is replaced.
+ */
+function redactCredentials(text: string): string {
+  return text
+    .replace(/(https?:\/\/)[^\s/@]+@/g, "$1[redacted-credentials]@")
+    .replace(/([?&](?:api[_-]?key|token|secret|password)=)[^\s&]*/gi, "$1[redacted]");
 }
 
 const TROVE_STATUS = ["none", "active", "closedByOwner", "closedByLiquidation", "closedByRedemption"] as const;
@@ -611,7 +641,12 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
     // Send the draw, then CHECK the receipt: waitForTransactionReceipt
     // does not throw on a reverted tx, so a draw that reverts at execution
     // (price move, Recovery Mode flip, concurrent budget use) must not be
-    // reported as a successful refill.
+    // reported as a successful refill. The hash is hoisted outside the
+    // try: if the receipt WAIT throws after the draw was sent, the
+    // REFILL_FAILED response still carries the sent hash — the draw may
+    // confirm on-chain later, so "nothing was paid" is not guaranteed
+    // in that case and the hash is needed to check.
+    let refillHash: string | null = null;
     try {
       const wallet = ctx.agentWallet ?? createAgentWallet(ctx.env, agentKey.privateKey, ctx.network);
       const hash = await wallet.writeContract({
@@ -622,6 +657,7 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
         chain: wallet.chain,
         account: privateKeyToAccount(agentKey.privateKey),
       });
+      refillHash = hash;
       const receipt = await client.waitForTransactionReceipt({ hash });
       if (receipt.status === "reverted") {
         return ok({
@@ -649,12 +685,15 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
         amount,
         payTo,
         network,
-        refillTx: null,
+        refillTx: refillHash,
         settleTx: null,
         responseStatus: first.status,
         responseBody: truncate(firstBody),
         reason: "REFILL_FAILED",
-        detail: `refill draw failed before it could settle: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
+        detail:
+          refillHash !== null
+            ? `refill draw tx ${refillHash} was sent but its receipt could not be confirmed: ${truncate(err instanceof Error ? err.message : String(err), 500)} — the draw may still confirm on-chain; check the hash before retrying`
+            : `refill draw failed before it could settle: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
         preview,
       });
     }
@@ -875,7 +914,7 @@ function classifyRankError(err: unknown): string {
   if (/returned no data|no data was returned|abi|could not decode|decode/i.test(msg)) {
     return "returned data the Radar ABI could not decode (wrong address or ABI mismatch)";
   }
-  return `failed (${truncate(msg, 120)})`;
+  return `failed (${truncate(redactCredentials(msg), 120)})`;
 }
 
 /**
@@ -1061,7 +1100,7 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
         // (same ground truth, one call at a time) and say what happened.
         const kind = classifyRankError(err);
         console.error(
-          `[sternpost radar] deployed Radar rank() ${kind}: ${truncate(err instanceof Error ? err.message : String(err), 300)}`,
+          `[sternpost radar] deployed Radar rank() ${kind}: ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 300)}`,
         );
         const w = await walkRank();
         rank = w.rank;

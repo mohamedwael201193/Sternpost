@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -379,8 +380,81 @@ describe("snapshots (stub chain, offline)", () => {
     expect(p.ok).toBe(true);
     expect(p.rankSource).toBe("walk");
     expect(p.rankNote).toMatch(/fell back/);
+    // Timeout wording pinned byte-identical (J3 F3): other branches must
+    // word their kind distinctly, never relabelled as a timeout.
+    expect(p.rankNote).toBe("deployed Radar rank() timed out; fell back to the direct SortedTroves walk");
     expect(p.tcr).toBeCloseTo(2.3);
     expect(p.troveCount).toBe(279);
+  });
+
+  /** Radar fallback with a configurable rank() error (J3 F3): same stub as the timeout test, only the thrown error differs. */
+  async function radarFallbackWithRankError(rankError: string) {
+    const ctx = stubContext(
+      {
+        readContract: ({ functionName }) => {
+          switch (functionName) {
+            case "fetchPrice":
+              return 64_451_357_300_000_000_000_000n;
+            case "systemHealth":
+              return [0n, 2_300_000_000_000_000_000n, false, 279n];
+            case "frontier":
+              return ["0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d", 1_263_664_234_481_925_800n, 426_003_387_454_256_128_793_338_096n];
+            case "rank":
+              throw new Error(rankError);
+            case "getPrev":
+              return "0x0000000000000000000000000000000000000000";
+            case "getCurrentICR":
+              return 2_500_000_000_000_000_000n;
+            case "getEntireDebtAndColl":
+              return [0n, 100n, 0n, 0n, 0n, 0n];
+            case "policy":
+              return [2_500_000_000_000_000_000n, 1_600_000_000_000_000_000n, 2_000_000_000_000_000_000n, 1_000_000_000_000_000_000n, 0n, 20];
+            case "status":
+              return 1;
+            default:
+              throw new Error(`unexpected call ${functionName}`);
+          }
+        },
+      },
+      { STERNPOST_RADAR: "0x9Cd95A420e014da798dbFB74833b9D4DEe868be2" },
+    );
+    const res = await handleRadar(ctx, { account: ADDRESSES.governor });
+    return JSON.parse(res.content[0].text) as { rankSource: string; rankNote: string };
+  }
+
+  it("radar fallback words a rank() revert distinctly, not as a timeout (J3 F3)", async () => {
+    const p = await radarFallbackWithRankError("execution reverted: RankOutOfRange");
+    expect(p.rankSource).toBe("walk");
+    expect(p.rankNote).toBe("deployed Radar rank() reverted on-chain; fell back to the direct SortedTroves walk");
+  });
+
+  it("radar fallback words a rank() ABI-decode failure distinctly (J3 F3)", async () => {
+    const p = await radarFallbackWithRankError('The contract function "rank" returned no data ("0x").');
+    expect(p.rankSource).toBe("walk");
+    expect(p.rankNote).toBe(
+      "deployed Radar rank() returned data the Radar ABI could not decode (wrong address or ABI mismatch); fell back to the direct SortedTroves walk",
+    );
+  });
+
+  it("radar fallback redacts a credential-bearing RPC URL from the logged error (J3 O3)", async () => {
+    const logged: string[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args.join(" "));
+    };
+    try {
+      const p = await radarFallbackWithRankError(
+        "fetch failed: https://user:s3krit-pass@rpc.test.mezo.org/ — request timed out",
+      );
+      expect(p.rankSource).toBe("walk");
+      expect(p.rankNote).toBe("deployed Radar rank() timed out; fell back to the direct SortedTroves walk");
+    } finally {
+      console.error = origError;
+    }
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).not.toContain("s3krit-pass");
+    expect(logged[0]).toContain("[redacted-credentials]@");
+    expect(logged[0]).toContain("timed out");
   });
 });
 
@@ -547,6 +621,8 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       /** previewDraw result for the refill leg (payee = account); null = allowed. */
       refillPreview: [boolean, number, bigint, bigint] | null;
       receiptStatus: "success" | "reverted";
+      /** When true, waitForTransactionReceipt throws instead of returning a receipt (J3 F5). */
+      receiptThrows?: boolean;
     },
     run: (
       url: string,
@@ -582,7 +658,10 @@ describe("pay (offline, local 402 server + stub chain)", () => {
         getChainId: async () => 31611,
         getBytecode: async () => "0x1234",
         getBalance: async () => 0n,
-        waitForTransactionReceipt: async () => ({ status: opts.receiptStatus }),
+        waitForTransactionReceipt: async () => {
+          if (opts.receiptThrows) throw new Error("Timed out while waiting for transaction receipt");
+          return { status: opts.receiptStatus };
+        },
       };
       const stubWallet = {
         chain: { id: 31611 },
@@ -647,6 +726,24 @@ describe("pay (offline, local 402 server + stub chain)", () => {
         expect(p.refillTx).toBe("0x1111111111111111111111111111111111111111111111111111111111111111");
         expect(p.settleTx).toBeNull();
         expect(p.detail).toMatch(/reverted on-chain/);
+        expect(draws).toHaveLength(1);
+      },
+    );
+  });
+
+  it("pay returns REFILL_FAILED with the sent hash when the receipt wait throws (J3 F5)", async () => {
+    await withFullPayHarness(
+      { balanceOf: 0n, refillPreview: null, receiptStatus: "success", receiptThrows: true },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        // The draw WAS sent: the hash is kept, not discarded — it may still
+        // confirm on-chain, so the response must not claim nothing was paid.
+        expect(p.refillTx).toBe("0x1111111111111111111111111111111111111111111111111111111111111111");
+        expect(p.settleTx).toBeNull();
+        expect(p.detail).toMatch(/may still confirm on-chain/);
         expect(draws).toHaveLength(1);
       },
     );
@@ -754,6 +851,39 @@ describe("key never returned", () => {
       process.env.STERNPOST_AGENT_KEY_FILE = keyPath;
       try {
         expect(() => guardOutput(JSON.stringify({ agent: key.privateKey }))).toThrow(/agent private key/);
+        expect(() => guardOutput(JSON.stringify({ ok: true }))).not.toThrow();
+      } finally {
+        if (prev === undefined) delete process.env.STERNPOST_AGENT_KEY_FILE;
+        else process.env.STERNPOST_AGENT_KEY_FILE = prev;
+      }
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("guardOutput picks up an in-place key replacement at the same path (J3 F4)", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "sternpost-mcp-test-"));
+    try {
+      const keyPath = join(tmp, "agent.json");
+      const env = loadEnv({ ...process.env, STERNPOST_AGENT_KEY_FILE: keyPath });
+      const { key: key1 } = await loadOrCreateAgentKey(env);
+      const prev = process.env.STERNPOST_AGENT_KEY_FILE;
+      process.env.STERNPOST_AGENT_KEY_FILE = keyPath;
+      try {
+        // Prime the cache: the first key is scanned for.
+        expect(() => guardOutput(JSON.stringify({ agent: key1.privateKey }))).toThrow(/agent private key/);
+        // Replace the file in place with a fresh key (same path, same size).
+        const key2 = generatePrivateKey();
+        await writeFile(
+          keyPath,
+          JSON.stringify({ address: privateKeyToAccount(key2).address, privateKey: key2 }, null, 2) + "\n",
+        );
+        // Force a distinct mtime so the change is visible even on a coarse filesystem.
+        const later = new Date(Date.now() + 2000);
+        await utimes(keyPath, later, later);
+        // The stale key is no longer scanned for; the new key is.
+        expect(() => guardOutput(JSON.stringify({ agent: key1.privateKey }))).not.toThrow();
+        expect(() => guardOutput(JSON.stringify({ agent: key2 }))).toThrow(/agent private key/);
         expect(() => guardOutput(JSON.stringify({ ok: true }))).not.toThrow();
       } finally {
         if (prev === undefined) delete process.env.STERNPOST_AGENT_KEY_FILE;
