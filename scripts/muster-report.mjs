@@ -17,7 +17,7 @@
 //
 // The TRUE number is reported even when it is zero.
 //
-// Usage:  node scripts/muster-report.mjs [--rpc URL] [--out DIR]
+// Usage:  node scripts/muster-report.mjs [--rpc URL | --rpc=URL] [--out DIR | --out=DIR]
 //   Defaults: RPC from shared/deployments/testnet.json, output
 //   docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).
 // Requires Node >= 18 (global fetch). No dependencies, no keys, read-only.
@@ -60,11 +60,35 @@ const TEAM = new Set(
   )
 );
 
+// ---- CLI flags: --rpc URL | --rpc=URL, --out DIR | --out=DIR.
+// Last occurrence wins. Any other token starting with "--" (unknown flag
+// or typo, e.g. --rcp) is a hard error: exit 1 with usage on stderr —
+// never silently fall back to the default RPC / output dir. A space-form
+// flag whose next token starts with "--" is treated as missing (default).
+const USAGE = `Usage: node scripts/muster-report.mjs [--rpc URL | --rpc=URL] [--out DIR | --out=DIR]
+  Defaults: RPC from shared/deployments/testnet.json, output
+  docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).`;
+let rpcArg;
+let outArg;
 const args = process.argv.slice(2);
-const rpcIdx = args.indexOf("--rpc");
-const outIdx = args.indexOf("--out");
-const rpcArg = rpcIdx === -1 || args[rpcIdx + 1]?.startsWith("--") ? undefined : args[rpcIdx + 1];
-const outArg = outIdx === -1 || args[outIdx + 1]?.startsWith("--") ? undefined : args[outIdx + 1];
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === "--rpc" || a === "--out") {
+    const next = args[i + 1];
+    if (next === undefined || next.startsWith("--")) continue; // missing value -> default
+    if (a === "--rpc") rpcArg = next;
+    else outArg = next;
+    i++;
+  } else if (a.startsWith("--rpc=")) {
+    rpcArg = a.slice("--rpc=".length);
+  } else if (a.startsWith("--out=")) {
+    outArg = a.slice("--out=".length);
+  } else if (a.startsWith("--")) {
+    process.stderr.write(`error: unknown flag ${a}\n${USAGE}\n`);
+    process.exit(1);
+  }
+  // any other (non-flag) token is ignored, as before
+}
 const RPC = rpcArg || DEPLOYMENTS.rpc;
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
