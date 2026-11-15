@@ -1,0 +1,440 @@
+
+> @sternpost/mcp@0.1.0 fork
+> node scripts/fork-setup.mjs
+
+[fork-setup] starting anvil (fork of testnet)...
+[anvil] 
+
+                             _   _
+                            (_) | |
+      __ _   _ __   __   __  _  | |
+     / _` | | '_ \  \ \ / / | | | |
+    | (_| | | | | |  \ V /  | | | |
+     \__,_| |_| |_|   \_/   |_| |_|
+
+    1.8.6 (6bad0a66de 2026-10-21T17:56:11.890310850Z)
+    https://github.com/foundry-rs/foundry
+
+Available Accounts
+==================
+
+(0) 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (10000.000000000000000000 ETH)
+(1) 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (10000.000000000000000000 ETH)
+(2) 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (10000.000000000000000000 ETH)
+(3) 0x90F79bf6EB2c4f870365E785982E1f101E93b906 (10000.000000000000000000 ETH)
+(4) 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 (10000.000000000000000000 ETH)
+(5) 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc (10000.000000000000000000 ETH)
+(6) 0x976EA74026E726554dB657fA54763abd0C3a0aa9 (10000.000000000000000000 ETH)
+(7) 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 (10000.000000000000000000 ETH)
+(8) 0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f (10000.000000000000000000 ETH)
+(9) 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720 (10000.000000000000000000 ETH)
+
+Private Keys
+==================
+
+(0) [anvil default test key — public, redacted]
+(1) [anvil default test key — public, redacted]
+(2) [anvil default test key — public, redacted]
+(3) [anvil default test key — public, redacted]
+(4) [anvil default test key — public, redacted]
+(5) [anvil default test key — public, redacted]
+(6) [anvil default test key — public, redacted]
+(7) [anvil default test key — public, redacted]
+(8) [anvil default test key — public, redacted]
+(9) [anvil default test key — public, redacted]
+
+Wallet
+==================
+Mnemonic:          [anvil default test mnemonic — public, redacted]
+Derivation path:   m/44'/60'/0'/0/
+
+
+Fork
+==================
+Endpoint:       https://rpc.test.mezo.org/
+Block number:   16803813
+Block hash:     0xe86157d5601292d447cb0ae3d3defff23fb39e2d48149b885c714dbcb097388d
+Chain ID:       31611
+
+Base Fee
+==================
+
+130
+
+Gas Limit
+==================
+
+10000000
+
+Genesis Timestamp
+==================
+
+1794777747
+
+Genesis Number
+==================
+
+0
+
+Listening on 127.0.0.1:8545
+[anvil] eth_chainId
+[anvil] eth_blockNumber
+[fork-setup] anvil up at fork block 16803813
+[anvil] anvil_setBalance
+[anvil] anvil_setBalance
+[fork-setup] live BTC price: 64914685960000000000000
+[anvil] anvil_setCode
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x15b9395f4f51bd67e8ddcc2d188b6a16112ee5d44b624693b45aaf115010850b
+    Gas used: 26473
+
+[anvil]     Block Number: 16803814
+    Block Hash: 0x94cafac8946cddc876ef483d090fe0f7a78776bbe12416a8b79ea7df9c658b8a
+    Block Time: "Sun, 15 Nov 2026 21:22:19 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_call
+[fork-setup] price feed stubbed at 64914685960000000000000
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x935c5a4b7058fdcca83dfd7d8936fac51e95daef139c6f6c6349ab9564fd93e9
+[anvil]     Contract created: 0xa450f282BC627Fc697C35714804C42f97679EB16
+    Gas used: 4201025
+
+    Block Number: 16803815
+    Block Hash: 0xef38dc20769f1b08c4ad83cc3d8915a7eacf217640d4f8f9191a1dde4a3de6c7
+    Block Time: "Sun, 15 Nov 2026 21:22:19 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[fork-setup] TroveAccount implementation: 0xa450f282bc627fc697c35714804c42f97679eb16
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x93ddb5e01751ea363043d8ccfb1fcf3c0e6fa7749fbc9f21a0a6afb08489f4fe
+    Contract created: 0xbB8Af1D7599920e0C6b71A6D8ac3277c93cc2918
+    Gas used: 591723
+
+    Block Number: 16803816
+    Block Hash: 0x390f534d245d925f6e3735bd5defae3e151a59f1c26f4bc0b9dca962ecfaa6d4
+    Block Time: "Sun, 15 Nov 2026 21:22:20 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[fork-setup] TroveAccountFactory: 0xbb8af1d7599920e0c6b71a6d8ac3277c93cc2918
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x27182d28b17f275bd6a895d39cc80730d21849540193552d3d916d6cc6380a33
+    Contract created: 0xd447f8Dd624894b7eF46ed592e0C9D3dbB3dfF1b
+    Gas used: 859130
+
+[anvil]     Block Number: 16803817
+    Block Hash: 0x40314e2e23a78de13da305a21d3fb3ae93f514ec5f7048acf218005fb8c4a93a
+    Block Time: "Sun, 15 Nov 2026 21:22:20 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[fork-setup] Radar: 0xd447f8dd624894b7ef46ed592e0c9d3dbb3dff1b
+[anvil] eth_call
+[anvil] eth_call
+[anvil] eth_call
+[fork-setup] hints: 0xd15190548Bf6B3E5FD98A385F7e49046aCC2B02d 0x55726A86c321347db688f2C6A331445465eeE9BE nicr: 4523809523809523
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0xb0367bb44179b5c0e2bb264fc75d6367270878a0dc9bc986d1908948b7b89e69
+    Gas used: 981156
+
+    Block Number: 16803818
+    Block Hash: 0x3ac434b43949979a92d0cc9afd54fb79268148bc6418ccda8db6e65036967611
+    Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_call
+[fork-setup] TroveAccount: 0x4065549e98C212464BAE4AF01819A5C29dE64291 (createAndOpen tx 0xb0367bb44179b5c0e2bb264fc75d6367270878a0dc9bc986d1908948b7b89e69)
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x1115f39a5b1ab0572669fdc73445e2b15e9ff809d5198db223c14e2ec5f91e60
+    Gas used: 145646
+
+    Block Number: 16803819
+    Block Hash: 0x1dd66ecf228a360f4ba5b7b37b6dd0aa771050d8592fe4e71f7adb717abbba7a
+    Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0x4c821cab23a592ba7fdb9d14b38df5181a466d9ff28bdd5953bee4e2daa4a68a
+    Gas used: 52978
+
+    Block Number: 16803820
+    Block Hash: 0x1ce5bf5e36489adbbd86737fa97a5ba6211ecd53ab667f968a4220a0c7a34ff8
+    Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0xad3f4a4a17e512c417568590cbbea326548a9bd5ed865f4bd032fc5eff4971fe
+    Gas used: 52978
+
+    Block Number: 16803821
+    Block Hash: 0x093c5f14ebee4c608e5756ffc2d85abb5af08fb94d76ef2322132228f462d15b
+    Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0xf4b56ebaf4a03fdaaf3d74adcfda83e203467483b668db428140b339db133f17
+    Gas used: 54451
+
+    Block Number: 16803822
+    Block Hash: 0xed7852c00582c1fbec38d5cc172190bb6bb038e87fc337b49501f3dab6aaeaf1
+[anvil]     Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_call
+[fork-setup] account MUSD before sweep: 2100000000000000000000
+[anvil] eth_fillTransaction
+[anvil] eth_accounts
+[anvil] eth_sendRawTransaction
+[anvil] eth_getTransactionReceipt
+[anvil] 
+    Transaction: 0xb8c6b3bc006556f4a22c85d7d7a086937e52af6c65f3000641d9343310e15036
+    Gas used: 66112
+
+    Block Number: 16803823
+    Block Hash: 0x70b4ba58d43211b9b5c1a8591161fe9f10222c7a41860bbe2898dfd001b61311
+    Block Time: "Sun, 15 Nov 2026 21:22:35 +0000"
+
+[anvil] eth_blockNumber
+[anvil] eth_getTransactionByHash
+[anvil] eth_getTransactionReceipt
+[anvil] eth_call
+[fork-setup] account MUSD after sweep: 0
+[fork-setup] wrote mcp/evidence/fork-addresses.json
+[fork-setup] running fork tests...
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.1.0 [39m[90m/home/hatch/workspace/mezo-wave2/work/mcp-21/mcp[39m
+
+[90mstdout[2m | test/fork.test.ts[2m > [22m[2mfork testnet (anvil, chain 31611)[2m > [22m[2mbalance: full plan §5.1 shape on the fork account with a live session
+[22m[39mfork balance: {"session":{"active":true,"budget":"10","spent":"0","remaining":"10","perTx":"5","dailyRemaining":"5","expiry":"2026-11-22T21:22:45.000Z","canSignX402":true},"health":{"icr":2.6788128952695365,"floor":2.5,"recoveryMode":false,"troveStatus":"active"},"accountMusd":"0"}
+
+[90mstdout[2m | test/fork.test.ts[2m > [22m[2mfork testnet (anvil, chain 31611)[2m > [22m[2mradar: the fork account ranks in the fork list (full walk)
+[22m[39mfork radar: {"rank":260,"of":280,"rankSource":"radar","tcr":2.3314184226558394,"icr":2.6788128952695365,"complete":true}
+
+[90mstdout[2m | test/fork.test.ts[2m > [22m[2mfork testnet (anvil, chain 31611)[2m > [22m[2mpay: full flow against demo.vativ.io — refill draw on the fork, then the live verdict
+[22m[39mfork pay full-flow: {"status":"refused","reason":"VERIFY_FAILED","refillTx":"0xb545df27770424638a15bb00d881f1eabc2d1df75fc79ad7b5b00d07894535c2","settleTx":null,"responseStatus":402}
+
+ [32m✓[39m test/fork.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 112240[2mms[22m[39m
+   [32m✓[39m fork testnet (anvil, chain 31611) [2m(6)[22m
+     [33m[2m✓[22m[39m radar: the fork account ranks in the fork list (full walk)[33m 106975[2mms[22m[39m
+     [33m[2m✓[22m[39m pay dryRun: real demo.vativ.io 402 + fork previewDraw (no tx)[33m 1248[2mms[22m[39m
+     [33m[2m✓[22m[39m pay: full flow against demo.vativ.io — refill draw on the fork, then the live verdict[33m 1414[2mms[22m[39m
+     [33m[2m✓[22m[39m request_session: reuses the fork agent key and returns a pending request[33m 2392[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 21:22:46
+[2m   Duration [22m 113.59s[2m (tests 99%, import 1%)[22m
+
+[anvil] eth_chainId
+eth_getCode
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_chainId
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getCode
+eth_call
+eth_call
+eth_chainId
+eth_call
+eth_chainId
+eth_call
+eth_call
+eth_fillTransaction
+eth_accounts
+eth_sendRawTransaction
+eth_getTransactionReceipt
+
+    Transaction: 0xb545df27770424638a15bb00d881f1eabc2d1df75fc79ad7b5b00d07894535c2
+    Gas used: 444946
+
+    Block Number: 16803824
+    Block Hash: 0x9a8e678d8f4512d63314effe0a88494247702a998aa66187dafa693d536df7cd
+    Block Time: "Sun, 15 Nov 2026 21:24:27 +0000"
+
+eth_blockNumber
+eth_getTransactionByHash
+eth_getTransactionReceipt
+[fork-setup] running smoke (fork mode)...
+sternpost-mcp 0.1.0 listening on stdio (testnet 31611, factory 0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8)
+initialize ok: {"protocolVersion":"2024-11-05","serverInfo":{"name":"sternpost","version":"0.1.0"}}
+tools/list: ["balance","pay","request_session","radar"]
+balance call:
+{
+  "ok": true,
+  "tool": "balance",
+  "network": "testnet",
+  "account": "0x4065549e98C212464BAE4AF01819A5C29dE64291",
+  "agent": "0xe1f42ac25c2c3cd30e554CfaeFC44de60494Da8D",
+  "session": {
+    "active": true,
+    "budget": "10",
+    "spent": "0.001001",
+    "remaining": "9.998999",
+    "perTx": "5",
+    "dailyRemaining": "4.998999",
+    "expiry": "2026-11-22T21:22:45.000Z",
+    "canSignX402": true
+  },
+  "health": {
+    "icr": 2.678811634228097,
+    "floor": 2.5,
+    "recoveryMode": false,
+    "troveStatus": "active"
+  },
+  "accountMusd": "0.001",
+  "explorer": "https://explorer.test.mezo.org/address/0x4065549e98C212464BAE4AF01819A5C29dE64291"
+}
+radar call:
+{
+  "ok": true,
+  "tool": "radar",
+  "network": "testnet",
+  "synthetic": true,
+  "tcr": 2.331418340105499,
+  "recoveryMode": false,
+  "troveCount": 280,
+  "rank": 260,
+  "of": 280,
+  "debtAheadMusd": "427781699.469357321652369532",
+  "icr": 2.678811634228097,
+  "frontierIcr": 1.2674415483138115,
+  "frontierTrove": "0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d",
+  "frontierDebtMusd": "426003932.478474726429941192",
+  "shield": {
+    "armed": true,
+    "triggers": [
+      "ICR<1.6",
+      "RANK"
+    ]
+  },
+  "account": "0x4065549e98C212464BAE4AF01819A5C29dE64291",
+  "complete": true,
+  "steps": 260,
+  "rankSource": "radar"
+}
+request_session call:
+{
+  "ok": true,
+  "tool": "request_session",
+  "requestId": "req_de2fb658dd516dc5",
+  "agent": "0xe1f42ac25c2c3cd30e554CfaeFC44de60494Da8D",
+  "status": "pending",
+  "approveUrl": "https://sternpost-pink.vercel.app/app/crew?request=req_de2fb658dd516dc5",
+  "telegram": "not_linked",
+  "account": "0x4065549e98C212464BAE4AF01819A5C29dE64291",
+  "purpose": "smoke test",
+  "budget": "1",
+  "perTx": null,
+  "days": 7,
+  "payees": [],
+  "sandbox": false,
+  "keyFileCreated": false,
+  "backend": "unavailable"
+}
+pay dryRun call:
+{
+  "ok": true,
+  "tool": "pay",
+  "status": "dry_run",
+  "amount": "0.001",
+  "payTo": "0xC3376296a18ef364eA19287203EEd7a87f18e738",
+  "network": "eip155:31611",
+  "refillTx": null,
+  "settleTx": null,
+  "responseStatus": 402,
+  "responseBody": "{}",
+  "reason": null,
+  "preview": {
+    "allowed": true,
+    "reason": "",
+    "explanation": "Safe. This draw keeps the collateral ratio above the floor.",
+    "icrAfter": "2.678810468262455392",
+    "fee": "0.000001"
+  }
+}
+SMOKE PASSED: 4 tools listed, all 4 called (fork mode)
+[anvil] eth_chainId
+eth_getCode
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_chainId
+eth_call
+eth_call
+eth_call
+eth_call
+eth_call
+eth_getCode
+eth_call
+eth_call
+eth_chainId
+eth_call
+[fork-setup] stopping anvil...

@@ -4,17 +4,19 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "@x402/evm": "2.28.0",
     "viem": "^2.38.0",
     "zod": "^4.6.7"
   },
-  "description": "Sternpost MCP server: read-only tools over the live 0.9 deployment on Mezo testnet (chain 31611). No sends, no mainnet, no keys in any response.",
+  "description": "Sternpost MCP server: plan §5.1 tools (balance, pay, request_session, radar) over the Wave 2 TroveAccount system on Mezo testnet (chain 31611). Mainnet is gated; no keys in any response.",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",
-    "eslint": "^9.39.2",
+    "eslint": "10.15.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^5.0.5",
-    "typescript-eslint": "^8.46.0"
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=20"
@@ -28,10 +30,12 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "fork": "node scripts/fork-setup.mjs",
     "lint": "eslint src test",
     "smoke": "node scripts/mcp-smoke.mjs",
     "start": "node dist/index.js",
     "test": "vitest run",
+    "test:fork": "STERNPOST_FORK_TESTS=1 vitest run test/fork.test.ts",
     "test:live": "STERNPOST_LIVE_TESTS=1 vitest run test/live.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

@@ -1,0 +1,58 @@
+sternpost-mcp 0.1.0 listening on stdio (testnet 31611, factory 0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8)
+initialize ok: {"protocolVersion":"2024-11-05","serverInfo":{"name":"sternpost","version":"0.1.0"}}
+tools/list: ["balance","pay","request_session","radar"]
+balance call:
+{
+  "ok": false,
+  "refused": true,
+  "reason": "ACCOUNT_NOT_SET",
+  "detail": "no account: set STERNPOST_ACCOUNT or pass an account address (request_session creates the session request for an account)."
+}
+radar call:
+{
+  "ok": true,
+  "tool": "radar",
+  "network": "testnet",
+  "synthetic": true,
+  "tcr": 2.3323661410042025,
+  "recoveryMode": false,
+  "troveCount": 279,
+  "rank": 0,
+  "of": 279,
+  "debtAheadMusd": "0",
+  "icr": null,
+  "frontierIcr": 1.267957819699666,
+  "frontierTrove": "0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d",
+  "frontierDebtMusd": "426003946.349859583251431214",
+  "shield": {
+    "armed": false,
+    "triggers": []
+  }
+}
+request_session call:
+{
+  "ok": true,
+  "tool": "request_session",
+  "requestId": "req_918d4d597c1d91ea",
+  "agent": "0x4089677C9A7Bf4E1f0c97D8061E066D434312548",
+  "status": "pending",
+  "approveUrl": "https://sternpost-pink.vercel.app/app/crew?request=req_918d4d597c1d91ea",
+  "telegram": "not_linked",
+  "account": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+  "purpose": "smoke test",
+  "budget": "1",
+  "perTx": null,
+  "days": 7,
+  "payees": [],
+  "sandbox": false,
+  "keyFileCreated": true,
+  "backend": "unavailable"
+}
+pay dryRun call:
+{
+  "ok": false,
+  "refused": true,
+  "reason": "ACCOUNT_NOT_SET",
+  "detail": "no account: set STERNPOST_ACCOUNT or pass an account address (request_session creates the session request for an account)."
+}
+SMOKE PASSED: 4 tools listed, all 4 called (live testnet mode)

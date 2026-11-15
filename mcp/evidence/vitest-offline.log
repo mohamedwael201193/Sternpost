@@ -1,0 +1,21 @@
+
+> @sternpost/mcp@0.1.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.1.0 [39m[90m/home/hatch/workspace/mezo-wave2/work/mcp-21/mcp[39m
+
+ [2m[90m↓[39m[22m test/fork.test.ts [2m([22m[2m6 tests[22m[2m | [22m[33m6 skipped[39m[2m)[22m
+ [32m✓[39m test/tools.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 698[2mms[22m[39m
+   [32m✓[39m pay (offline, local 402 server + stub chain) [2m(3)[22m
+     [33m[2m✓[22m[39m dryRun parses the real demo.vativ.io 402 and runs previewDraw only (no tx)[33m 320[2mms[22m[39m
+ [2m[90m↓[39m[22m test/live.test.ts [2m([22m[2m13 tests[22m[2m | [22m[33m13 skipped[39m[2m)[22m
+ [32m✓[39m test/transport.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 3627[2mms[22m[39m
+   [32m✓[39m stdio transport (J3 F1) [2m(1)[22m
+     [33m[2m✓[22m[39m advertises exactly the plan §5.1 four tools, and drops credential fields before the handler[33m 3624[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (4)[39m
+[2m      Tests [22m [1m[32m32 passed[39m[22m[2m | [22m[33m19 skipped[39m[90m (51)[39m
+[2m   Start at [22m 21:14:32
+[2m   Duration [22m 4.29s[2m (import 50%, tests 45%, transform 5%)[22m
+

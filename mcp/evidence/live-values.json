@@ -1,0 +1,144 @@
+{
+  "governor_status": {
+    "ok": true,
+    "tool": "governor_status",
+    "governor": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+    "chainId": 31611,
+    "network": "Mezo testnet",
+    "factoryRecognised": true,
+    "borrower": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "floorICRWei": "2500000000000000000",
+    "floorICR": "2.5",
+    "defendICRWei": "1600000000000000000",
+    "defendICR": "1.6",
+    "frozen": false,
+    "bufferWei": "30000000000000000000",
+    "bufferMusd": "30",
+    "standby": {
+      "amountWei": "30000000000000000000",
+      "amountMusd": "30",
+      "deadline": "1797331299",
+      "deadlineISO": "2026-12-15T10:41:39.000Z",
+      "nonce": "45",
+      "live": true
+    },
+    "icrWei": "2376708117423202905",
+    "icr": "2.376708117423202905",
+    "feeBps": 10,
+    "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "musd": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
+    "explorer": "https://explorer.test.mezo.org/address/0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38"
+  },
+  "preview_draw_10": {
+    "ok": true,
+    "tool": "preview_draw",
+    "governor": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+    "app": "0x0508F05fD26811139cf0C3e139FD692Ae7612D1E",
+    "payee": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
+    "amountMusd": "10",
+    "amountWei": "10000000000000000000",
+    "allowed": false,
+    "reason": "APP_NOT_AUTHORIZED",
+    "explanation": "This app has no credit line from you.",
+    "icrAfterWei": "2367076699935294515",
+    "icrAfter": "2.367076699935294515",
+    "floorICRWei": "2500000000000000000",
+    "floorICR": "2.5",
+    "remainingBudgetWei": "0",
+    "remainingBudgetMusd": "0",
+    "explorer": "https://explorer.test.mezo.org/address/0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38"
+  },
+  "preview_draw_oversized": {
+    "ok": true,
+    "tool": "preview_draw",
+    "governor": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+    "app": "0x0508F05fD26811139cf0C3e139FD692Ae7612D1E",
+    "payee": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
+    "amountMusd": "1000000",
+    "amountWei": "1000000000000000000000000",
+    "allowed": false,
+    "reason": "APP_NOT_AUTHORIZED",
+    "explanation": "This app has no credit line from you.",
+    "icrAfterWei": "5826824425390296",
+    "icrAfter": "0.005826824425390296",
+    "floorICRWei": "2500000000000000000",
+    "floorICR": "2.5",
+    "remainingBudgetWei": "0",
+    "remainingBudgetMusd": "0",
+    "explorer": "https://explorer.test.mezo.org/address/0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38"
+  },
+  "x402_quote": {
+    "ok": true,
+    "tool": "x402_quote",
+    "route": "radar",
+    "amountWei": "10000000000000000",
+    "amountMusd": "0.01",
+    "asset": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
+    "payTo": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "network": "eip155:31611",
+    "facilitator": "https://facilitator.vativ.io",
+    "challenge": {
+      "x402Version": 2,
+      "error": "payment_required",
+      "resource": {
+        "url": "https://sternpost-api.vercel.app/v1/radar",
+        "description": "Sternpost radar snapshot: trove rank, frontier, system health",
+        "mimeType": "application/json"
+      },
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:31611",
+          "asset": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
+          "amount": "10000000000000000",
+          "payTo": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "name": "Mezo USD",
+            "version": "1",
+            "assetTransferMethod": "permit2"
+          }
+        }
+      ]
+    },
+    "payable": {
+      "app": "0x0508F05fD26811139cf0C3e139FD692Ae7612D1E",
+      "payee": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
+      "allowed": false,
+      "reason": "APP_NOT_AUTHORIZED",
+      "explanation": "This app has no credit line from you.",
+      "icrAfter": "2.3766984468557113"
+    },
+    "note": "Quote only. This tool never verifies, settles, or sends a payment."
+  },
+  "radar_wave1": {
+    "ok": true,
+    "tool": "radar",
+    "network": "testnet",
+    "synthetic": true,
+    "tcr": 2.323347471323506,
+    "recoveryMode": false,
+    "troveCount": 279,
+    "rank": 241,
+    "of": 279,
+    "debtAheadMusd": "426579945.644167063996648951",
+    "icr": 2.3767080790130355,
+    "frontierIcr": 1.2630549465626084,
+    "frontierTrove": "0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d",
+    "frontierDebtMusd": "426003394.322611737510774903",
+    "shield": {
+      "armed": false,
+      "triggers": []
+    },
+    "account": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "complete": true,
+    "steps": 279
+  },
+  "spend_wallet": {
+    "wallet": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
+    "agent": "0x62a4773191747994c0368664cA68BC476897c1d9",
+    "agentExpiry": 1797330675,
+    "owner": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "musdBalanceWei": "0"
+  }
+}

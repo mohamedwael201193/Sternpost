@@ -1,48 +1,131 @@
-# MCP live evidence (plan §2.1)
+# MCP live evidence (plan §5.1)
 
-Recorded 2026-11-15 ~19:20 EET by `npm run smoke` (stdio JSON-RPC against the
-built server) and `npm run test:live` (vitest, `STERNPOST_LIVE_TESTS=1`).
-RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 deployment.
+Recorded 2026-11-15 ~22:15 EET by the fix-round builder (commit TBD).
+RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 Classic deployment.
+Fork: anvil fork of testnet (see "Fork evidence" below).
 
 ## Test runs
 
-- `npm test` (offline): 12/12 pass — schema, 402 fixture, refusal reasons,
-  key-not-in-output snapshot.
-- `npm run test:live`: 7/7 pass — every tool returns a real on-chain read.
-- `npm run smoke`: PASSED — initialize ok, `tools/list` returned exactly the
-  4 tools, all 4 called live.
-- `npm run typecheck`: pass. `npm run lint`: pass. `npm run build`: pass.
+- `npm test` (offline): **32/32 pass** — schemas, real 402 fixture,
+  snapshots, refusal reasons, key-not-in-output, stdio transport, and
+  the Radar-rank fallback (stubbed Radar rank() throws → direct walk,
+  `rankSource: "walk"`).
+- `npm run test:live`: **13/13 pass** — every tool returns a real
+  on-chain read, plus the honest refusal shapes where no TroveAccount
+  exists yet (see below), plus the deployed Wave 2 Radar's on-chain
+  `rank()` through the tool (`rankSource: "radar"`). First attempt 7/12:
+  the radar rank walk's 50-wide read batches throttled the public RPC
+  (`eth_chainId` timeouts in the four following tests). Fixed by 10-wide
+  batches + 100 ms pauses + a 30 s viem timeout; re-run 12/12 in 64 s,
+  then 13/13 with the Radar test.
+- `npm run smoke` (live): **PASSED** — initialize ok, `tools/list`
+  returned exactly the plan §5.1 4 tools, all 4 called live.
+- `npm run fork`: **PASSED** — fork tests 6/6 + fork smoke PASSED
+  (see "Fork evidence"). The first fork run failed twice on the way
+  there, both fixed and recorded below (PayeeNotAllowed self-payee;
+  anvil fork slowness → 300 s RPC timeout + Radar-rank fallback).
+- `npm run typecheck`: pass. `npm run lint`: pass (eslint 10.15.0,
+  @eslint/js 10.0.1). `npm run build`: pass.
 
-## `balance` — borrower `0xf76e…71a3`
+## Live testnet — what is verified, and what is not
 
-- MUSD: `4122.607536326` (wei `4122607536326000000000`), symbol `MUSD`
-- BTC: `0.013361428281097685`
-- chainId `31611`, network `Mezo testnet`
+The Wave 2 system (task 1.9) **is deployed on live testnet**
+(2026-11-15 22:45 EET: TroveAccount impl
+`0xC4f080498a720887b6086f13fBad5627d8abc470`, Factory
+`0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3`, Radar
+`0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`, Batcher
+`0xB094e06559F7aF264e515F5363D9E89920b19b33` — all four verified to
+hold code by `getBytecode`: impl 21,857 B, Factory 2,414 B, Radar
+3,726 B, Batcher 2,784 B; deploy txs in
+`work/deploy-19/contracts/broadcast/DeployAccounts.s.sol/31611/run-latest.json`).
+But **no account has been opened there yet** (that broadcast is 4
+deploy txs, no `createAndOpen`). So on live testnet:
 
-## `governor_status` — governor `0x1bF4…71F38`
+- `balance` with no account → `ACCOUNT_NOT_SET` refusal (no chain
+  call). `balance` with the borrower address (not a TroveAccount) →
+  `ACCOUNT_NOT_DEPLOYED` refusal (real `getBytecode` read).
+- `pay` dryRun with no account → `ACCOUNT_NOT_SET` refusal.
+- The full `balance` / `pay` success paths are verified on the fork
+  below, not on live testnet. A `pay` that settles on live testnet
+  needs a live TroveAccount (an account opened on the live Factory) —
+  not claimed here.
+
+## `radar` — live testnet
+
+Smoke run (no account — system health + frontier only):
+
+- TCR `2.324468233934961`, `recoveryMode: false`, `troveCount: 279`
+- Frontier trove `0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d`
+  (the whale — same frontier as the lab run), frontier ICR
+  `1.2636642344819258`, frontier debt `426003387.454256128793338096` MUSD
+- `synthetic: true`, `network: "testnet"`
+
+Full walk (live test + values script), Wave-1 wallet
+`0xf76e…71a3`:
+
+- **rank 241 / 279**, `debtAheadMusd: 426579945.644167063996648951`,
+  `icr: 2.3767080790130355`, `frontierIcr: 1.2630549465626084`,
+  `tcr: 2.323347471323506`, `complete: true`
+- Rank moved 234 (lab, block 16791591, 271 troves) → 241 (279 troves):
+  the list grew; the rank is read live, not copied.
+
+Deployed Wave 2 Radar (live, `STERNPOST_RADAR` set to
+`0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`):
+
+- `rank()` through the tool: **rank 241 / 279, `rankSource: "radar"`,
+  `complete: true`, `steps: 241`, in 1,992 ms** — the deployed Radar's
+  on-chain rank works on the real chain and **agrees exactly with the
+  direct walk above (241)**; `debtAheadMusd: 426580307.188409946144635135`
+  (vs the walk's 426579945.64 — 0.0085% price drift between the two
+  calls, different blocks), `tcr: 2.336748971370031`,
+  `frontierIcr: 1.270340483410701`.
+- This is the `npm run test:live` Radar test (13th test) — the Radar
+  path is a repo test, not a one-off probe.
+
+## `request_session` — live smoke
+
+- `requestId: req_5cdff60d56523a3b`, agent
+  `0xa7207edf7043C6Cb8d1EBB983DeC980b9CE43A55`,
+  `status: "pending"`,
+  `approveUrl: https://sternpost-pink.vercel.app/app/crew?request=req_5cdff60d56523a3b`,
+  `telegram: "not_linked"`, `backend: "unavailable"`
+- `backend: "unavailable"` is the honest probe result: the API has no
+  `/v1/sessions/request` endpoint (root 200, `/v1/radar`, `/v1/muster`,
+  `/paid/brief` all 404), so the request was recorded locally and
+  returned `pending` for the owner to approve in Crew. Sandbox
+  auto-approval needs the Lane B backend — not claimed.
+- The agent key was generated fresh for the smoke run
+  (`/tmp/sternpost-mcp-smoke-agent.json`, chmod 600) and its private
+  key appears nowhere in any output (the stdio transport test asserts
+  this with a sentinel).
+
+## Classic internal helpers — live testnet
+
+Governor `0x1bF4…71F38`:
 
 - floorICR `2.5`, defendICR `1.6`, frozen `false`
 - buffer `30` MUSD, standby `30` MUSD, deadline `1797331299`
-  (`2026-12-15T10:41:39Z`), nonce `45`, live `true`
-- ICR `2.380450065257390321`, feeBps `10`,
+  (`2026-12-15T10:41:39.000Z`), nonce `45`, live `true`
+- ICR `2.376708117423202905`, feeBps `10`,
   feeRecipient = borrower `0xf76e…71a3`
 - `factoryRecognised: true`, borrower `0xf76e…71a3`
-- Matches `shared/deployments/testnet.json` `classicRedeploy.finalState`.
+- Matches `shared/deployments/testnet.json`
+  `sternpost.classicRedeploy.defend.finalState`.
 
-## `preview_draw` — app `0x0508…2D1E`, 10 MUSD, payee = spend wallet
+`preview_draw` — app `0x0508…2D1E`, 10 MUSD, payee = spend wallet:
 
 - `allowed: false`, `reason: "APP_NOT_AUTHORIZED"`,
   explanation: "This app has no credit line from you."
-- `icrAfter: 2.370754426314248947`, floor `2.5`,
+- `icrAfter: 2.367076699935294515`, floor `2.5`,
   `remainingBudget: 0` MUSD
 - Honest finding, not a server bug: the Wave-1 app `0x0508…` was authorized
   on the superseded Wave-1 governor, not on the 0.9 governor. A draw through
   the 0.9 governor needs a fresh `authorizeApp` on it first (not this
-  task's scope — this server is read-only and never sends it).
+  task's scope).
 - Oversized draw (1,000,000 MUSD) is likewise refused with a real reason
-  code (covered by the live test).
+  code (`APP_NOT_AUTHORIZED`, covered by the live test).
 
-## `x402_quote` — route `radar`
+`x402_quote` — route `radar`:
 
 - Challenge: x402 v2, `payment_required`, scheme `exact`,
   network `eip155:31611`, asset MUSD `0x1189…c503`,
@@ -53,26 +136,102 @@ RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 deployment.
   `APP_NOT_AUTHORIZED` — same finding as above.
 - Quote only: no verify, settle, or send.
 
-## Spend wallet (bonus read, not a tool) — `0x4F87…9Ee4a`
+Spend wallet (bonus read, not a tool) — `0x4F87…9Ee4a`:
 
-- owner = borrower `0xf76e…71a3`, agent `0x62a4…c1d9`,
-  `agentExpiry: 1797330675` — matches the deployment record.
+- owner = borrower `0xf76e…71a3`, agent `0x62a4773191747994c0368664cA68BC476897c1d9`,
+  `agentExpiry: 1797330675`, MUSD balance `0` — matches the deployment record.
 
-## `claude mcp add` verification (Claude Code 2.1.325, installed scratch to /tmp/claude-cli)
+## Fork evidence
 
-- `claude mcp add sternpost -- node /home/hatch/workspace/mezo-wave2/work/mcp-21/mcp/dist/index.js`
-  → exit 0: "Added stdio MCP server sternpost … to local config", and
-  `claude mcp list` shows `sternpost: … - ✔ Connected` (Claude Code's own
-  health check connected to the server over stdio).
-- `balance` runs: verified over the MCP protocol by `npm run smoke`
-  (initialize → tools/list → tools/call balance, live testnet read above).
-  An interactive `claude -p` invocation was NOT run: the CLI reports
-  "Not logged in · Please run /login", and login must be done by the user
-  on his own device — not attempted here.
-- The registration is left in place (local scope, this project dir) so the
-  parent can re-verify; remove with `claude mcp remove sternpost -s local`.
+`npm run fork` (final run 2026-11-15 ~21:22 UTC): anvil fork of
+testnet at **block 16803813**, live BTC price stubbed per plan G3
+(**$64,914.68596**), TroveAccount impl
+`0xa450f282bc627fc697c35714804c42f97679eb16`, Factory
+`0xbb8af1d7599920e0c6b71a6d8ac3277c93cc2918`, Radar
+`0xd447f8dd624894b7ef46ed592e0c9d3dbb3dff1b`, account
+`0x4065549e98C212464BAE4AF01819A5C29dE64291` (owner
+`0xc6aB8639AAe32a4569ba1bD13Cc05fe4aADB48c4`, agent
+`0xe1f42ac25c2c3cd30e554CfaeFC44de60494Da8D` — fresh throwaway keys,
+fork-only, key file at `/tmp/sternpost-fork-agent.json`, never in the
+repo). `createAndOpen` tx
+`0xb0367bb44179b5c0e2bb264fc75d6367270878a0dc9bc986d1908948b7b89e69`
+(0.095 BTC collateral, 2100 MUSD debt, policy floor 2.5 / shield 1.6 /
+target 2.0, bounty 1, minDebtAhead 1000, cooldown 20); session tx
+`0x1115f39a5b1ab0572669fdc73445e2b15e9ff809d5198db223c14e2ec5f91e60`
+(agent, budget 10, perTx 5, daily 5, 7 days, canSignX402); borrowed
+MUSD swept to 0 so `pay` must refill. **Fork tests 6/6 pass, fork
+smoke PASSED.**
+
+- `balance` (full §5.1 shape): session `active: true`, budget `10`,
+  spent `0`, remaining `10`, perTx `5`, dailyRemaining `5`, expiry
+  `2026-11-22T21:22:45.000Z`, `canSignX402: true`; health
+  `icr: 2.6788128952695365`, floor `2.5`, `recoveryMode: false`,
+  `troveStatus: "active"`; `accountMusd: "0"` (before the pay test).
+  After the pay test the smoke's `balance` shows `spent: "0.001001"`,
+  `remaining: "9.998999"`, `accountMusd: "0.001"` — the refill draw's
+  0.001 MUSD + 0.000001 fee, on-chain.
+- `radar`: **rank 260 / 280, `rankSource: "radar"`, `complete: true`,
+  `steps: 260`**, `tcr: 2.3314184226558394`,
+  `icr: 2.6788128952695365`, `frontierIcr: 1.2674415483138115`,
+  `debtAheadMusd: 427781699.469357321652369532`, shield `armed: true`,
+  triggers `ICR<1.6` + `RANK`. The deployed (fork) Radar's on-chain
+  `rank()` completed here — it needed the 300 s RPC timeout (see below).
+- `pay` dryRun: real demo.vativ.io 402, `status: "dry_run"`,
+  amount `0.001`, preview `allowed: true`, reason `""`,
+  `icrAfter: "2.678810468262455392"`, fee `0.000001`, `refillTx: null`.
+- `pay` full flow: **refill draw tx
+  `0xb545df27770424638a15bb00d881f1eabc2d1df75fc79ad7b5b00d07894535c2`
+  (real tx on the fork, agent → account, 0.001 MUSD)**; then the live
+  facilitator's verdict: **`status: "refused"`, `reason:
+  "VERIFY_FAILED"`, `settleTx: null`, `responseStatus: 402`** — the
+  fork-only account has no code on live testnet, so its EIP-1271
+  Permit2 signature cannot verify there. This is the expected honest
+  outcome; `paid` needs a live TroveAccount.
+- `request_session`: `requestId: req_de2fb658dd516dc5`, agent
+  `0xe1f42ac25c2c3cd30e554CfaeFC44de60494Da8D`, `status: "pending"`,
+  `backend: "unavailable"`, `keyFileCreated: false` (reused the fork
+  key).
+
+Two fork failures on the way here, both fixed (not hidden):
+
+1. First run: `pay` full flow reverted `PayeeNotAllowed(account)`
+   (`0xbc2f3a3f`) — the refill draws to self, but the fork session's
+   payee list held only the demo payee. Fixed by allowlisting the
+   account itself as a payee in fork-setup (TroveAccount.sol:491
+   documents `payee == address(this)` as "the x402 pay-by-borrow
+   refill" — the designed configuration, not a test hack).
+2. First two runs: the deployed Radar's `rank()` is one heavy eth_call
+   and anvil fetches remote state per slot through the public RPC, so
+   with the 30 s client timeout it was abandoned client-side while
+   anvil kept executing it — which then poisoned the following tests
+   (pay tests timing out on `eth_chainId` against an unresponsive
+   anvil). Fixed by `STERNPOST_RPC_TIMEOUT_MS` (fork runs use 300 s)
+   plus a fallback in `handleRadar`: if the Radar `rank()` throws,
+   the direct SortedTroves walk runs instead and the output reports
+   `rankSource: "walk"` + `rankNote`. The fallback is pinned by a
+   stub test offline; on the final fork run the Radar `rank()`
+   completed (`rankSource: "radar"`).
+
+## `claude mcp add` verification
+
+**Unreproduced on this box:** no `claude` binary exists here (checked:
+`command -v claude` → missing; `/tmp/claude-cli` from the previous
+build no longer exists). The stdio smoke verification above
+(`npm run smoke`: initialize → `tools/list` → `tools/call` for all 4
+tools) is the in-repo substitute and is recorded as such. Re-verify
+with `claude mcp add sternpost -- npx -y @sternpost/mcp` on a machine
+with Claude Code installed.
 
 ## Full raw outputs
 
-See `/tmp/mcp-smoke.log` (smoke run) and `/tmp/mcp-all.log` (vitest run)
-on the build machine; the values above are copied verbatim from them.
+See `mcp/evidence/` in this repo: `vitest-offline.log` (32/32),
+`vitest-live.log` (13/13), `smoke-live.log` (live smoke),
+`live-values.json` (governor / preview_draw / x402_quote / radar-walk /
+spend-wallet values above), `live-radar.json` (deployed Radar rank()
+through the tool + `getBytecode` on all four Wave 2 contracts),
+`fork-run.log` + `fork-addresses.json` (final fork run: 6/6 + fork
+smoke). No `/tmp` pointers: the logs live in the repo. Note:
+`fork-run.log` contains anvil's startup banner with the 10 well-known
+anvil default test private keys — those are public Foundry test keys,
+not secrets, and they are redacted in the committed log (see the
+`[anvil default test keys — public, redacted]` marker).

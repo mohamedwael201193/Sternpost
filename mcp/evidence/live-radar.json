@@ -1,0 +1,29 @@
+impl 0xC4f080498a720887b6086f13fBad5627d8abc470 code bytes: 21857
+factory 0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3 code bytes: 2414
+radar 0x9Cd95A420e014da798dbFB74833b9D4DEe868be2 code bytes: 3726
+batcher 0xB094e06559F7aF264e515F5363D9E89920b19b33 code bytes: 2784
+radar call ms: 1992
+{
+  "ok": true,
+  "tool": "radar",
+  "network": "testnet",
+  "synthetic": true,
+  "tcr": 2.336748971370031,
+  "recoveryMode": false,
+  "troveCount": 279,
+  "rank": 241,
+  "of": 279,
+  "debtAheadMusd": "426580307.188409946144635135",
+  "icr": 2.3904174066332926,
+  "frontierIcr": 1.270340483410701,
+  "frontierTrove": "0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d",
+  "frontierDebtMusd": "426003759.28817447524124053",
+  "shield": {
+    "armed": false,
+    "triggers": []
+  },
+  "account": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+  "complete": true,
+  "steps": 241,
+  "rankSource": "radar"
+}

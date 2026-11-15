@@ -1,0 +1,15 @@
+{
+  "forkRpc": "http://127.0.0.1:8545",
+  "forkBlock": 16803813,
+  "price": "64914685960000000000000",
+  "implementation": "0xa450f282bc627fc697c35714804c42f97679eb16",
+  "factory": "0xbb8af1d7599920e0c6b71a6d8ac3277c93cc2918",
+  "radar": "0xd447f8dd624894b7ef46ed592e0c9d3dbb3dff1b",
+  "account": "0x4065549e98C212464BAE4AF01819A5C29dE64291",
+  "owner": "0xc6aB8639AAe32a4569ba1bD13Cc05fe4aADB48c4",
+  "agent": "0xe1f42ac25c2c3cd30e554CfaeFC44de60494Da8D",
+  "agentKeyFile": "/tmp/sternpost-fork-agent.json",
+  "demoPayTo": "0xC3376296a18ef364eA19287203EEd7a87f18e738",
+  "createAndOpenTx": "0xb0367bb44179b5c0e2bb264fc75d6367270878a0dc9bc986d1908948b7b89e69",
+  "sessionTx": "0x1115f39a5b1ab0572669fdc73445e2b15e9ff809d5198db223c14e2ec5f91e60"
+}

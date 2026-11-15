@@ -1,0 +1,34 @@
+{
+  "_provenance": {
+    "source": "https://demo.vativ.io/ (live HTTP GET, response status 402)",
+    "fetched": "2026-11-15T19:43:01Z (Date header of the 402 response; re-fetched by the fix-round builder)",
+    "note": "Real fixture: the 402 challenge arrived in the `payment-required` response header (base64 JSON); the response body itself is `{}` (2 bytes). The header value below is verbatim; `decoded` is its base64 decode."
+  },
+  "status": 402,
+  "body": {},
+  "paymentRequiredHeader": "eyJ4NDAyVmVyc2lvbiI6MiwiZXJyb3IiOiJQYXltZW50IHJlcXVpcmVkIiwicmVzb3VyY2UiOnsidXJsIjoiaHR0cDovL2RlbW8udmF0aXYuaW8vIiwiZGVzY3JpcHRpb24iOiJNZXpvIHg0MDIgUXVpY2tzdGFydCDigJQgcGF5ICQwLjAwMSBpbiBNVVNEIHRvIHVubG9jayIsIm1pbWVUeXBlIjoiIn0sImFjY2VwdHMiOlt7InNjaGVtZSI6ImV4YWN0IiwibmV0d29yayI6ImVpcDE1NTozMTYxMSIsImFtb3VudCI6IjEwMDAwMDAwMDAwMDAwMDAiLCJhc3NldCI6IjB4MTE4OTE3YTQwRkFGMUNEN2ExM2RCMEVmNTZDODZEZTc5NzNBYzUwMyIsInBheVRvIjoiMHhDMzM3NjI5NmExOGVmMzY0ZUExOTI4NzIwM0VFZDdhODdmMThlNzM4IiwibWF4VGltZW91dFNlY29uZHMiOjMwMCwiZXh0cmEiOnsibmFtZSI6Ik1lem8gVVNEIiwidmVyc2lvbiI6IjEiLCJhc3NldFRyYW5zZmVyTWV0aG9kIjoicGVybWl0MiJ9fV19",
+  "decoded": {
+    "x402Version": 2,
+    "error": "Payment required",
+    "resource": {
+      "url": "http://demo.vativ.io/",
+      "description": "Mezo x402 Quickstart \u2014 pay $0.001 in MUSD to unlock",
+      "mimeType": ""
+    },
+    "accepts": [
+      {
+        "scheme": "exact",
+        "network": "eip155:31611",
+        "amount": "1000000000000000",
+        "asset": "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
+        "payTo": "0xC3376296a18ef364eA19287203EEd7a87f18e738",
+        "maxTimeoutSeconds": 300,
+        "extra": {
+          "name": "Mezo USD",
+          "version": "1",
+          "assetTransferMethod": "permit2"
+        }
+      }
+    ]
+  }
+}

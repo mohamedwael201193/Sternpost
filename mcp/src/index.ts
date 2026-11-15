@@ -1,23 +1,34 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ADDRESSES, CHAIN_ID, loadEnv } from "./config.js";
+import { ADDRESSES, CHAIN_ID, loadEnv, resolveNetwork } from "./config.js";
 import {
   createContext,
+  fail,
   handleBalance,
-  handleGovernorStatus,
-  handlePreviewDraw,
-  handleX402Quote,
+  handlePay,
+  handleRadar,
+  handleRequestSession,
   toolSchemas,
 } from "./tools.js";
 
 /**
- * Sternpost MCP server (plan §2.1).
- * Transport: stdio. Read-only tools over the live 0.9 deployment on Mezo
- * testnet (chain 31611). No sends, no mainnet, no keys in any response.
+ * Sternpost MCP server (plan §5.1).
+ * Transport: stdio. Exactly the plan's 4 tools: balance, pay,
+ * request_session, radar. Testnet by default (chain 31611); mainnet is
+ * refused unless STERNPOST_MAINNET_OK=1 and the account is recorded in
+ * shared/deployments/mainnet.json. `pay` spends real session budget.
+ * No keys in any response: unknown/credential fields are dropped by the
+ * transport, direct handler calls are guarded, and every serialized
+ * response — success or error — is scanned before it leaves the server.
  *
+ * Run directly (fallback one-liner, plan §5.1):
+ *   npx tsx mcp/src/index.ts
+ * Or build first and run the compiled server:
+ *   npm run build && node mcp/dist/index.js
  * Install for Claude Code:
- *   claude mcp add sternpost -- node /absolute/path/to/mcp/dist/index.js
+ *   claude mcp add sternpost -- npx -y @sternpost/mcp
+ * (publishing to npm is a USER action; until then use the paths above)
  */
 export function createServer() {
   const env = loadEnv();
@@ -31,51 +42,53 @@ export function createServer() {
     "balance",
     {
       description:
-        "MUSD + native BTC balance of an address on Mezo testnet (chain 31611). Read-only.",
+        "Show the agent's session on its Sternpost trove account: remaining budget, per-tx cap, daily limit, expiry, account health (ICR, floor, Recovery Mode) and MUSD held by the account. Read-only.",
       inputSchema: toolSchemas.balance,
     },
-    (args) => handleBalance(ctx, args),
+    (args) => handleBalance(ctx, args).catch((e) => fail(e)),
   );
 
   server.registerTool(
-    "preview_draw",
+    "pay",
     {
       description:
-        "Preview a draw against a Sternpost governor: allowed?, on-chain reason code + explanation, ICR after, floor, remaining budget. Read-only, never sends.",
-      inputSchema: toolSchemas.preview_draw,
+        "Pay an x402-protected HTTP resource in MUSD by borrowing exactly that amount just in time against the owner's Bitcoin collateral, then fetch the resource. Spends session budget.",
+      inputSchema: toolSchemas.pay,
     },
-    (args) => handlePreviewDraw(ctx, args),
+    (args) => handlePay(ctx, args).catch((e) => fail(e)),
   );
 
   server.registerTool(
-    "governor_status",
+    "request_session",
     {
       description:
-        "Live governor state: floor/defend ICR, frozen flag, buffer, standby (amount/deadline/nonce/live), ICR, fee. Read-only.",
-      inputSchema: toolSchemas.governor_status,
+        "Ask the account owner for a spending session. Generates a local agent key if needed and sends the owner an approval request. Returns a request id and the approval link; poll with balance.",
+      inputSchema: toolSchemas.request_session,
     },
-    (args) => handleGovernorStatus(ctx, args),
+    (args) => handleRequestSession(ctx, args).catch((e) => fail(e)),
   );
 
   server.registerTool(
-    "x402_quote",
+    "radar",
     {
       description:
-        "Quote an x402 v2 payment for a priced Sternpost route: returns the exact 402 challenge (scheme/network/asset/amount/payTo) and, when an app address is given, a live preview of whether that draw can pay it. Quote only — never verifies, settles, or sends.",
-      inputSchema: toolSchemas.x402_quote,
+        "Redemption Radar for a trove account or any trove address: rank from the redemption frontier, MUSD of debt ahead, ICR, system TCR vs the 150% Recovery Mode line. Network is labelled; testnet ranks are synthetic. Read-only.",
+      inputSchema: toolSchemas.radar,
     },
-    (args) => handleX402Quote(ctx, args),
+    (args) => handleRadar(ctx, args).catch((e) => fail(e)),
   );
 
   return server;
 }
 
 async function main() {
+  const env = loadEnv();
+  const network = resolveNetwork(env);
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(
-    `sternpost-mcp 0.1.0 listening on stdio (testnet ${CHAIN_ID}, factory ${ADDRESSES.factory})`,
+    `sternpost-mcp 0.1.0 listening on stdio (${network} ${network === "mainnet" ? 31612 : CHAIN_ID}, factory ${ADDRESSES.factory})`,
   );
 }
 

@@ -1,34 +1,58 @@
 import { z } from "zod";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
 import type { Address, PublicClient } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   ADDRESSES,
   CHAIN_ID,
+  X402_FACILITATOR_URL,
   addressSchema,
+  apiBase,
+  chainIdFor,
   loadEnv,
-  sandboxSchema,
+  musdAddress,
+  resolveNetwork,
   x402PayTo,
   x402Price,
   type McpEnv,
+  type NetworkName,
 } from "./config.js";
 import {
-  assertTestnet,
+  assertNetwork,
+  createAgentWallet,
   createClient,
   explorerAddress,
+  explorerAddressFor,
+  explorerTxFor,
   factoryAbi,
   formatUnits,
   governorAbi,
+  mezoSystem,
   musdAbi,
   parseMusd,
+  priceFeedAbi,
+  radarAbi,
+  requireMainnetGate,
+  safeDeadline,
+  sortedTrovesAbi,
   spendWalletAbi,
+  troveAccountAbi,
+  troveManagerAbi,
 } from "./chain.js";
-import { REFUSALS, explain } from "./reasons.js";
+import { REFUSALS, explain, explainTrovePreview } from "./reasons.js";
 import { X402_ROUTES, x402Challenge, type X402Route } from "./x402.js";
+import { loadAgentAddress, loadAgentKey, loadOrCreateAgentKey } from "./agentKey.js";
+import { newRequestId, storeSessionRequest } from "./store.js";
 
 /**
- * KEY RULE: this server holds no private key, accepts no key as input, and
- * never returns one. Tool inputs are rejected if they carry any
- * credential-shaped field, and every serialized response is scanned for the
- * value of STERNPOST_API_KEY (if set) before it leaves the server.
+ * KEY RULE: this server holds no private key in any tool result, accepts no
+ * key as input, and never returns one. Defence in depth, two layers:
+ * (1) over real MCP transport the SDK parses args against the zod schemas
+ * below, so unknown/credential fields are dropped by the transport and never
+ * reach a handler (verified by the stdio transport test in the smoke
+ * script); (2) handlers called directly still run rejectCredentialFields
+ * below, and every serialized response — success or error — is scanned for
+ * the value of STERNPOST_API_KEY (if set) before it leaves the server.
  */
 const FORBIDDEN_INPUT_FIELDS = [
   "key",
@@ -72,41 +96,77 @@ export function ok(result: unknown): {
   return { content: [{ type: "text", text }] };
 }
 
+/** Error path: the same output scan applies to thrown errors (J3 F2). */
+export function fail(err: unknown): { content: { type: "text"; text: string }[] } {
+  const message = err instanceof Error ? err.message : String(err);
+  guardOutput(message);
+  return ok({ ok: false, error: message });
+}
+
 export function refusal(reason: string, detail?: string) {
   return ok({ ok: false, refused: true, reason, ...(detail ? { detail } : {}) });
 }
 
-function requireSandbox(args: { sandbox?: boolean }) {
-  if (args.sandbox === false) return refusal("SANDBOX_REQUIRED", REFUSALS.SANDBOX_REQUIRED);
-  return null;
-}
+const amountPattern = /^(\d+)(\.\d{1,18})?$/;
 
-/** Zod raw shapes for McpServer.registerTool (strict: unknown fields rejected by the handler guard). */
+/**
+ * Zod raw shapes for McpServer.registerTool. These four — and only these
+ * four — are the plan §5.1 tool set (balance, pay, request_session, radar).
+ * preview_draw / governor_status / x402_quote live on as internal helpers
+ * (used by `pay` and by the tests) but are NOT registered tools.
+ */
 export const toolSchemas = {
   balance: {
-    address: addressSchema.describe("Address to read balances for (0x, Mezo testnet)"),
-    sandbox: sandboxSchema.describe("Must be true: this server only serves the Mezo testnet sandbox (chain 31611)"),
+    account: addressSchema.optional().describe("TroveAccount address; defaults to STERNPOST_ACCOUNT"),
   },
+  pay: {
+    url: z.string().url().describe("x402-protected HTTP resource to pay for"),
+    method: z.enum(["GET", "POST"]).default("GET"),
+    body: z.string().optional().describe("POST body"),
+    maxAmount: z
+      .string()
+      .regex(amountPattern, "decimal MUSD amount, e.g. \"0.01\"")
+      .optional()
+      .describe("MUSD ceiling; the call fails with OVER_MAX if the 402 asks for more"),
+    dryRun: z.boolean().default(false).describe("Parse the 402 and run previewDraw only; no tx, no payment"),
+  },
+  request_session: {
+    account: addressSchema.describe("TroveAccount address to request a session on"),
+    purpose: z.string().max(200).describe("What the agent will spend on (max 200 chars)"),
+    budget: z.string().regex(amountPattern, "decimal MUSD amount").describe("MUSD requested"),
+    perTx: z.string().regex(amountPattern, "decimal MUSD amount").optional(),
+    days: z.number().int().min(1).max(90).default(7),
+    payees: z.array(addressSchema).max(10).optional(),
+    sandbox: z
+      .boolean()
+      .default(false)
+      .describe("Request a small, labelled sandbox session on the Sternpost team account (Lane B). Auto-approved up to 5 MUSD/day per agent."),
+  },
+  radar: {
+    account: addressSchema.optional().describe("Trove address to rank (defaults to the session account)"),
+    network: z.enum(["testnet", "mainnet"]).optional().describe("Defaults to STERNPOST_NETWORK"),
+  },
+  // Internal helpers (NOT registered tools): Classic 0.9 governor reads.
   preview_draw: {
     governor: addressSchema.optional().describe("Governor to preview against; defaults to the live 0.9 governor"),
     app: addressSchema.describe("App (agent) address whose credit line is previewed"),
-    amountMusd: z.string().regex(/^\d+(\.\d{1,18})?$/, "decimal MUSD amount, e.g. \"10.5\"").describe("Draw amount in MUSD (decimal string)"),
+    amountMusd: z.string().regex(amountPattern, "decimal MUSD amount, e.g. \"10.5\"").describe("Draw amount in MUSD (decimal string)"),
     payee: addressSchema.describe("Payee address the draw would pay"),
-    sandbox: sandboxSchema.describe("Must be true: testnet sandbox only"),
   },
   governor_status: {
     governor: addressSchema.optional().describe("Governor to inspect; defaults to the live 0.9 governor"),
-    sandbox: sandboxSchema.describe("Must be true: testnet sandbox only"),
   },
   x402_quote: {
     route: z.enum(["radar", "brief", "muster"]).describe("Priced route to quote an x402 payment for"),
     app: addressSchema.optional().describe("Optional app address: when given, the quote also previews whether this draw can pay it"),
     payee: addressSchema.optional().describe("Optional payee for the preview; defaults to the x402 payee"),
-    sandbox: sandboxSchema.describe("Must be true: testnet sandbox only"),
   },
 } as const;
 
 export type BalanceArgs = z.infer<z.ZodObject<typeof toolSchemas.balance>>;
+export type PayArgs = z.infer<z.ZodObject<typeof toolSchemas.pay>>;
+export type RequestSessionArgs = z.infer<z.ZodObject<typeof toolSchemas.request_session>>;
+export type RadarArgs = z.infer<z.ZodObject<typeof toolSchemas.radar>>;
 export type PreviewDrawArgs = z.infer<z.ZodObject<typeof toolSchemas.preview_draw>>;
 export type GovernorStatusArgs = z.infer<z.ZodObject<typeof toolSchemas.governor_status>>;
 export type X402QuoteArgs = z.infer<z.ZodObject<typeof toolSchemas.x402_quote>>;
@@ -114,56 +174,840 @@ export type X402QuoteArgs = z.infer<z.ZodObject<typeof toolSchemas.x402_quote>>;
 export interface ToolContext {
   client: PublicClient;
   env: McpEnv;
+  network: NetworkName;
 }
 
-export function createContext(env: McpEnv = loadEnv()): ToolContext {
-  return { client: createClient(env), env };
+export function createContext(env: McpEnv = loadEnv(), network?: NetworkName): ToolContext {
+  const resolved = network ?? resolveNetwork(env);
+  return { client: createClient(env, resolved), env, network: resolved };
 }
 
-async function checkedClient(ctx: ToolContext): Promise<PublicClient> {
-  await assertTestnet(ctx.client);
-  return ctx.client;
+/** Chain-gate every read: the RPC must report the configured chain. */
+async function checkedClient(ctx: ToolContext, network: NetworkName = ctx.network): Promise<PublicClient> {
+  const client = network === ctx.network ? ctx.client : createClient(ctx.env, network);
+  await assertNetwork(client, chainIdFor(network));
+  return client;
 }
+
+function resolveAccount(ctx: ToolContext, arg?: string): Address | null {
+  return ((arg ?? ctx.env.STERNPOST_ACCOUNT) as Address | undefined) ?? null;
+}
+
+function truncate(text: string, max = 8192): string {
+  return text.length > max ? text.slice(0, max) + `…[truncated ${text.length - max} chars]` : text;
+}
+
+const TROVE_STATUS = ["none", "active", "closedByOwner", "closedByLiquidation", "closedByRedemption"] as const;
+
+/* ------------------------------------------------------------------ */
+/* 1. balance — plan §5.1: session + health + account MUSD              */
+/* ------------------------------------------------------------------ */
 
 /**
- * balance — MUSD + native BTC balance of an address on Mezo testnet.
- * Real reads: MUSD.balanceOf, MUSD.decimals, MUSD.symbol, eth_getBalance.
+ * balance — the agent's session on its Sternpost trove account: remaining
+ * budget, per-tx cap, daily limit, expiry, account health (ICR, floor,
+ * Recovery Mode) and MUSD held by the account. Read-only.
  */
 export async function handleBalance(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.balance).strict().parse(rawArgs);
-  const sandboxRefusal = requireSandbox(args);
-  if (sandboxRefusal) return sandboxRefusal;
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, args.account ?? ctx.env.STERNPOST_ACCOUNT);
+  const account = resolveAccount(ctx, args.account);
+  if (!account) return refusal("ACCOUNT_NOT_SET", REFUSALS.ACCOUNT_NOT_SET);
   const client = await checkedClient(ctx);
-  const address = args.address as Address;
-  const [musdBalance, decimals, symbol, btcBalance] = await Promise.all([
-    client.readContract({ address: ADDRESSES.musd as Address, abi: musdAbi, functionName: "balanceOf", args: [address] }),
-    client.readContract({ address: ADDRESSES.musd as Address, abi: musdAbi, functionName: "decimals" }),
-    client.readContract({ address: ADDRESSES.musd as Address, abi: musdAbi, functionName: "symbol" }),
-    client.getBalance({ address }),
-  ]);
+  const code = await client.getBytecode({ address: account });
+  if (!code) return refusal("ACCOUNT_NOT_DEPLOYED", REFUSALS.ACCOUNT_NOT_DEPLOYED);
+  const agent = await loadAgentAddress(ctx.env);
+  const sys = mezoSystem(ctx.network);
+  let session: {
+    active: boolean;
+    budget: string;
+    spent: string;
+    remaining: string;
+    perTx: string;
+    dailyRemaining: string | null;
+    expiry: string | null;
+    canSignX402: boolean;
+  };
+  let policy: { floorICR: bigint };
+  let status: number;
+  let accountMusd: bigint;
+  try {
+    const [policyRaw, statusRaw, musdRaw] = await Promise.all([
+      client.readContract({ address: account, abi: troveAccountAbi, functionName: "policy" }),
+      client.readContract({ address: account, abi: troveAccountAbi, functionName: "status" }),
+      client.readContract({ address: sys.musd as Address, abi: musdAbi, functionName: "balanceOf", args: [account] }),
+    ]);
+    policy = { floorICR: (policyRaw as [bigint, bigint, bigint, bigint, bigint, number])[0] };
+    status = statusRaw as number;
+    accountMusd = musdRaw as bigint;
+    if (agent) {
+      const [s, epoch] = await Promise.all([
+        client.readContract({ address: account, abi: troveAccountAbi, functionName: "sessions", args: [agent] }),
+        client.readContract({ address: account, abi: troveAccountAbi, functionName: "sessionEpoch" }),
+      ]);
+      const [budget, spent, perTx, dailyLimit, daySpent, expiry, dayStart, sessEpoch, , , canSignX402, active] =
+        s as unknown as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, number, number, boolean, boolean, boolean];
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const daySpentNow = now >= dayStart + 86400n ? 0n : daySpent;
+      const dailyRemaining =
+        dailyLimit === 0n ? null : formatUnits(dailyLimit > daySpentNow ? dailyLimit - daySpentNow : 0n, 18);
+      session = {
+        active: active && sessEpoch === epoch && expiry > now,
+        budget: formatUnits(budget, 18),
+        spent: formatUnits(spent, 18),
+        remaining: formatUnits(budget > spent ? budget - spent : 0n, 18),
+        perTx: formatUnits(perTx, 18),
+        dailyRemaining,
+        expiry: expiry === 0n ? null : new Date(Number(expiry) * 1000).toISOString(),
+        canSignX402,
+      };
+    } else {
+      session = {
+        active: false,
+        budget: "0",
+        spent: "0",
+        remaining: "0",
+        perTx: "0",
+        dailyRemaining: null,
+        expiry: null,
+        canSignX402: false,
+      };
+    }
+  } catch {
+    return refusal("ACCOUNT_NOT_DEPLOYED", REFUSALS.ACCOUNT_NOT_DEPLOYED);
+  }
+  // Health: live price + ICR + Recovery Mode (needs the Mezo system contracts).
+  let icr: number | null;
+  let recoveryMode = false;
+  try {
+    const price = await client.readContract({
+      address: sys.priceFeed as Address,
+      abi: priceFeedAbi,
+      functionName: "fetchPrice",
+    });
+    const [icrRaw, rm] = await Promise.all([
+      client.readContract({
+        address: sys.troveManager as Address,
+        abi: troveManagerAbi,
+        functionName: "getCurrentICR",
+        args: [account, price],
+      }),
+      client.readContract({
+        address: sys.troveManager as Address,
+        abi: troveManagerAbi,
+        functionName: "checkRecoveryMode",
+        args: [price],
+      }),
+    ]);
+    const icrWei = icrRaw as bigint;
+    // No trove yet (or a closed one): ICR is not meaningful.
+    icr = status === 1 ? Number.parseFloat(formatUnits(icrWei, 18)) : null;
+    recoveryMode = rm as boolean;
+  } catch {
+    icr = null;
+  }
   return ok({
     ok: true,
     tool: "balance",
-    address,
-    chainId: CHAIN_ID,
-    network: "Mezo testnet",
-    musd: { balanceWei: musdBalance.toString(), balance: formatUnits(musdBalance, decimals), symbol },
-    btc: { balanceWei: btcBalance.toString(), balance: formatUnits(btcBalance, 18) },
-    explorer: explorerAddress(address),
+    network: ctx.network,
+    account,
+    agent,
+    session,
+    health: {
+      icr,
+      floor: Number.parseFloat(formatUnits(policy.floorICR, 18)),
+      recoveryMode,
+      troveStatus: TROVE_STATUS[status] ?? `unknown_${status}`,
+    },
+    accountMusd: formatUnits(accountMusd, 18),
+    explorer: explorerAddressFor(ctx.network, account),
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* 2. pay — plan §5.1: pay-by-borrow x402 (spends real budget)          */
+/* ------------------------------------------------------------------ */
+
+interface X402Accept {
+  scheme?: string;
+  network?: string;
+  amount?: string;
+  asset?: string;
+  payTo?: string;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}
+
+function parse402(status: number, headers: Headers, bodyText: string): { doc: Record<string, unknown>; accepts: X402Accept[] } | null {
+  if (status !== 402) return null;
+  const header = headers.get("payment-required");
+  if (header) {
+    try {
+      const doc = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as Record<string, unknown>;
+      const accepts = (doc.accepts as X402Accept[] | undefined) ?? [];
+      return { doc, accepts };
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const doc = JSON.parse(bodyText) as Record<string, unknown>;
+    const accepts = (doc.accepts as X402Accept[] | undefined) ?? [];
+    return { doc, accepts };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * pay — pay an x402-protected HTTP resource in MUSD by borrowing exactly
+ * that amount just in time against the owner's Bitcoin collateral, then
+ * fetch the resource. SPENDS SESSION BUDGET (and the agent key pays gas
+ * for the refill draw). `pay` always calls previewDraw first and refuses
+ * with a reason code instead of sending a doomed tx.
+ */
+export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
+  rejectCredentialFields(rawArgs);
+  const args = z.object(toolSchemas.pay).strict().parse(rawArgs);
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, ctx.env.STERNPOST_ACCOUNT);
+  const account = resolveAccount(ctx);
+  if (!account) return refusal("ACCOUNT_NOT_SET", REFUSALS.ACCOUNT_NOT_SET);
+  const agentKey = await loadAgentKey(ctx.env);
+  if (!agentKey) return refusal("SESSION_INACTIVE", REFUSALS.NO_AGENT_KEY);
+  const client = await checkedClient(ctx);
+  const chainId = chainIdFor(ctx.network);
+  const network = `eip155:${chainId}`;
+  const musd = musdAddress(ctx.network);
+
+  // (1) GET url → 402.
+  const first = await fetch(args.url, {
+    method: args.method,
+    body: args.method === "POST" ? (args.body ?? "") : undefined,
+    signal: AbortSignal.timeout(30_000),
+  });
+  const firstBody = await first.text();
+  const parsed402 = parse402(first.status, first.headers, firstBody);
+  if (!parsed402) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount: null,
+      payTo: null,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "NO_402",
+      detail: "the resource did not answer 402 with an x402 challenge",
+    });
+  }
+  const accepts = parsed402.accepts;
+  const wanted = accepts.find((a) => a.network === network);
+  if (!wanted) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount: accepts[0]?.amount ? formatUnits(BigInt(accepts[0].amount), 18) : null,
+      payTo: accepts[0]?.payTo ?? null,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "NETWORK_MISMATCH",
+      detail: `no accepts entry for ${network}`,
+    });
+  }
+  if (wanted.scheme !== "exact") {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount: wanted.amount ? formatUnits(BigInt(wanted.amount), 18) : null,
+      payTo: wanted.payTo ?? null,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "SCHEME_MISMATCH",
+      detail: `unsupported scheme ${String(wanted.scheme)} (only "exact" is supported)`,
+    });
+  }
+  if (!wanted.asset || wanted.asset.toLowerCase() !== musd.toLowerCase()) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount: wanted.amount ? formatUnits(BigInt(wanted.amount), 18) : null,
+      payTo: wanted.payTo ?? null,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "ASSET_MISMATCH",
+      detail: `asset ${String(wanted.asset)} is not MUSD ${musd}`,
+    });
+  }
+  const amountWei = BigInt(wanted.amount ?? "0");
+  const amount = formatUnits(amountWei, 18);
+  const payTo = wanted.payTo as Address;
+  if (args.maxAmount !== undefined && amountWei > parseMusd(args.maxAmount)) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount,
+      payTo,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "OVER_MAX",
+      detail: `402 asks ${amount} MUSD, above maxAmount ${args.maxAmount}`,
+    });
+  }
+
+  // (2) previewDraw first — never send a doomed tx.
+  const [previewOk, reasonCode, icrAfter, fee] = (await client.readContract({
+    address: account,
+    abi: troveAccountAbi,
+    functionName: "previewDraw",
+    args: [agentKey.address, payTo, amountWei],
+  })) as unknown as [boolean, number, bigint, bigint];
+  const preview = {
+    allowed: previewOk,
+    ...explainTrovePreview(reasonCode),
+    icrAfter: formatUnits(icrAfter, 18),
+    fee: formatUnits(fee, 18),
+  };
+  if (!previewOk) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount,
+      payTo,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: preview.reason,
+      preview,
+    });
+  }
+  if (args.dryRun) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "dry_run",
+      amount,
+      payTo,
+      network,
+      refillTx: null,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: null,
+      preview,
+    });
+  }
+
+  // (3) Refill: if the account's MUSD balance is below the amount, borrow
+  // exactly the shortfall with draw(payee = the account itself). The draw
+  // is signed by the agent key, which pays gas.
+  let refillTx: string | null = null;
+  const balance = (await client.readContract({
+    address: musd as Address,
+    abi: musdAbi,
+    functionName: "balanceOf",
+    args: [account],
+  })) as bigint;
+  if (balance < amountWei) {
+    const wallet = createAgentWallet(ctx.env, agentKey.privateKey, ctx.network);
+    const hash = await wallet.writeContract({
+      address: account,
+      abi: troveAccountAbi,
+      functionName: "draw",
+      args: [account, amountWei],
+      chain: wallet.chain,
+      account: privateKeyToAccount(agentKey.privateKey),
+    });
+    await client.waitForTransactionReceipt({ hash });
+    refillTx = hash;
+  }
+
+  // (4) Sign the x402 v2 ExactEvmScheme payment (Permit2, payer = account,
+  // signed by the agent key via the account's EIP-1271 signature).
+  const requirements = {
+    scheme: "exact",
+    network,
+    asset: musd as Address,
+    amount: amountWei.toString(),
+    payTo,
+    maxTimeoutSeconds: wanted.maxTimeoutSeconds ?? 300,
+    extra: { name: "Mezo USD", version: "1", assetTransferMethod: "permit2" },
+  };
+  const agentAccount = privateKeyToAccount(agentKey.privateKey);
+  const signer = {
+    address: account,
+    signTypedData: (a: Parameters<typeof agentAccount.signTypedData>[0]) => agentAccount.signTypedData(a),
+    readContract: (a: never) => client.readContract(a),
+  };
+  const paymentPayload = await new ExactEvmScheme(signer as never).createPaymentPayload(2, requirements as never);
+  const payload = { accepted: requirements, resource: { url: args.url, description: "Sternpost x402", mimeType: "application/json" }, ...paymentPayload, x402Version: 2 };
+
+  // (4b) Verify through the facilitator before retrying (diagnostic: a bad
+  // signature is refused here instead of burning the retry).
+  const verifyRes = await fetch(`${X402_FACILITATOR_URL}/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ x402Version: 2, paymentPayload: payload, paymentRequirements: requirements }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const verifyJson = (await verifyRes.json().catch(() => ({}))) as { valid?: boolean; invalidReason?: string };
+  if (verifyJson.valid !== true) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount,
+      payTo,
+      network,
+      refillTx,
+      settleTx: null,
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "VERIFY_FAILED",
+      detail: `facilitator verify rejected the payment: ${truncate(JSON.stringify(verifyJson), 500)}`,
+      preview,
+    });
+  }
+
+  // (5) Retry with PAYMENT-SIGNATURE; (6) read payment-response for the settle hash.
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+  const retry = await fetch(args.url, {
+    method: args.method,
+    body: args.method === "POST" ? (args.body ?? "") : undefined,
+    headers: { "PAYMENT-SIGNATURE": encoded, "X-PAYMENT": encoded },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const retryBody = await retry.text();
+  let settleTx: string | null = null;
+  const paymentResponse = retry.headers.get("payment-response");
+  if (paymentResponse) {
+    try {
+      const pr = JSON.parse(Buffer.from(paymentResponse, "base64").toString("utf8")) as Record<string, unknown>;
+      settleTx = (pr.transaction as string | undefined) ?? (pr.txHash as string | undefined) ?? (pr.settleTx as string | undefined) ?? null;
+    } catch {
+      settleTx = null;
+    }
+  }
+  if (retry.status === 402) {
+    return ok({
+      ok: true,
+      tool: "pay",
+      status: "refused",
+      amount,
+      payTo,
+      network,
+      refillTx,
+      settleTx,
+      responseStatus: retry.status,
+      responseBody: truncate(retryBody),
+      reason: "SETTLE_FAILED",
+      detail: "the resource still answers 402 after payment (settlement did not go through on its side)",
+      preview,
+    });
+  }
+  return ok({
+    ok: true,
+    tool: "pay",
+    status: "paid",
+    amount,
+    payTo,
+    network,
+    refillTx,
+    settleTx,
+    responseStatus: retry.status,
+    responseBody: truncate(retryBody),
+    reason: null,
+    preview,
+    ...(settleTx ? { explorer: explorerTxFor(ctx.network, settleTx) } : {}),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. request_session — plan §5.1: ask the owner for budget             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * request_session — ask the account owner for a spending session.
+ * Generates a local agent key if needed (STERNPOST_AGENT_KEY_FILE, chmod
+ * 600; the key is never returned — only the agent address is) and sends
+ * the owner an approval request. Returns a request id and the approval
+ * link; poll with `balance`.
+ *
+ * Backend note: sandbox auto-approval (Lane B, plan §9.3) runs through the
+ * backend, which has no /v1/sessions/request endpoint yet (the API answers
+ * 404 for it today). Until it exists, EVERY request — sandbox or not — is
+ * recorded locally and returned `pending` for the owner to approve in Crew;
+ * the tool never claims `sandbox_granted` it did not receive.
+ */
+export async function handleRequestSession(ctx: ToolContext, rawArgs: unknown) {
+  rejectCredentialFields(rawArgs);
+  const args = z.object(toolSchemas.request_session).strict().parse(rawArgs);
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, args.account);
+  const { key: agentKey, created: keyCreated } = await loadOrCreateAgentKey(ctx.env);
+  const requestId = newRequestId();
+  const approveUrl = `https://sternpost-pink.vercel.app/app/crew?request=${requestId}`;
+  let status: "pending" | "approved" | "denied" | "sandbox_granted" = "pending";
+  let telegram: "sent" | "not_linked" = "not_linked";
+  let backend: "accepted" | "unavailable" = "unavailable";
+  try {
+    const res = await fetch(`${apiBase(ctx.env)}/v1/sessions/request`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestId,
+        account: args.account,
+        agent: agentKey.address,
+        purpose: args.purpose,
+        budget: args.budget,
+        perTx: args.perTx ?? null,
+        days: args.days,
+        payees: args.payees ?? [],
+        sandbox: args.sandbox,
+      }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { status?: string; telegram?: string };
+      backend = "accepted";
+      if (json.status === "sandbox_granted" || json.status === "approved" || json.status === "denied") {
+        status = json.status;
+      }
+      if (json.telegram === "sent") telegram = "sent";
+    }
+  } catch {
+    backend = "unavailable";
+  }
+  const record = {
+    requestId,
+    account: args.account,
+    agent: agentKey.address,
+    purpose: args.purpose,
+    budget: args.budget,
+    perTx: args.perTx ?? null,
+    days: args.days,
+    payees: args.payees ?? [],
+    sandbox: args.sandbox,
+    status,
+    approveUrl,
+    telegram,
+    createdAt: new Date().toISOString(),
+  };
+  await storeSessionRequest(ctx.env, record);
+  return ok({
+    ok: true,
+    tool: "request_session",
+    requestId,
+    agent: agentKey.address,
+    status,
+    approveUrl,
+    telegram,
+    account: args.account,
+    purpose: args.purpose,
+    budget: args.budget,
+    perTx: args.perTx ?? null,
+    days: args.days,
+    payees: args.payees ?? [],
+    sandbox: args.sandbox,
+    keyFileCreated: keyCreated,
+    backend,
+    ...(args.sandbox
+      ? { note: "Sandbox sessions are capped at 5 MUSD/day per agent at approval; auto-approval needs the Lane B backend, which is not live yet — this request is pending owner approval." }
+      : {}),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. radar — plan §5.1: Redemption Radar                               */
+/* ------------------------------------------------------------------ */
+
+const MCR = 1_100_000_000_000_000_000n; // 1.1e18
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+/**
+ * radar — Redemption Radar for a trove account or any trove address: rank
+ * from the redemption frontier, MUSD of debt ahead, ICR, system TCR vs the
+ * 150% Recovery Mode line. Network is labelled; testnet ranks are
+ * synthetic (the plan's label: testnet troves are play money).
+ * Read-only. Reads Mezo SortedTroves + TroveManager + PriceFeed directly,
+ * or the deployed Radar contract when STERNPOST_RADAR is set.
+ */
+export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
+  rejectCredentialFields(rawArgs);
+  const args = z.object(toolSchemas.radar).strict().parse(rawArgs);
+  const network = args.network ?? ctx.network;
+  if (network === "mainnet") await requireMainnetGate(ctx.env, args.account);
+  const client = await checkedClient(ctx, network);
+  const sys = mezoSystem(network);
+  const account = (args.account ?? ctx.env.STERNPOST_ACCOUNT ?? null) as Address | null;
+  const maxSteps = 300;
+
+  // One live price read, shared by every ICR/TCR call below.
+  const price = (await client.readContract({
+    address: sys.priceFeed as Address,
+    abi: priceFeedAbi,
+    functionName: "fetchPrice",
+  })) as bigint;
+
+  let tcr: bigint;
+  let recoveryMode: boolean;
+  let troveCount: bigint;
+  let frontierTrove: Address;
+  let frontierIcr: bigint;
+  let frontierDebt: bigint;
+  if (ctx.env.STERNPOST_RADAR) {
+    const radar = ctx.env.STERNPOST_RADAR as Address;
+    const [, tcrRaw, rm, n] = (await client.readContract({
+      address: radar,
+      abi: radarAbi,
+      functionName: "systemHealth",
+    })) as unknown as [bigint, bigint, boolean, bigint];
+    tcr = tcrRaw;
+    recoveryMode = rm;
+    troveCount = n;
+    const [fTro, fIcr, fDebt] = (await client.readContract({
+      address: radar,
+      abi: radarAbi,
+      functionName: "frontier",
+    })) as unknown as [Address, bigint, bigint];
+    frontierTrove = fTro;
+    frontierIcr = fIcr;
+    frontierDebt = fDebt;
+  } else {
+    const [tcrRaw, rm, n] = await Promise.all([
+      client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "getTCR", args: [price] }),
+      client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "checkRecoveryMode", args: [price] }),
+      client.readContract({ address: sys.sortedTroves as Address, abi: sortedTrovesAbi, functionName: "getSize" }),
+    ]);
+    tcr = tcrRaw as bigint;
+    recoveryMode = rm as boolean;
+    troveCount = n as bigint;
+    frontierTrove = (await client.readContract({
+      address: sys.sortedTroves as Address,
+      abi: sortedTrovesAbi,
+      functionName: "getLast",
+    })) as Address;
+    if (frontierTrove === ZERO) {
+      frontierIcr = 0n;
+      frontierDebt = 0n;
+    } else {
+      const [fIcr, fDebt] = await Promise.all([
+        client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "getCurrentICR", args: [frontierTrove, price] }),
+        client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "getEntireDebtAndColl", args: [frontierTrove] }),
+      ]);
+      frontierIcr = fIcr as bigint;
+      const [, principal, interest] = fDebt as unknown as [bigint, bigint, bigint, bigint, bigint, bigint];
+      frontierDebt = principal + interest;
+    }
+  }
+
+  let rank = 0;
+  let debtAhead = 0n;
+  let icr: number | null = null;
+  let complete = true;
+  let steps = 0;
+  let rankSource: "radar" | "walk" | null = null;
+  let rankNote: string | null = null;
+  if (account && account !== ZERO) {
+    // Direct walk: frontier → getPrev, redeemable troves only (ICR >= MCR).
+    // Ground truth for the rank; also the fallback when the deployed
+    // Radar's single heavy rank() call times out (see below).
+    const walkRank = async (): Promise<{ rank: number; debtAhead: bigint; icr: number | null; complete: boolean; steps: number }> => {
+      const chain: Address[] = [];
+      let cursor = frontierTrove;
+      while (cursor !== ZERO && chain.length < maxSteps) {
+        chain.push(cursor);
+        cursor = (await client.readContract({
+          address: sys.sortedTroves as Address,
+          abi: sortedTrovesAbi,
+          functionName: "getPrev",
+          args: [cursor],
+        })) as Address;
+      }
+      let wComplete = cursor === ZERO;
+      const wSteps = chain.length;
+      const reads: { trove: Address; icr: bigint; debt: bigint }[] = [];
+      // Small batches + a pause between them: the public testnet RPC
+      // rate-limits bursts (a 50-wide batch throttled it mid-walk on
+      // 2026-11-15 and poisoned the following tests with eth_chainId
+      // timeouts). 10-wide batches stay under the limit.
+      for (let i = 0; i < chain.length; i += 10) {
+        const chunk = chain.slice(i, i + 10);
+        const chunkReads = await Promise.all(
+          chunk.map(async (trove) => {
+            const [icrRaw, entire] = await Promise.all([
+              client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "getCurrentICR", args: [trove, price] }),
+              client.readContract({ address: sys.troveManager as Address, abi: troveManagerAbi, functionName: "getEntireDebtAndColl", args: [trove] }),
+            ]);
+            const [, principal, interest] = entire as unknown as [bigint, bigint, bigint, bigint, bigint, bigint];
+            return { trove, icr: icrRaw as bigint, debt: principal + interest };
+          }),
+        );
+        reads.push(...chunkReads);
+        if (i + 10 < chain.length) await new Promise((r) => setTimeout(r, 100));
+      }
+      let wRank = 0;
+      let wDebtAhead = 0n;
+      let wIcr: number | null = null;
+      let redeemableSeen = 0;
+      for (const r of reads) {
+        const redeemable = r.icr >= MCR;
+        if (r.trove.toLowerCase() === account.toLowerCase()) {
+          wIcr = Number.parseFloat(formatUnits(r.icr, 18));
+          wRank = redeemable ? redeemableSeen + 1 : 0;
+          break;
+        }
+        if (redeemable) {
+          redeemableSeen += 1;
+          wDebtAhead += r.debt;
+        }
+      }
+      if (wIcr === null) {
+        // Target not found in the walked prefix (or no troves at all).
+        wComplete = false;
+        try {
+          const icrRaw = (await client.readContract({
+            address: sys.troveManager as Address,
+            abi: troveManagerAbi,
+            functionName: "getCurrentICR",
+            args: [account, price],
+          })) as bigint;
+          wIcr = Number.parseFloat(formatUnits(icrRaw, 18));
+        } catch {
+          wIcr = null;
+        }
+      }
+      return { rank: wRank, debtAhead: wDebtAhead, icr: wIcr, complete: wComplete, steps: wSteps };
+    };
+    if (ctx.env.STERNPOST_RADAR) {
+      try {
+        const [r, d, s, c] = (await client.readContract({
+          address: ctx.env.STERNPOST_RADAR as Address,
+          abi: radarAbi,
+          functionName: "rank",
+          args: [account, BigInt(maxSteps)],
+        })) as unknown as [bigint, bigint, bigint, boolean];
+        rank = Number(r);
+        debtAhead = d;
+        steps = Number(s);
+        complete = c;
+        const icrRaw = (await client.readContract({
+          address: sys.troveManager as Address,
+          abi: troveManagerAbi,
+          functionName: "getCurrentICR",
+          args: [account, price],
+        })) as bigint;
+        icr = Number.parseFloat(formatUnits(icrRaw, 18));
+        rankSource = "radar";
+      } catch {
+        // The deployed Radar's rank() is one heavy eth_call: on an anvil
+        // fork (remote state fetched per slot through the public RPC) or
+        // a slow RPC it times out even though the Radar is fine — the
+        // fork run hit this on 2026-11-15. Fall back to the direct walk
+        // (same ground truth, one call at a time) and say so.
+        const w = await walkRank();
+        rank = w.rank;
+        debtAhead = w.debtAhead;
+        icr = w.icr;
+        complete = w.complete;
+        steps = w.steps;
+        rankSource = "walk";
+        rankNote = "deployed Radar rank() timed out; fell back to the direct SortedTroves walk";
+      }
+    } else {
+      const w = await walkRank();
+      rank = w.rank;
+      debtAhead = w.debtAhead;
+      icr = w.icr;
+      complete = w.complete;
+      steps = w.steps;
+      rankSource = "walk";
+    }
+  }
+
+  // Shield: only a TroveAccount has a policy to report.
+  let shield: { armed: boolean; triggers: string[] } = { armed: false, triggers: [] };
+  if (account && account !== ZERO) {
+    try {
+      const code = await client.getBytecode({ address: account });
+      if (code) {
+        const policyRaw = (await client.readContract({
+          address: account,
+          abi: troveAccountAbi,
+          functionName: "policy",
+        })) as unknown as [bigint, bigint, bigint, bigint, bigint, number];
+        const [floorICR, shieldICR, , , minDebtAhead] = policyRaw;
+        void floorICR;
+        const status = (await client.readContract({
+          address: account,
+          abi: troveAccountAbi,
+          functionName: "status",
+        })) as number;
+        const triggers: string[] = [];
+        if (shieldICR > 0n) triggers.push(`ICR<${formatUnits(shieldICR, 18)}`);
+        if (minDebtAhead > 0n) triggers.push("RANK");
+        shield = { armed: status === 1 && triggers.length > 0, triggers };
+      }
+    } catch {
+      shield = { armed: false, triggers: [] };
+    }
+  }
+
+  return ok({
+    ok: true,
+    tool: "radar",
+    network,
+    synthetic: network === "testnet",
+    tcr: Number.parseFloat(formatUnits(tcr, 18)),
+    recoveryMode,
+    troveCount: Number(troveCount),
+    rank,
+    of: Number(troveCount),
+    debtAheadMusd: formatUnits(debtAhead, 18),
+    icr,
+    frontierIcr: Number.parseFloat(formatUnits(frontierIcr, 18)),
+    frontierTrove,
+    frontierDebtMusd: formatUnits(frontierDebt, 18),
+    shield,
+    ...(account ? { account, complete, steps, ...(rankSource ? { rankSource } : {}), ...(rankNote ? { rankNote } : {}) } : {}),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Internal helpers (NOT registered tools): Classic 0.9 governor reads  */
+/* ------------------------------------------------------------------ */
 
 /**
  * preview_draw — Governor.previewDraw(app, amount, payee): the exact
  * allow/refuse verdict for a draw, with the on-chain reason code and a
- * human explanation. Never sends anything.
+ * human explanation. Never sends anything. Internal helper: `pay` calls
+ * the TroveAccount previewDraw directly; this Classic helper stays for
+ * the live 0.9 governor and for tests.
  */
 export async function handlePreviewDraw(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.preview_draw).strict().parse(rawArgs);
-  const sandboxRefusal = requireSandbox(args);
-  if (sandboxRefusal) return sandboxRefusal;
   const client = await checkedClient(ctx);
   const governor = (args.governor ?? ADDRESSES.governor) as Address;
   const amountWei = parseMusd(args.amountMusd);
@@ -205,8 +1049,6 @@ export async function handlePreviewDraw(ctx: ToolContext, rawArgs: unknown) {
 export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.governor_status).strict().parse(rawArgs);
-  const sandboxRefusal = requireSandbox(args);
-  if (sandboxRefusal) return sandboxRefusal;
   const client = await checkedClient(ctx);
   const governor = (args.governor ?? ADDRESSES.governor) as Address;
   const [borrower, floorICR, defendICR, frozen, buffer, standby, icr, feeBps, feeRecipient, musd] =
@@ -233,6 +1075,7 @@ export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
     })
     .then((g) => g.toLowerCase() === governor.toLowerCase())
     .catch(() => false);
+  const { deadline, deadlineISO } = safeDeadline(standbyDeadline);
   return ok({
     ok: true,
     tool: "governor_status",
@@ -251,8 +1094,8 @@ export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
     standby: {
       amountWei: standbyAmount.toString(),
       amountMusd: formatUnits(standbyAmount, 18),
-      deadline: Number(standbyDeadline),
-      deadlineISO: new Date(Number(standbyDeadline) * 1000).toISOString(),
+      deadline,
+      deadlineISO,
       nonce: standbyNonce.toString(),
       live: standbyLive,
     },
@@ -274,8 +1117,9 @@ export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
 export async function handleX402Quote(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.x402_quote).strict().parse(rawArgs);
-  const sandboxRefusal = requireSandbox(args);
-  if (sandboxRefusal) return sandboxRefusal;
+  // Chain-gated even on the no-app path (J3 F3): a quote for the wrong
+  // chain must never be served.
+  const client = await checkedClient(ctx);
   const route = args.route as X402Route;
   const meta = X402_ROUTES[route];
   const priceWei = x402Price(ctx.env);
@@ -286,7 +1130,6 @@ export async function handleX402Quote(ctx: ToolContext, rawArgs: unknown) {
   );
   let payable: unknown = null;
   if (args.app) {
-    const client = await checkedClient(ctx);
     const payee = (args.payee ?? x402PayTo(ctx.env)) as Address;
     const [allowed, reason, icrAfter] = await client.readContract({
       address: ADDRESSES.governor as Address,
