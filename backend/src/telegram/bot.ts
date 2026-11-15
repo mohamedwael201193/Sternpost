@@ -2,8 +2,9 @@ import { randomBytes } from "node:crypto";
 import { formatUnits, verifyMessage } from "viem";
 import type { Db } from "../db/pool.js";
 import { notModified, type Keyboard, type TelegramApi } from "./api.js";
-import { HELP, WELCOME, addr, backRow, balancesText, linkPrompt, linked, mainMenu, navRow, notLinked, parseCallback, requestKeyboard, requestText, stamp, statusText } from "./ui.js";
+import { HELP, WELCOME, addr, backRow, balancesText, crewText, linkPrompt, linked, mainMenu, navRow, notLinked, parseCallback, radarText, requestKeyboard, requestText, stamp, statusText, type CrewRecent } from "./ui.js";
 import type { ChainReader, Hex } from "./chain.js";
+import { ZERO } from "./chain.js";
 
 export interface BotDeps {
   db: Db;
@@ -103,6 +104,107 @@ export function createBot(d: BotDeps) {
     );
   }
 
+  async function radar(c: Ctx, arg?: string) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
+    // /radar [0x…]: an optional address checks another trove; default is the linked wallet.
+    let target: Hex = u.address;
+    if (arg !== undefined) {
+      if (!addrRe.test(arg)) return reply(c, "📡 <b>Redemption radar</b>\n\n⚠️ Usage: <code>/radar 0xAddress</code> — that is not an address.", [navRow("radar")]);
+      target = arg.toLowerCase() as Hex;
+    }
+    try {
+      const r = await d.chain.radar(target);
+      // Governor floor/defend + defend readiness (standby re-arm deadline).
+      // The 0.9 Governor has no shield cooldownBlocks (that is the TroveAccount
+      // 1.x design); the live time-bound defend value here is the standby deadline.
+      let gov: { floor: string; defend: string; standbyLive: boolean; standbyUntil: string | null } | null = null;
+      try {
+        const g = await d.chain.governorOf(target);
+        if (g) {
+          const s = await d.chain.status(g);
+          gov = {
+            floor: ratio(s.floor),
+            defend: ratio(s.defend),
+            standbyLive: s.standbyLive,
+            standbyUntil: s.standbyDeadline > 0n ? new Date(Number(s.standbyDeadline) * 1000).toISOString().slice(0, 10) : null,
+          };
+        }
+      } catch {
+        gov = null; // radar still answers without the governor block
+      }
+      return reply(c, radarText({
+        price: Number(formatUnits(r.price, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 }),
+        tcr: ratio(r.tcr),
+        recoveryMode: r.recoveryMode,
+        troveCount: r.troveCount.toString(),
+        frontier: r.frontier ? { trove: r.frontier.trove, icr: ratio(r.frontier.icr), debt: amt(r.frontier.debt) } : null,
+        mine: { status: r.mine.status, icr: ratio(r.mine.icr), debt: amt(r.mine.debt), coll: amt(r.mine.coll) },
+        rank: r.rank,
+        debtAhead: amt(r.debtAhead),
+        steps: r.steps,
+        found: r.found,
+        complete: r.complete,
+        exhausted: r.exhausted,
+        gov,
+      }), [navRow("radar")]);
+    } catch {
+      return reply(c, "📡 <b>Redemption radar</b>\n\nThe testnet RPC did not answer. Nothing is wrong with your trove — try /radar again in a minute.", [navRow("radar")]);
+    }
+  }
+
+  /** Recent Drawn / Defended / Healed events for a governor, from the indexer's activity log. [] when nothing is indexed yet (or the log is unavailable) — never an error. */
+  async function recentCrewEvents(governor: string): Promise<CrewRecent[]> {
+    try {
+      const { rows } = await d.db.query<{ event: string; args: any; block_number: string }>(
+        "SELECT event, args, block_number FROM activity WHERE contract = $1 AND event IN ('Drawn','Defended','Healed') ORDER BY block_number DESC, id DESC LIMIT 5",
+        [governor.toLowerCase()],
+      );
+      const out: CrewRecent[] = [];
+      for (const row of rows) {
+        if (row.event !== "Drawn" && row.event !== "Defended" && row.event !== "Healed") continue;
+        const args = typeof row.args === "string" ? JSON.parse(row.args) : (row.args ?? {});
+        const rawAmt = args.amount ?? args.repaid;
+        let amount: string;
+        try { amount = amt(BigInt(String(rawAmt))); } catch { continue; }
+        const icr = (v: unknown): string | undefined => {
+          try { return v === undefined || v === null ? undefined : ratio(BigInt(String(v))); } catch { return undefined; }
+        };
+        out.push({ event: row.event, amount, icrBefore: icr(args.icrBefore), icrAfter: icr(args.icrAfter), block: String(row.block_number) });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  async function crew(c: Ctx) {
+    const u = await user(c.chatId);
+    if (!u) return reply(c, ...notLinked());
+    try {
+      const k = await d.chain.crew(u.address);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const recent = k.governor ? await recentCrewEvents(k.governor) : [];
+      return reply(c, crewText({
+        governor: k.governor,
+        gov: k.govStatus ? { icr: ratio(k.govStatus.icr), floor: ratio(k.govStatus.floor), defend: ratio(k.govStatus.defend), buffer: amt(k.govStatus.buffer) } : null,
+        wallets: k.wallets.map((w) => ({
+          address: w.address,
+          agent: w.agent.toLowerCase() === ZERO ? "none" : addr(w.agent),
+          session: w.agent.toLowerCase() === ZERO
+            ? "no agent"
+            : Number(w.agentExpiry) <= nowSec
+              ? "⚠️ agent session expired"
+              : `agent until ${new Date(Number(w.agentExpiry) * 1000).toISOString().slice(0, 10)}`,
+          musd: amt(w.musd),
+        })),
+        recent,
+      }), [navRow("crew")]);
+    } catch {
+      return reply(c, "👥 <b>Crew</b>\n\nThe testnet RPC did not answer. Try /crew again in a minute.", [navRow("crew")]);
+    }
+  }
+
   async function balances(c: Ctx) {
     const u = await user(c.chatId);
     if (!u) return reply(c, ...notLinked());
@@ -155,6 +257,8 @@ export function createBot(d: BotDeps) {
         case "status": return status(c);
         case "balances": return balances(c);
         case "requests": return requests(c);
+        case "radar": return radar(c);
+        case "crew": return crew(c);
       }
     }
     const u = await user(chatId);
@@ -201,6 +305,10 @@ export function createBot(d: BotDeps) {
       }
       case "/status":
         return status(c);
+      case "/radar":
+        return radar(c, args[0]);
+      case "/crew":
+        return crew(c);
       case "/balances":
         return balances(c);
       case "/requests":

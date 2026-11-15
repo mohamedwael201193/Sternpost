@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { deploymentFileAddresses, SORTED_TROVES_TESTNET } from "./deployments.js";
+
+/** Chain addresses from `shared/deployments/testnet.json` when present; env vars still win. */
+const DEPLOY = deploymentFileAddresses();
 
 const schema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
@@ -7,8 +11,11 @@ const schema = z.object({
   CHAIN_ID: z.coerce.number().int().default(31611).refine((v) => v === 31611, {
     message: "CHAIN_ID must be 31611 (Mezo testnet); no other chain is allowed — mainnet (31612) relaying is refused at startup",
   }),
-  MUSD_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default("0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503"),
+  MUSD_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default(DEPLOY.musd ?? "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503"),
   FACTORY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  TROVE_MANAGER_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default(DEPLOY.troveManager ?? "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0"),
+  PRICE_FEED_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default(DEPLOY.priceFeed ?? "0x86bCF0841622a5dAC14A313a15f96A95421b9366"),
+  SORTED_TROVES_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default(SORTED_TROVES_TESTNET),
   /**
    * TroveAccountFactory (Wave 2 accounts) on Mezo testnet (31611). DEPLOYED:
    * Shield redeploy factory 0x46442898c022e1fAa2BD05a23600C1Ec89DcA200

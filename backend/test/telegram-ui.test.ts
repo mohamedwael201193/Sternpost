@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { memDb } from "./helpers.js";
 import { createBot } from "../src/telegram/bot.js";
 import { telegramApi, notModified } from "../src/telegram/api.js";
-import { ACTIONS, cbData, esc, mainMenu, navRow, parseCallback, statusText, balancesText, requestKeyboard, linkPrompt, notLinked } from "../src/telegram/ui.js";
+import { ACTIONS, cbData, esc, mainMenu, navRow, parseCallback, statusText, balancesText, requestKeyboard, linkPrompt, notLinked, radarText, crewText } from "../src/telegram/ui.js";
 
 const APP = "https://app.test";
 
@@ -10,7 +10,7 @@ describe("telegram ui", () => {
   it("main menu grid has every entry, url buttons for dashboard and revoke", () => {
     const kb = mainMenu(APP);
     const flat = kb.flat();
-    expect(flat.map((b) => b.text)).toEqual(["🔗 Link wallet", "🧭 Status", "🪙 Balances", "📜 Requests", "🗺 Open dashboard", "🛑 Revoke", "🛟 Help"]);
+    expect(flat.map((b) => b.text)).toEqual(["🔗 Link wallet", "🧭 Status", "📡 Radar", "👥 Crew", "🪙 Balances", "📜 Requests", "🗺 Open dashboard", "🛑 Revoke", "🛟 Help"]);
     expect(flat.find((b) => b.text.includes("dashboard"))!.url).toBe(`${APP}/app`);
     expect(flat.find((b) => b.text.includes("Revoke"))!.url).toBe(`${APP}/app/revoke`);
     expect(kb.every((row) => row.length <= 2)).toBe(true);
@@ -42,9 +42,87 @@ describe("telegram ui", () => {
   it("request, link and unlinked keyboards", () => {
     const kb = requestKeyboard(APP, { id: 7, app_address: "0xab", amount: "5" });
     expect(kb[0][1]).toEqual({ text: "🔎 View in app", url: `${APP}/app/apps?request=7` });
+    expect(kb[2]).toEqual([{ text: "👥 View crew", callback_data: "m:crew" }]);
     const [, lk] = linkPrompt("msg", 10, "https://api.test/tg/link?code=c");
     expect(lk.map((r) => r[0].url ?? r[0].callback_data)).toEqual(["https://api.test/tg/link?code=c", "m:cancel"]);
     expect(notLinked()[1][0][0].callback_data).toBe("m:link");
+  });
+  it("radar text: ranked trove, frontier, system line", () => {
+    const at = new Date("2026-10-23T15:40:00Z");
+    const s = radarText({
+      price: "64,558.66", tcr: "2.32", recoveryMode: false, troveCount: "279",
+      frontier: { trove: "0x5eaa8bdc315608e8cf873cfaba05e42826f68c4d", icr: "1.26", debt: "426,001,712.3835" },
+      mine: { status: 1, icr: "2.37", debt: "2,460.1097", coll: "0.0904" },
+      rank: 3, debtAhead: "150", steps: 3, found: true, complete: true, exhausted: false,
+      gov: { floor: "2.50", defend: "1.60", standbyLive: true, standbyUntil: "2026-12-15" },
+    }, at);
+    expect(s).toContain("Rank #3 from redemption");
+    expect(s).toContain("150 MUSD");
+    expect(s).toContain("TCR 2.32");
+    expect(s).toContain("📊 TCR ▓▓▓▓▓▓▓▓░░ 2.32 (recovery below 1.50)");
+    expect(s).toContain("BTC price $64,558.66");
+    expect(s).toContain("<code>0x5eaa…8c4d</code>");
+    expect(s).toContain("Governor floor 2.50 · defend 1.60 — your trove ICR 2.37 vs floor 2.50");
+    expect(s).toContain("Defend standby live until 2026-12-15");
+    expect(s).toContain("Updated 15:40 UTC");
+  });
+  it("radar text: disarmed governor is called out, not hidden", () => {
+    const s = radarText({
+      price: "64,558.66", tcr: "2.32", recoveryMode: false, troveCount: "279",
+      frontier: null, mine: { status: 1, icr: "2.37", debt: "1", coll: "1" },
+      rank: 0, debtAhead: "0", steps: 0, found: false, complete: true, exhausted: true,
+      gov: { floor: "2.50", defend: "1.60", standbyLive: false, standbyUntil: null },
+    });
+    expect(s).toContain("Defend standby DISARMED");
+  });
+  it("radar text: deeper-than-window is a lower bound, never a rank", () => {
+    const s = radarText({
+      price: "64,558.66", tcr: "2.32", recoveryMode: false, troveCount: "279",
+      frontier: { trove: "0x5eaa8bdc315608e8cf873cfaba05e42826f68c4d", icr: "1.26", debt: "426,001,712.3835" },
+      mine: { status: 1, icr: "2.37", debt: "2,460.1097", coll: "0.0904" },
+      rank: 0, debtAhead: "426,001,712.3835", steps: 20, found: false, complete: false, exhausted: false,
+    });
+    expect(s).toContain("deeper than the first 20 troves");
+    expect(s).toContain("lower bound");
+    expect(s).not.toContain("Rank #");
+  });
+  it("radar text: recovery mode blocks redemptions; below-floor trove is skipped", () => {
+    const rm = radarText({
+      price: "1", tcr: "1.40", recoveryMode: true, troveCount: "3",
+      frontier: null, mine: { status: 1, icr: "2.00", debt: "1", coll: "1" },
+      rank: 0, debtAhead: "0", steps: 0, found: false, complete: true, exhausted: true,
+    });
+    expect(rm).toContain("RECOVERY MODE");
+    expect(rm).toContain("not in the redemption list");
+    const skipped = radarText({
+      price: "1", tcr: "2.00", recoveryMode: false, troveCount: "3",
+      frontier: null, mine: { status: 1, icr: "1.05", debt: "1", coll: "1" },
+      rank: 0, debtAhead: "0", steps: 1, found: true, complete: true, exhausted: false,
+    });
+    expect(skipped).toContain("below the 1.10 redemption floor");
+  });
+  it("crew text: governor, wallets, agent expiry; empty crew", () => {
+    const at = new Date("2026-10-23T15:40:00Z");
+    const s = crewText({
+      governor: "0x9eea9762ed3c1de2308c800687558064dff0b832",
+      gov: { icr: "3.00", floor: "2.50", defend: "1.60", buffer: "20" },
+      wallets: [{ address: "0x4f878203175b1bb6c63ec02ceebe1af4a7c9ee4a", agent: "<code>0x62a4…c1d9</code>", session: "agent until 2026-12-15", musd: "0" }],
+      recent: [
+        { event: "Defended", amount: "30", icrBefore: "2.38", icrAfter: "2.41", block: "16794538" },
+        { event: "Drawn", amount: "10", icrAfter: "2.35", block: "16794520" },
+      ],
+    }, at);
+    expect(s).toContain("Governor <code>0x9eea…b832</code>");
+    expect(s).toContain("ICR 3.00");
+    expect(s).toContain("agent until 2026-12-15");
+    expect(s).toContain("Updated 15:40 UTC");
+    expect(s).toContain("🛡 Defended 30 MUSD · ICR 2.38 → 2.41 · block 16794538");
+    expect(s).toContain("💸 Drew 10 MUSD · ICR after 2.35 · block 16794520");
+    const empty = crewText({ governor: null, gov: null, wallets: [] });
+    expect(empty).toContain("No governor yet");
+    expect(empty).toContain("No spend wallets yet");
+    const quiet = crewText({ governor: "0x9eea9762ed3c1de2308c800687558064dff0b832", gov: null, wallets: [], recent: [] });
+    expect(quiet).toContain("No draws or defends in the indexed log yet.");
   });
 });
 

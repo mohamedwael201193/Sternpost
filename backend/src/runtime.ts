@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, http, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Config } from "./config.js";
+import { deploymentFileAddresses } from "./deployments.js";
 import { createPool } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
 import { createApp } from "./app.js";
@@ -18,25 +19,38 @@ export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {})
   assertTestnetChain(cfg.CHAIN_ID);
   if (!cfg.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const chain = defineChain({ id: cfg.CHAIN_ID, name: "Mezo", nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 }, rpcUrls: { default: { http: [cfg.RPC_URL] } } });
-  const client = createPublicClient({ chain, transport: http(cfg.RPC_URL) });
+  // The public testnet RPC answers slowly (~2-5s per eth_call) and supports
+  // JSON-RPC batching (verified live 2026-11-15): batch the bot's parallel
+  // reads into fewer HTTP requests and allow 30s per request instead of
+  // viem's 10s default, or /radar times out mid-walk. Read-only either way.
+  const client = createPublicClient({ chain, transport: http(cfg.RPC_URL, { batch: true, timeout: 30_000 }) });
   const db = createPool(cfg.DATABASE_URL, opts.poolMax);
   await migrate(db);
+  // Factory: explicit env wins; otherwise the 0.9 address from shared/deployments/testnet.json.
+  const factory = cfg.FACTORY_ADDRESS ?? deploymentFileAddresses().factory;
   let indexer: Indexer | undefined;
-  if (cfg.FACTORY_ADDRESS && cfg.INDEXER_ENABLED === "true") {
+  if (factory && cfg.INDEXER_ENABLED === "true") {
     const start = cfg.INDEXER_START_BLOCK ?? (await client.getBlockNumber()) - 5000n;
     indexer = new Indexer(db, client as any, {
-      factory: cfg.FACTORY_ADDRESS as `0x${string}`,
+      factory: factory as `0x${string}`,
       startBlock: start,
       accountFactory: cfg.ACCOUNT_FACTORY_ADDRESS as `0x${string}` | undefined,
     });
     await indexer.loadTracked();
   }
   let telegram;
-  if (cfg.TELEGRAM_BOT_TOKEN && cfg.TELEGRAM_WEBHOOK_SECRET && cfg.FACTORY_ADDRESS) {
+  if (cfg.TELEGRAM_BOT_TOKEN && cfg.TELEGRAM_WEBHOOK_SECRET && factory) {
     const bot = createBot({
       db,
       tg: telegramApi(cfg.TELEGRAM_BOT_TOKEN),
-      chain: viemChain(client as any, { factory: cfg.FACTORY_ADDRESS as Hex, musd: cfg.MUSD_ADDRESS as Hex, mezo: cfg.MEZO_ADDRESS as Hex }),
+      chain: viemChain(client as any, {
+        factory: factory as Hex,
+        musd: cfg.MUSD_ADDRESS as Hex,
+        mezo: cfg.MEZO_ADDRESS as Hex,
+        troveManager: cfg.TROVE_MANAGER_ADDRESS as Hex,
+        priceFeed: cfg.PRICE_FEED_ADDRESS as Hex,
+        sortedTroves: cfg.SORTED_TROVES_ADDRESS as Hex,
+      }),
       appUrl: cfg.APP_URL,
       apiUrl: cfg.PUBLIC_API_URL,
       alertMarginBps: cfg.TELEGRAM_ALERT_MARGIN_BPS,

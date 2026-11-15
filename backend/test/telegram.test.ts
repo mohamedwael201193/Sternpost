@@ -9,6 +9,9 @@ import type { Db } from "../src/db/pool.js";
 const CHAT = 4242;
 const GOV = "0x9eea9762ed3c1de2308c800687558064dff0b832";
 const APP = "0x1111111111111111111111111111111111111111";
+const T1 = "0x2222222222222222222222222222222222222222";
+const W1 = "0x5555555555555555555555555555555555555555";
+const AGENT = "0x6666666666666666666666666666666666666666";
 const E18 = 10n ** 18n;
 const SECRET = "test_webhook_secret_123";
 const CRON = "cron_secret_abcdefghijk";
@@ -19,13 +22,26 @@ function mocks() {
   const answers: { id: string; text?: string }[] = [];
   const st: GovernorStatus = { icr: 3n * E18, floor: (25n * E18) / 10n, defend: (16n * E18) / 10n, frozen: false, buffer: 20n * E18, standbyLive: true, standbyDeadline: 1_900_000_000n };
   const allow = { remaining: 0n, perDrawMax: 0n, expiry: 0n };
-  const chain: ChainReader & { st: GovernorStatus; allow: typeof allow; gov: string | null } = {
-    st, allow, gov: GOV,
+  const radarReading = {
+    price: 65000n * E18, tcr: (23n * E18) / 10n, recoveryMode: false, troveCount: 279n,
+    frontier: { trove: T1, icr: (12n * E18) / 10n, debt: 100n * E18 },
+    mine: { status: 1, icr: (24n * E18) / 10n, debt: 10n * E18, coll: E18 },
+    rank: 3, debtAhead: 150n * E18, steps: 3, found: true, complete: true, exhausted: false,
+  };
+  const crewReading = {
+    governor: GOV,
+    govStatus: st,
+    wallets: [{ address: W1, agent: AGENT, agentExpiry: 1_900_000_000n, musd: 5n * E18 }],
+  };
+  const chain: ChainReader & { st: GovernorStatus; allow: typeof allow; gov: string | null; radarReading: typeof radarReading; crewReading: typeof crewReading } = {
+    st, allow, gov: GOV, radarReading, crewReading,
     governorOf: vi.fn(async function (this: any) { return chain.gov as any; }),
     status: vi.fn(async () => chain.st),
     allowance: vi.fn(async () => chain.allow),
     balances: vi.fn(async () => ({ musd: 1234n * E18, mezo: 5n * E18 })),
     now: vi.fn(async () => 1_000n),
+    radar: vi.fn(async () => chain.radarReading),
+    crew: vi.fn(async () => chain.crewReading),
   };
   return {
     sent, answers, chain,
@@ -72,7 +88,7 @@ describe("telegram commands", () => {
     expect(m.sent).toHaveLength(0);
   });
   it("commands that need a wallet ask to /link first", async () => {
-    for (const c of ["/status", "/balances", "/requests", "/revoke"]) await msg(c);
+    for (const c of ["/status", "/balances", "/requests", "/revoke", "/radar", "/crew"]) await msg(c);
     expect(m.sent.every((s) => s.text.includes("/link"))).toBe(true);
   });
 });
@@ -166,6 +182,98 @@ describe("status, balances, revoke", () => {
   it("/revoke deep-links to the app; the bot never signs", async () => {
     await msg("/revoke");
     expect(last().kb![0][0]).toEqual({ text: "Revoke in wallet", url: "https://app.test/app/revoke" });
+  });
+});
+
+describe("radar and crew", () => {
+  beforeEach(async () => { await link(); });
+  it("/radar shows live price, TCR, frontier and your rank", async () => {
+    await msg("/radar");
+    expect(last().text).toContain("Redemption radar");
+    expect(last().text).toContain("BTC price $65,000");
+    expect(last().text).toContain("TCR 2.30");
+    expect(last().text).toContain("📊 TCR");
+    expect(last().text).toContain("Troves 279");
+    expect(last().text).toContain("Rank #3 from redemption");
+    expect(last().text).toContain("150 MUSD");
+    expect(last().text).toContain("Governor floor 2.50 · defend 1.60 — your trove ICR 2.40 vs floor 2.50");
+    expect(last().text).toContain("Defend standby live until 2030-03-17");
+    expect(last().kb![0][0].callback_data).toBe("m:radar");
+  });
+  it("/radar [address] checks another trove; a bad address gets usage, not a crash", async () => {
+    const other = "0x7777777777777777777777777777777777777777";
+    await msg(`/radar ${other}`);
+    expect((m.chain.radar as any).mock.calls[0][0]).toBe(other);
+    expect(last().text).toContain("Redemption radar");
+    await msg("/radar notanaddress");
+    expect(last().text).toContain("Usage:");
+    expect(last().text).not.toContain("Rank #");
+  });
+  it("/crew lists recent draws and defends from the indexed activity log", async () => {
+    await db.query(
+      "INSERT INTO activity (tx_hash, log_index, block_number, contract, event, args) VALUES ($1,$2,$3,$4,$5,$6)",
+      ["0xabc", 0, "16794538", GOV, "Defended", JSON.stringify({ caller: "0x27aeba9c609b21ea4112d8bd0a21e779901d62a6", repaid: "30000000000000000000", icrBefore: "2379108551208365491", icrAfter: "2408120979536199641" })],
+    );
+    await db.query(
+      "INSERT INTO activity (tx_hash, log_index, block_number, contract, event, args) VALUES ($1,$2,$3,$4,$5,$6)",
+      ["0xdef", 0, "16794520", GOV, "Drawn", JSON.stringify({ app: "0x0508f05fd26811139cf0c3e139fd692ae7612d1e", payee: "0x4f878203175b1bb6c63ec02ceebe1af4a7c9ee4a", amount: "10000000000000000000", icrAfter: "2350000000000000000", nonceUsed: "1" })],
+    );
+    await msg("/crew");
+    expect(last().text).toContain("🛡 Defended 30 MUSD · ICR 2.38 → 2.41 · block 16794538");
+    expect(last().text).toContain("💸 Drew 10 MUSD · ICR after 2.35 · block 16794520");
+  });
+  it("/crew with no indexed activity says so instead of inventing history", async () => {
+    await msg("/crew");
+    expect(last().text).toContain("No draws or defends in the indexed log yet.");
+  });
+  it("/radar reports a deeper-than-window trove as a lower bound", async () => {
+    m.chain.radarReading = { ...m.chain.radarReading, rank: 0, found: false, complete: false, exhausted: false, steps: 20, debtAhead: 426001712n * E18 };
+    await msg("/radar");
+    expect(last().text).toContain("deeper than the first 20 troves");
+    expect(last().text).toContain("lower bound");
+    expect(last().text).not.toContain("Rank #");
+  });
+  it("/radar says so honestly when the RPC is down", async () => {
+    (m.chain.radar as any).mockRejectedValueOnce(new Error("rpc down"));
+    await msg("/radar");
+    expect(last().text).toContain("did not answer");
+    expect(last().text).not.toContain("Rank #");
+  });
+  it("/crew shows the governor and spend wallets with agent + expiry", async () => {
+    await msg("/crew");
+    expect(last().text).toContain("Crew");
+    expect(last().text).toContain("Governor");
+    expect(last().text).toContain("ICR 3.00");
+    expect(last().text).toContain("1 spend wallet");
+    expect(last().text).toContain("agent until 2030-03-17");
+    expect(last().text).toContain("MUSD 5");
+    expect(last().kb![0][0].callback_data).toBe("m:crew");
+  });
+  it("/crew flags an expired agent session and an empty crew", async () => {
+    m.chain.crewReading = { ...m.chain.crewReading, wallets: [{ address: W1, agent: AGENT, agentExpiry: 500n, musd: 0n }] };
+    await msg("/crew");
+    expect(last().text).toContain("agent session expired");
+    m.chain.crewReading = { governor: null, govStatus: null, wallets: [] };
+    await msg("/crew");
+    expect(last().text).toContain("No governor yet");
+    expect(last().text).toContain("No spend wallets yet");
+  });
+  it("/crew says so honestly when the RPC is down", async () => {
+    (m.chain.crew as any).mockRejectedValueOnce(new Error("rpc down"));
+    await msg("/crew");
+    expect(last().text).toContain("did not answer");
+  });
+  it("menu buttons open radar and crew; the approve card opens crew", async () => {
+    await cb("m:radar");
+    expect(last().text).toContain("Redemption radar");
+    await cb("m:crew");
+    expect(last().text).toContain("Crew");
+    const r = await addRequest();
+    await msg("/requests");
+    expect(last().kb![2]).toEqual([{ text: "👥 View crew", callback_data: "m:crew" }]);
+    await cb("m:crew");
+    expect(last().text).toContain("Crew");
+    void r;
   });
 });
 
