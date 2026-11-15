@@ -41,6 +41,23 @@ export const STERNPOST: Deployments = {
 /** Route adapter (Save / Swap / Loop after a governed draw). */
 export const ROUTER: Address | undefined = at(d.sternpost.SternpostRouter)
 
+/** Wave 2 account contracts (task 1.9, deployed 2026-11-15, testnet 31611). */
+export type AccountDeployments = {
+  implementation?: Address
+  factory?: Address
+  radar?: Address
+  batcher?: Address
+}
+export const ACCOUNTS: AccountDeployments = {
+  implementation: at(d.accounts.implementation),
+  factory: at(d.accounts.factory),
+  radar: at(d.accounts.radar),
+  batcher: at(d.accounts.batcher),
+}
+
+/** First block worth scanning for Account events (implementation deployment). */
+export const ACCOUNTS_DEPLOY_BLOCK: bigint = BigInt(d.accounts.implementation.block)
+
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'https://sternpost-api.vercel.app'
 
 /** First block worth scanning for Sternpost events (factory deployment). */

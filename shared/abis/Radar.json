@@ -1,0 +1,199 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "sortedTroves_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "troveManager_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "priceFeed_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MCR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "debtAheadForNICR",
+    "inputs": [
+      {
+        "name": "nicr",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxSteps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "debtAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "complete",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "frontier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "trove",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "icr",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "debt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "priceFeed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRadarPriceFeed"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rank",
+    "inputs": [
+      {
+        "name": "trove",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "maxSteps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "rankOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "debtAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "steps",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "complete",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "sortedTroves",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRadarSortedTroves"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "systemHealth",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "tcr",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recoveryMode",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "troveCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "troveManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRadarTroveManager"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  }
+]

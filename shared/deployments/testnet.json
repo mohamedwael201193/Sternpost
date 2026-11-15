@@ -333,5 +333,47 @@
       "step": "v2 governor.rearm after the 2-leg loop",
       "tx": "0x3d535a3f98a1c1b4649490876fbf28e8b956c0349a62862b846600b327c36d4c"
     }
-  ]
+  ],
+  "accounts": {
+    "date": "2026-11-15",
+    "task": "1.9 Wave 2 account contracts (TroveAccount implementation + Factory + Radar + Batcher)",
+    "chainId": 31611,
+    "deployer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "feeBps": 10,
+    "implementation": {
+      "address": "0xC4f080498a720887b6086f13fBad5627d8abc470",
+      "tx": "0x0c2128c6357dbbaa6ea669d4d741bbd054c98825b41447cf08580ef3fe09b7a2",
+      "block": 16803284,
+      "gasUsed": 4773582,
+      "verified": true
+    },
+    "factory": {
+      "address": "0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3",
+      "tx": "0x9716cdf72b414bf8e99f5818d67d2c2da355a2cee1c915866d94ffe6ffbcb6f4",
+      "block": 16803285,
+      "gasUsed": 591225,
+      "verified": true,
+      "verificationNote": "Blockscout classifies the factory as proxy_type basic_implementation pointing at the verified TroveAccount implementation, so its own v2 record carries no is_verified field; forge verify-contract reports already verified; deployed bytecode independently MATCHes the local forge build (see docs/proof/accounts-2026-11-15.md)"
+    },
+    "radar": {
+      "address": "0x9Cd95A420e014da798dbFB74833b9D4DEe868be2",
+      "tx": "0x7a084aae58be89f31849595980176da7670f2e7652c77f0583c5051e367fdc8d",
+      "block": 16803285,
+      "gasUsed": 859898,
+      "verified": true
+    },
+    "batcher": {
+      "address": "0xB094e06559F7aF264e515F5363D9E89920b19b33",
+      "tx": "0xa7b4cf963933293b9c3141237940e8b957ddc831269618e5ea2f62e49f60fec8",
+      "block": 16803285,
+      "gasUsed": 654587,
+      "verified": true
+    },
+    "bytecodeMatch": "all four deployed bytecodes MATCH the local forge build (immutable slots masked)",
+    "demo": {
+      "status": "BLOCKED",
+      "reason": "funding gap: deployer holds 0.013361428281097685 BTC; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
+    }
+  }
 }

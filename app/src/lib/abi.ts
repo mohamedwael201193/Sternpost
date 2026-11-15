@@ -46,9 +46,19 @@ export const governorAbi = parseAbi([
 ])
 
 import governorJson from '../../../shared/abis/SternpostGovernor.json'
+import troveAccountJson from '../../../shared/abis/TroveAccount.json'
+import troveAccountFactoryJson from '../../../shared/abis/TroveAccountFactory.json'
+import radarJson from '../../../shared/abis/Radar.json'
+import batcherJson from '../../../shared/abis/Batcher.json'
 /** Governor ABI plus its custom errors, so viem can decode reverts from simulate/eth_call. */
 export const governorErrorsAbi = (governorJson as readonly any[]).filter((x) => x.type === 'error')
 export const governorFullAbi = [...governorAbi, ...governorErrorsAbi] as unknown as typeof governorAbi
+
+/** Wave 2 account contract ABIs (task 1.9; addresses live in chain.ts ACCOUNTS, never here). */
+export const troveAccountAbi = troveAccountJson as readonly any[]
+export const troveAccountFactoryAbi = troveAccountFactoryJson as readonly any[]
+export const radarAbi = radarJson as readonly any[]
+export const batcherAbi = batcherJson as readonly any[]
 
 export const routerAbi = parseAbi([
   'struct Leg { uint256 amount; uint256 withdrawDeadline; bytes withdrawSig; uint256 healDeadline; bytes healSig; uint256 collAmount; uint256 addCollDeadline; bytes addCollSig; }',

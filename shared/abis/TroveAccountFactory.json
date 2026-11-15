@@ -1,0 +1,428 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "implementation_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "feeRecipient_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "feeBps_",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "BURN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FEE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "createAccount",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct Policy",
+        "components": [
+          {
+            "name": "floorICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "shieldICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "targetICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "bounty",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minDebtAhead",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cooldownBlocks",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createAndOpen",
+    "inputs": [
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct Policy",
+        "components": [
+          {
+            "name": "floorICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "shieldICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "targetICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "bounty",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minDebtAhead",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cooldownBlocks",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      },
+      {
+        "name": "debt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "upHint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "loHint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minDebtAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "feeBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeRecipient",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "implementation",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isAccount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "predict",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct Policy",
+        "components": [
+          {
+            "name": "floorICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "shieldICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "targetICR",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "bounty",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minDebtAhead",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cooldownBlocks",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AccountCreated",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "floorICR",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "shieldICR",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "targetICR",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyCreated",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadPolicy",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BountyTooHigh",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CloneFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeBpsTooHigh",
+    "inputs": [
+      {
+        "name": "feeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ImplementationFeeMismatch",
+    "inputs": [
+      {
+        "name": "implementationFeeRecipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "implementationFeeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ImplementationHasNoCode",
+    "inputs": [
+      {
+        "name": "implementation",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidFeeRecipient",
+    "inputs": [
+      {
+        "name": "feeRecipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroOwner",
+    "inputs": []
+  }
+]
