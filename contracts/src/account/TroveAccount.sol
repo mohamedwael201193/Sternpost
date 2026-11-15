@@ -9,6 +9,20 @@ import {ISMUSD} from "./interfaces/ISMUSD.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveAccount, Policy} from "./interfaces/ITroveAccount.sol";
 
+/// @notice Minimal view of Mezo BorrowerOperations' public CollSurplusPool
+///         getter (live: `ICollSurplusPool public collSurplusPool`,
+///         mezo-org/musd BorrowerOperations.sol).
+interface IBOWithCollSurplusPool {
+    function collSurplusPool() external view returns (address);
+}
+
+/// @notice Minimal view of Mezo CollSurplusPool: the surplus BTC owed to an
+///         account. Live `claimColl` reverts on a zero balance
+///         ("CollSurplusPool: No collateral available to claim").
+interface ICollSurplusPool {
+    function getCollateral(address account) external view returns (uint256);
+}
+
 /// @title TroveAccount
 /// @notice The borrower: one clone per user, deployed by TroveAccountFactory
 ///         as an ERC-1167 minimal proxy. Non-upgradeable, no pause, owner set
@@ -424,12 +438,27 @@ contract TroveAccount is ITroveAccount {
 
     /// @notice Claim post-redemption surplus BTC from Mezo's CollSurplusPool.
     ///         Permissionless (task 1.6 owns the fork test); the BTC lands in
-    ///         this account and the owner sweeps it.
+    ///         this account and the owner sweeps it. A zero surplus is a
+    ///         no-op that still emits `CollateralClaimed(0)`: live
+    ///         `claimColl` reverts on zero, and a redeemed trove whose
+    ///         surplus was already claimed must not brick `closeAccount()`.
     function claimCollateral() external nonReentrant {
         _claimCollateral();
     }
 
     function _claimCollateral() internal {
+        // Live CollSurplusPool.claimColl reverts when the surplus is zero
+        // ("CollSurplusPool: No collateral available to claim"). Read the
+        // surplus first via BO's public collSurplusPool and skip the claim
+        // when there is nothing to claim; surplus > 0 claims exactly as
+        // before. Found live on a mainnet fork by the 1.6 builder:
+        // closeAccount() on a redeemed trove with an already-claimed (or
+        // never-existing) surplus reverted and the account could not close.
+        address pool = IBOWithCollSurplusPool(address(bo)).collSurplusPool();
+        if (ICollSurplusPool(pool).getCollateral(address(this)) == 0) {
+            emit CollateralClaimed(0);
+            return;
+        }
         uint256 before = address(this).balance;
         bo.claimCollateral();
         uint256 amount = address(this).balance - before;

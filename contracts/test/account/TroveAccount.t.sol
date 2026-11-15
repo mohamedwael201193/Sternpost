@@ -68,16 +68,44 @@ contract TestTroveManager {
     }
 }
 
+/// @notice Mock of Mezo CollSurplusPool, faithful where it matters: the
+///         surplus balance per account, `getCollateral` as a view, and
+///         `claimColl` reverting on a zero balance with the exact live
+///         message ("CollSurplusPool: No collateral available to claim").
+///         Live source: mezo-org/musd CollSurplusPool.sol.
+contract TestCollSurplusPool {
+    mapping(address => uint256) public balances;
+
+    function setBalance(address a, uint256 amt) external {
+        balances[a] = amt;
+    }
+
+    function getCollateral(address a) external view returns (uint256) {
+        return balances[a];
+    }
+
+    function claimColl(address account, address recipient) external {
+        uint256 amt = balances[account];
+        require(amt > 0, "CollSurplusPool: No collateral available to claim");
+        balances[account] = 0;
+        (bool ok,) = recipient.call{value: amt}("");
+        require(ok);
+    }
+
+    receive() external payable {}
+}
+
 contract TestBorrowerOperations {
     MockMUSD public musd;
     TestTroveManager public tm;
     MockPriceFeed public pf;
-    mapping(address => uint256) public surplus;
+    TestCollSurplusPool public collSurplusPool;
 
     constructor(MockMUSD m, TestTroveManager t, MockPriceFeed p) {
         musd = m;
         tm = t;
         pf = p;
+        collSurplusPool = new TestCollSurplusPool();
     }
 
     function minNetDebt() external pure returns (uint256) {
@@ -87,7 +115,10 @@ contract TestBorrowerOperations {
         return d * 1e15 / 1e18; // 0.1%
     }
     function setSurplus(address b, uint256 a) external {
-        surplus[b] = a;
+        collSurplusPool.setBalance(b, a);
+        // Fund the pool with exactly the surplus so claimColl can pay it.
+        (bool ok,) = payable(address(collSurplusPool)).call{value: a}("");
+        require(ok);
     }
 
     function openTrove(uint256 debt, address, address) external payable {
@@ -128,10 +159,11 @@ contract TestBorrowerOperations {
         require(ok);
     }
     function claimCollateral() external {
-        uint256 amt = surplus[msg.sender];
-        surplus[msg.sender] = 0;
-        (bool ok,) = msg.sender.call{value: amt}("");
-        require(ok);
+        // Live: BO forwards to CollSurplusPool.claimColl, which reverts on
+        // a zero surplus. The account must tolerate that (see
+        // TroveAccount._claimCollateral); the mock models the revert so a
+        // test that passes without the fix proves nothing.
+        collSurplusPool.claimColl(msg.sender, msg.sender);
     }
 
     receive() external payable {}
@@ -563,6 +595,51 @@ contract TroveAccountTest is Test {
         account.closeAccount();
         assertEq(owner.balance - ownerBtcBefore, 0.02 ether, "surplus BTC claimed then swept");
         assertEq(account.status(), 4, "status unchanged by close after redemption");
+    }
+
+    function test_I5_closeAccountRedeemedZeroSurplusSucceeds() public {
+        // 1.6 follow-up (found live on a mainnet fork): a redeemed trove
+        // whose surplus was never created (or is zero) bricked
+        // closeAccount(), because live CollSurplusPool.claimColl reverts on
+        // zero. The close must succeed and sweep what the account holds.
+        tm.setStatus(address(account), 4);
+        assertEq(bo.collSurplusPool().getCollateral(address(account)), 0, "no surplus exists");
+        uint256 ownerMusdBefore = musd.balanceOf(owner);
+        account.closeAccount(); // must NOT revert on the zero-surplus claim
+        assertEq(account.status(), 4, "status unchanged by close after redemption");
+        assertEq(address(account).balance, 0, "no BTC to sweep");
+        assertEq(musd.balanceOf(owner) - ownerMusdBefore, 2000e18, "all MUSD swept to the owner");
+        assertEq(musd.balanceOf(address(account)), 0);
+        assertEq(account.sessionEpoch(), 1, "close still revokes all sessions");
+    }
+
+    function test_I5_closeAccountRedeemedAfterSurplusAlreadyClaimedSucceeds() public {
+        // The exact live scenario: surplus claimed once (by the owner via
+        // claimCollateral, or by anyone — it is permissionless), then
+        // closeAccount() must still succeed instead of reverting on the
+        // now-zero second claim.
+        tm.setStatus(address(account), 4);
+        bo.setSurplus(address(account), 0.02 ether);
+        account.claimCollateral();
+        assertEq(address(account).balance, 0.02 ether, "first claim lands in the account");
+        assertEq(bo.collSurplusPool().getCollateral(address(account)), 0, "surplus drained by first claim");
+        uint256 ownerBtcBefore = owner.balance;
+        uint256 ownerMusdBefore = musd.balanceOf(owner);
+        account.closeAccount(); // second claim would revert live without the fix
+        assertEq(owner.balance - ownerBtcBefore, 0.02 ether, "already-claimed surplus swept, not re-claimed");
+        assertEq(musd.balanceOf(owner) - ownerMusdBefore, 2000e18, "all MUSD swept to the owner");
+        assertEq(account.status(), 4, "status unchanged by close after redemption");
+    }
+
+    function test_I5_claimCollateralZeroSurplusSucceeds() public {
+        // The permissionless claim itself is equally tolerant: zero surplus
+        // is a no-op emitting CollateralClaimed(0), not a revert.
+        tm.setStatus(address(account), 4);
+        vm.expectEmit(false, false, false, true, address(account));
+        emit TroveAccount.CollateralClaimed(0);
+        account.claimCollateral();
+        assertEq(address(account).balance, 0, "nothing claimed, nothing received");
+        assertEq(bo.collSurplusPool().getCollateral(address(account)), 0);
     }
 
     function test_I5_closeAccountInRecoveryModeReverts() public {
