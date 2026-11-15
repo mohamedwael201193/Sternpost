@@ -1,6 +1,9 @@
 {
-  "generatedAt": "2026-11-15T10:57:45.655Z",
-  "commit": "4d2c3a1b0bae9d309d51983571570fdb6527d3ce",
+  "generatedAt": "2026-11-15T11:39:26.721Z",
+  "commit": "7b1ffcde1d814ae4ea64568ffbe374307d43f9da",
+  "inputs": {
+    "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b"
+  },
   "suites": [
     {
       "name": "contracts-unit",
@@ -32,6 +35,14 @@
       "passed": 32,
       "failed": 0,
       "skipped": 2,
+      "status": "completed"
+    },
+    {
+      "name": "contracts-fuzz-account",
+      "kind": "fuzz",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
       "status": "completed"
     },
     {
@@ -113,14 +124,14 @@
     }
   ],
   "total": {
-    "passed": 255,
+    "passed": 256,
     "failed": 0,
     "skipped": 2
   },
   "reconciliation": {
-    "nonForkDeclared": 257,
+    "nonForkDeclared": 258,
     "forkDeclared": 10,
-    "passedInclFork": 272,
+    "passedInclFork": 273,
     "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties). Do not read total.passed as 'N in total'."
   },
   "forkNote": "fork suites listed separately, never added twice"
