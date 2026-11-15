@@ -37,10 +37,10 @@ used (anvil dev keys only).**
 | Session for agent `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` on B (budget 50, per-tx 10, daily 10 MUSD, 24 h, any payee) | PASS — tx 0x1, gas 145,658 |
 | Agent draw 5 MUSD from B to `0x000000000000000000000000000000000000dEaD` | PASS — tx 0x1, gas 461,548; payee MUSD balance 5e18; ICR B 2.992e18; `status()` 1 |
 | Park 1000 MUSD into real mainnet sMUSD (account A) | PASS — tx 0x1, gas 233,602; sMUSD balance 1000e18; `status()` 1 |
-| Crash fork price 40% (×0.62) | ICR A 1.549e18; `needed()` = (icr 1.549e18, repayWanted 1.8e18, collWanted 2.229e16, **reason 1 = ICR trigger**) — trigger VERIFIED |
+| Crash fork price 38% (×0.62) | ICR A 1.549e18; `needed()` = (icr 1.549e18, repayWanted 1.8e18, collWanted 2.229e16, **reason 1 = ICR trigger**) — trigger VERIFIED |
 | `shield()` from a stranger EOA (`0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`) | **NOT PRESENT — tx status 0 (failed), fork tx `0xbafb8d1897e6bbb8fa8d0c36f94eb551f0117b7d9e535ec86389fbe73e8853af`** (see gap below) |
 | Restore price | ICR A 2.499e18; `status()` 1 |
-| Close A (`closeAccount`, after unpark + 30 MUSD fork-only top-up from an impersonated holder) | PASS — tx 0x1, gas 409,830; account BTC 0 (swept); trove `status()` 2 (closedByOwner); owner BTC delta 0.07709347451925296 (≈ collateral minus gas) |
+| Close A (`closeAccount`, after unpark + 30 MUSD fork-only top-up from an impersonated holder) | PASS — tx 0x1, gas 392,730; account BTC 0 (swept); trove `status()` 2 (closedByOwner); owner BTC delta 0.07709347451925296 (≈ collateral minus gas) |
 | Close B (`closeAccount`, same top-up) | PASS — tx 0x1, gas 364,030; account BTC 0; trove `status()` 2; owner BTC delta 0.09251223913365969 (≈ collateral minus gas) |
 
 ## Gap: shield() is NOT in the production contract on main
@@ -66,7 +66,8 @@ and the draw reverted `BelowFloor(2.493e18, 2.5e18)` — reproduced on a
 third account and confirmed by `eth_call`. That is the floor rule working
 as designed, not a contract bug: an account opened exactly at the 2.50
 floor has zero draw headroom. The script was fixed to draw from B
-(opened at 3.0), and run 2 passes every step. The lab V3 rehearsal could
+(opened at 3.0), and run 2 passes every step except the expected shield()
+probe failure. The lab V3 rehearsal could
 draw from a 2.50 account only because the lab policy ordered floor BELOW
 shield (0.9 / 1.8 / 2.0); production policy orders shield BELOW floor
 (1.60 < 2.50), so the lab's draw-from-2.50 pattern does not transfer.

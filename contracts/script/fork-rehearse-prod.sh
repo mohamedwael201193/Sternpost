@@ -8,9 +8,9 @@
 #      contracts from this repo, main HEAD)
 #   2. Account A: Factory.createAndOpen at ICR 2.5 (250%)
 #   3. Account B: Factory.createAndOpen at ICR 3.0 (300%)
-#   4. session for an agent + agent draw of 5 MUSD on A
+#   4. session for an agent + agent draw of 5 MUSD on B
 #   5. park 1000 MUSD into real mainnet sMUSD on A
-#   6. crash the fork price 40%, read needed() (shield trigger) + probe
+#   6. crash the fork price 38% (×0.62), read needed() (shield trigger) + probe
 #      shield() — EXPECTED TO FAIL: shield() is task 1.4 and is NOT in the
 #      production contract on main yet; the probe evidences the gap.
 #   7. close both accounts, sweep, verify trove status 2 (closedByOwner)
@@ -135,7 +135,7 @@ snd $ACC_A "park(uint256)" 1000000000000000000000 --private-key $K0
 echo "  sMUSD balance A $(cast call $MSM 'balanceOf(address)(uint256)' $ACC_A --rpc-url $F)"
 echo "  status A $(status $ACC_A)"
 
-echo "== crash the price 40% (fork-only), read the shield trigger, probe shield()"
+echo "== crash the price 38% (×0.62, fork-only), read the shield trigger, probe shield()"
 setprice $($PY -c "print(int($PRICE*0.62))")
 echo "  ICR A at crashed price $(icr $ACC_A)"
 echo "  needed() A: $(cast call $ACC_A 'needed()(uint256,uint256,uint256,uint8)' --rpc-url $F) (icr, repayWanted, collWanted, reason; reason 1 = ICR trigger)"
