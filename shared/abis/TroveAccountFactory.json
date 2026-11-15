@@ -358,6 +358,17 @@
   },
   {
     "type": "error",
+    "name": "BadCooldown",
+    "inputs": [
+      {
+        "name": "cooldownBlocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "BadPolicy",
     "inputs": []
   },

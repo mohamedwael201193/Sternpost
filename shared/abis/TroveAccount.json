@@ -168,6 +168,19 @@
   },
   {
     "type": "function",
+    "name": "MAX_COOLDOWN_BLOCKS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_FEE_BPS",
     "inputs": [],
     "outputs": [
@@ -220,6 +233,19 @@
   },
   {
     "type": "function",
+    "name": "MAX_TOTAL_BOUNTY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MCR",
     "inputs": [],
     "outputs": [
@@ -227,6 +253,32 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_BOUNTY_VALUE_MOVED",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_COOLDOWN_BLOCKS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -321,6 +373,13 @@
   },
   {
     "type": "function",
+    "name": "armExit",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "bo",
     "inputs": [],
     "outputs": [
@@ -396,6 +455,13 @@
   },
   {
     "type": "function",
+    "name": "disarmExit",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "domainSeparator",
     "inputs": [],
     "outputs": [
@@ -457,6 +523,19 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "exitArmed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1296,6 +1375,19 @@
   },
   {
     "type": "function",
+    "name": "totalBountyPaid",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "unpark",
     "inputs": [
       {
@@ -1439,6 +1531,19 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ExitArmedSet",
+    "inputs": [
+      {
+        "name": "armed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       }
     ],
     "anonymous": false
@@ -1717,6 +1822,17 @@
   },
   {
     "type": "error",
+    "name": "BadCooldown",
+    "inputs": [
+      {
+        "name": "cooldownBlocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "BadNonce",
     "inputs": []
   },
@@ -1782,6 +1898,11 @@
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "ExitArmed",
+    "inputs": []
   },
   {
     "type": "error",
@@ -1988,6 +2109,11 @@
   {
     "type": "error",
     "name": "ZeroOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroPrice",
     "inputs": []
   }
 ]
