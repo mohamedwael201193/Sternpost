@@ -15,7 +15,7 @@ export function Footer() {
         </div>
         <div className="mt-20 flex flex-wrap items-center justify-between gap-4 border-t border-ink/20 pt-6 text-sm text-muted">
           <span className="display text-xl text-ink">Sternpost</span>
-          <span>Built for the Mezo Buildathon · Testnet 31611 · Not audited</span>
+          <span>Built for the Mezo Buildathon · Testnet 31611 · v0.9 · Not audited</span>
           <span className="flex items-center gap-5">
             <a className="ink-link inline-flex items-center gap-1.5" href={BOT_URL} target="_blank" rel="noreferrer"><TelegramLogo size={16} /> Telegram ↗</a>
             <a className="ink-link" href="https://github.com/mohamedwael201193/Sternpost">GitHub ↗</a>

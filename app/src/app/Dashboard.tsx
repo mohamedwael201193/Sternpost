@@ -166,7 +166,7 @@ export default function Dashboard() {
                 <span className="text-[11px] text-muted">Bitcoin-backed. Mezo-secured.</span>
               </a>
               <div className="mt-4"><ChainSwitcher /></div>
-              <div className="text-[11px] text-muted mt-4">Sternpost v0.2.0 · <span className="text-magenta">Testnet</span> · chain 31611</div>
+              <div className="text-[11px] text-muted mt-4">Sternpost v0.9 · <span className="text-magenta">Testnet</span> · chain 31611</div>
             </div>
           </aside>
           <main className="min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-10 lg:py-8 max-w-[1440px] w-full">
