@@ -66,12 +66,15 @@ const TEAM = new Set(
 // never silently fall back to the default RPC / output dir. A space-form
 // flag whose next token is missing (last arg) or starts with "--" is
 // treated as missing (default) — that guard is specified and kept.
-// Empty values are NEVER "unset": an empty value in either form
-// (--rpc=, --out=, --rpc "", --out "") is a hard error. A value starting
+// Empty values are NEVER "unset": an empty or whitespace-only value in
+// either form (--rpc=, --out=, --rpc "", --out "", --out " ") is a hard
+// error — reject, never silently trim-and-accept. A value starting
 // with "=" (--rpc==URL, --out==DIR) is a hard error. Any other token
 // (positional, or a single-dash typo such as -rpc) is a hard error:
 // error: unexpected argument <token>. The RPC is validated with new URL()
-// before first use, so an invalid URL fails cleanly, never with a stack.
+// (http:/https: only) before first use, so an invalid URL fails cleanly,
+// never with a stack. RPC failures at runtime are caught and reported as a
+// clean error, never a stack trace.
 const USAGE = `Usage: node scripts/muster-report.mjs [--rpc URL | --rpc=URL] [--out DIR | --out=DIR]
   Defaults: RPC from shared/deployments/testnet.json, output
   docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).`;
@@ -80,7 +83,7 @@ function fail(msg) {
   process.exit(1);
 }
 function checkValue(flag, value) {
-  if (value === "") {
+  if (value.trim() === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
   }
   if (value.startsWith("=")) {
@@ -110,10 +113,14 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 const RPC = rpcArg || DEPLOYMENTS.rpc;
+let rpcUrl;
 try {
-  new URL(RPC);
+  rpcUrl = new URL(RPC);
 } catch {
   fail(`invalid value for --rpc: '${RPC}' is not a valid URL`);
+}
+if (rpcUrl.protocol !== "http:" && rpcUrl.protocol !== "https:") {
+  fail(`invalid value for --rpc: '${RPC}' must use http: or https:`);
 }
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
@@ -155,23 +162,34 @@ async function getLogs(address, topics, fromBlock, toBlock) {
   return out;
 }
 
-const latest = hexToInt(await rpc("eth_blockNumber", []));
 const date = new Date().toISOString().slice(0, 10);
 
-// GovernorCreated + SpendWalletCreated from the 0.9 Factory.
-const creations = await getLogs(
-  FACTORY,
-  [[TOPICS.GovernorCreated, TOPICS.SpendWalletCreated]],
-  FACTORY_BLOCK,
-  latest
-);
-// Drawn from the 0.9 Governor.
-const draws = await getLogs(
-  GOVERNOR,
-  [[TOPICS.Drawn]],
-  GOVERNOR_BLOCK,
-  latest
-);
+// All top-level RPC work is wrapped so a refused / unreachable /
+// erroring RPC fails cleanly (error: RPC request failed: <cause>),
+// never with an uncaught stack trace.
+let latest;
+let creations;
+let draws;
+try {
+  latest = hexToInt(await rpc("eth_blockNumber", []));
+
+  // GovernorCreated + SpendWalletCreated from the 0.9 Factory.
+  creations = await getLogs(
+    FACTORY,
+    [[TOPICS.GovernorCreated, TOPICS.SpendWalletCreated]],
+    FACTORY_BLOCK,
+    latest
+  );
+  // Drawn from the 0.9 Governor.
+  draws = await getLogs(
+    GOVERNOR,
+    [[TOPICS.Drawn]],
+    GOVERNOR_BLOCK,
+    latest
+  );
+} catch (err) {
+  fail(`RPC request failed: ${err.message}`);
+}
 
 const rows = []; // {address, kind, tx, block}
 const seen = new Set();
