@@ -35,11 +35,11 @@ export default function Watch() {
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title="Your ICR">
           <div className="display text-3xl">{icrPct === null ? '—' : `${icrPct.toFixed(1)}%`}</div>
-          <p className="text-xs text-muted mt-1">Liquidation floor · 110%</p>
+          <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
         <Card title="System health (TCR)">
           <div className="display text-3xl">{tcrPct === null ? '—' : `${tcrPct.toFixed(1)}%`}</div>
-          <p className="text-xs text-muted mt-1">Recovery Mode below 150%</p>
+          <p className="text-xs text-muted mt-1">Recovery Mode below 150% (Mezo CCR)</p>
         </Card>
         <Card title="Standby heal">
           <div className="display text-3xl">{!standbyKnown ? '—' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>

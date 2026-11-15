@@ -6,6 +6,7 @@ const FACTORY = deployments.sternpost.SternpostFactory.address
 const GOVERNOR = deployments.sternpost.governor
 const ROUTER = deployments.sternpost.SternpostRouter.address
 const SPEND_WALLET = deployments.sternpost.spendWallet
+const DEFEND_CALLER = deployments.sternpost.classicRedeploy.defend.caller
 
 const SUITES: [string, number, number, number][] = [
   ['contracts-unit', 87, 0, 0],
@@ -57,9 +58,8 @@ export default function ProveIt() {
           separately and never added twice). The table below sums to 273 / 0 / 5, including the{' '}
           <span className="mono">contracts-fork-offline</span> row (0 / 0 / 2): the two fork contracts skipped
           offline, which the previous version of this page omitted. The snapshot id recorded inside{' '}
-          <span className="mono">TESTS.json</span> (<span className="mono">7b1ffcde…</span>) does not resolve to any
-          commit in this repo&apos;s history, so the counts are anchored to the file&apos;s{' '}
-          <span className="mono">generatedAt</span> above and to main HEAD{' '}
+          <span className="mono">TESTS.json</span> does not resolve to any commit in this repo&apos;s history, so
+          the counts are anchored to the file&apos;s <span className="mono">generatedAt</span> above and to main HEAD{' '}
           <span className="mono">3374eee</span>. The mcp and keeper suites are absent from
           that snapshot; a refresh is pending. No test count here is a claim about the future.
         </p>
@@ -84,7 +84,7 @@ export default function ProveIt() {
 
         <h2 className="display text-3xl mt-12 mb-4">defend() — a stranger repaid 30 MUSD</h2>
         <p className="text-sm leading-relaxed">
-          Caller <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl('0x27aeBa9c609b21Ea4112d8bd0a21E779901D62A6')} target="_blank" rel="noreferrer">0x27aeBa9c609b21Ea4112d8bd0a21E779901D62A6 ↗</a>{' '}
+          Caller <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(DEFEND_CALLER)} target="_blank" rel="noreferrer">{DEFEND_CALLER} ↗</a>{' '}
           — a fresh single-use outside EOA, not the borrower. ICR 2.3791 → 2.4081, buffer 30 → 0 MUSD, standby nonce
           44 → 45. Triggered by raising the policy line, not by a price move; policy restored to (2.5, 1.6) after.
           Final state: not frozen, buffer 30 MUSD, standby live, Mezo nonce 45.

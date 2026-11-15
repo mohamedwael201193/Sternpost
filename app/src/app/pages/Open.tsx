@@ -16,7 +16,7 @@ function Addr({ a }: { a: string }) {
 export default function Open() {
   return (
     <div className="space-y-8">
-      <Card title="Open a credit account — three steps, all live today">
+      <Card title="Open a credit account — the live path today, in three steps">
         <ol className="text-sm leading-relaxed space-y-3 list-decimal pl-5">
           <li>
             <b>Open a trove on Mezo testnet.</b> Deposit testnet BTC and borrow MUSD at{' '}
