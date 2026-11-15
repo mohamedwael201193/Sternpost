@@ -136,7 +136,7 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Counts are from [`TESTS.json`](TESTS.json) @ [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) (generated 2026-11-15 11:39 UTC; refresh pending) — **256 passing** non-fork, **270 distinct** declared (258 non-fork + 10 fork + 2 invariant properties), **273 incl. fork** (256 + 10 testnet + 7 mainnet). The account suite was re-verified separately (row below) — the **137** and **161** rows are different snapshots, not one run: 137 is the TESTS.json contracts total (account 33 inside it), while 161 is the later account-suite re-verification @ `6c69ab2`. E2E not counted. Note on the citation: the `commit` field embedded inside `TESTS.json` still records `7b1ffcd`, the pre-landing run commit, which does not resolve in this repository's history; `3374eee` is the commit that landed the file, and the counts above are from the file as landed at `3374eee`.
+Counts are from [`TESTS.json`](TESTS.json) @ [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) (generated 2026-11-15 11:39 UTC; refresh pending) — **256 passing (non-fork subtotal; E2E not counted)**, **270 distinct** declared (258 non-fork + 10 fork + 2 invariant properties), **273 incl. fork** (256 + 10 testnet + 7 mainnet). The account suite was re-verified separately (row below) — the **137** and **161** rows are different snapshots, not one run: 137 is the TESTS.json contracts total (account 33 inside it), while 161 is the later account-suite re-verification @ `6c69ab2`. Note on the citation: the `commit` field embedded inside `TESTS.json` still records `7b1ffcd`, the pre-landing run commit, which does not resolve in this repository's history; `3374eee` is the commit that landed the file, and the counts above are from the file as landed at `3374eee`.
 
 | Suite | Command | Result |
 |---|---|---|
@@ -145,7 +145,7 @@ Counts are from [`TESTS.json`](TESTS.json) @ [`3374eee`](https://github.com/moha
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/10** (3 skipped — Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
 | SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **10/10** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74 passed of 80 declared** (API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) was not in the TESTS.json run, so only 74 executed; the 6 pass standalone |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74 passed of 80 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) was not in the TESTS.json run, so only 74 executed; the 6 pass standalone |
 | App unit | `cd app && npx vitest run` | **35/35** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |

@@ -389,11 +389,17 @@ function main() {
     `$1**${sdk}/${sdk}**`,
     `sdk row -> ${sdk}/${sdk}`
   );
+  // Backend row renders passed/DECLARED (5417bb0): `**74/74**` was false —
+  // only 74 of the 80 declared backend tests executed in the TESTS.json
+  // run (`test/config.test.ts`, 6 tests, was not in it). The script syncs
+  // only the passed number from TESTS.json; the declared number is hand
+  // prose counted by word-boundary `it(` (see the row's own parenthetical),
+  // like the parenthetical breakdowns this script deliberately does not touch.
   add(
     "README.md",
-    /(\| Backend \(x402 API, indexer\) \|[^\n]*?)\*\*\d+\/\d+\*\*/,
-    `$1**${backend}/${backend}**`,
-    `backend row -> ${backend}/${backend}`
+    /(\| Backend \(x402 API, indexer\) \|[^\n]*?)\*\*(\d+) passed of (\d+) declared\*\*/,
+    `$1**${backend} passed of $3 declared**`,
+    `backend row -> ${backend} passed of <declared> declared`
   );
   add(
     "README.md",
