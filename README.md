@@ -83,10 +83,10 @@ The full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts
 
 | Sternpost contract | Address |
 |---|---|
-| SternpostFactory | [`0x0632…6980`](https://explorer.test.mezo.org/address/0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980) |
-| SternpostGovernor (demo) | [`0x9eEa…B832`](https://explorer.test.mezo.org/address/0x9eEa9762ED3c1dE2308c800687558064DFf0B832) |
-| SpendWallet (demo) | [`0x6330…41FA`](https://explorer.test.mezo.org/address/0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA) |
-| SternpostRouter v2 | [`0xEC30…9674`](https://explorer.test.mezo.org/address/0xEC30280134f06668f35753D640c6760984179674) |
+| SternpostFactory | [`0x3977…F6d8`](https://explorer.test.mezo.org/address/0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8) |
+| SternpostGovernor (demo) | [`0x1bF4…1F38`](https://explorer.test.mezo.org/address/0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38) |
+| SpendWallet (demo) | [`0x4F87…Ee4a`](https://explorer.test.mezo.org/address/0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a) |
+| SternpostRouter v2 | [`0xd683…88d4`](https://explorer.test.mezo.org/address/0xd6833f811e987f06a1e55a435d4be38c6d4188d4) |
 | SternpostRouter v1 (superseded) | [`0x7550…284c`](https://explorer.test.mezo.org/address/0x7550a53Cc5510B192A3B486368B8330D1CC7284c) |
 
 | Mezo contract used | Address |
@@ -105,7 +105,7 @@ ABIs: [`shared/abis`](shared/abis). Every address and hash: [`shared/deployments
 
 | What it proves | Tx |
 |---|---|
-| Factory deployed | [`0xfc32c758…`](https://explorer.test.mezo.org/tx/0xfc32c7584b4c14b12f2d171d787b5bc6a5098d79535bd3c967923ef37c53c50c) |
+| Factory deployed | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
 | Safe draw by an app key → SpendWallet | [`0xba4eb129…`](https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523) |
 | Unsafe draw refused (`Unsafe`, ICR 218% < floor 250%) | [`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf) |
 | Direct Mezo submission blocked by the gate | [`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2) |
