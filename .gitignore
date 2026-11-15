@@ -11,3 +11,6 @@ coverage/
 *.log
 .vercel
 .DS_Store
+*.key.json
+agent*.json
+btctestkey.json
