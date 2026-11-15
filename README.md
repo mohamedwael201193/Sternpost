@@ -77,7 +77,7 @@ await sp.revoke(borrowerWallet, governor);                                      
 await sp.rearm(borrowerWallet, governor, parseEther("5"));
 ```
 
-The full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts) (`npm run e2e`).
+The script for the full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts) (`npm run e2e`) — last run in full in Wave 1; on the 0.9 deployment only `defend()` was re-run.
 
 ## Deployments (Mezo testnet, chain 31611)
 
@@ -156,7 +156,7 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 
 - The gate relies on Mezo's current ActivePool callback. If it is removed, draws **fail closed** (`CallbackMismatch`); a fork test covers this.
 - Mezo has one signature nonce per borrower, so other signed actions disarm the defend standby until `rearm()`. A loop leg uses the heal nonce, so re-arm after a loop.
-- Swap/Loop are proven live but not on forks (forks lack Mezo's BTC precompile). Loops are capped at 2 legs.
+- Swap/Loop were proven live in Wave 1 (superseded deployment) but not on forks (forks lack Mezo's BTC precompile). Loops are capped at 2 legs.
 - Bitcoin wallets (OrangeKit) cannot draw: Mezo checks signatures with `ECDSA.recover` only.
 - **Unaudited, testnet only.** Full analysis: [threat model](docs/THREAT_MODEL.md).
 
@@ -179,7 +179,7 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 
 <img src="docs/media/telegram-bot.webp" alt="@sternpost_bot: /start menu and /status for the demo trove" width="820" />
 
-<sub>Rendered from the bot's reply templates in <code>backend/src/telegram/ui.ts</code> with the demo trove's live testnet values.</sub>
+<sub>Rendered from the bot's reply templates in <code>backend/src/telegram/ui.ts</code> with the demo trove's testnet values (Wave-1 render).</sub>
 
 - **Link:** `/link` asks for one wallet signature (no gas); the API checks it and binds the chat to your borrower address.
 - **Watch:** `/status` reads ICR, floor, defend line and buffer from your Governor; `/balances` shows MUSD and MEZO.
