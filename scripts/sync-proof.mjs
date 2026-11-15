@@ -11,10 +11,19 @@
 // Proof.tsx:6-10, JUDGES.md:14-15, plus the same numbers wherever else
 // they appear in those files):
 //   README badge            tests-N%20passing        <- total.passed
-//   README "N in total"     (E2E not counted)        <- total.passed
+//   README "N passing (non-fork subtotal; E2E not counted)"
+//                                                     <- total.passed
 //   README Tests table      per-suite **N passing** / **N/N**
 //   Proof.tsx COUNTS        contract / fork / backend / sdk+app rows
 //   JUDGES.md table         unit+fuzz+invariant, fork testnet/mainnet, sdk
+//
+// LABEL HONESTY (J2-F5, plan C12): total.passed is a NON-FORK subtotal,
+// so the README line must never read "N in total" — the table sums to
+// more once the fork rows are added (198 distinct declared vs 179
+// passed non-fork on the pre-merge tree). The line reads "N passing
+// (non-fork subtotal; E2E not counted)" and this script logs the
+// reconciliation (non-fork declared, fork declared, passed incl. fork)
+// from TESTS.json.reconciliation on every run.
 //
 // What it deliberately does NOT touch:
 //   - The parenthetical breakdowns in the README table ("Governor 21 + …").
@@ -29,18 +38,96 @@
 //     and warns; --check skips them instead of failing.
 //
 // Honesty guard: sync (write mode) REFUSES to run when TESTS.json has any
-// failed test or any suite in "error" status. Stamping a green "N passing"
-// badge over red counts would be a lie; fix the failing suites first,
-// re-run `make test-all`, then sync. --check mode does not refuse: it
-// reports drift, and separately warns loudly when TESTS.json is red, so
-// the red state stays visible instead of being hidden behind a passing
-// drift check.
+// failed test or any suite in "error" status, OR when TESTS.json is stale
+// (sources under contracts/backend/sdk/app/mcp/keeper changed since the
+// commit TESTS.json was generated from, or uncommitted changes there).
+// Stamping a green "N passing" badge over red or stale counts would be a
+// lie; fix the failing suites first, re-run `make test-all`, then sync.
+// --check mode FAILS (exit 1) on a red or stale TESTS.json, after still
+// reporting drift, so CI can never go green on red/stale numbers: the old
+// behaviour (warn about red, exit 0 when numbers matched) let a red
+// TESTS.json ship as a passing drift check, and the old workflow path
+// filter blinded it to gov-chain/backend merges entirely.
+import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECK = process.argv.includes("--check");
+// Source paths whose changes stale the counts: the code under test. (The
+// 0.8 scripts themselves are versioned with TESTS.json; a script change
+// is reviewed together with the numbers it produces.)
+const SOURCE_PATHS = ["contracts", "backend", "sdk", "app", "mcp", "keeper"];
+// Files sync-proof itself generates from TESTS.json: changing them does
+// NOT stale the counts (they are outputs, not inputs). They must be
+// filtered out of the freshness diff/status, or every sync would make
+// the next check fail on its own output (Proof.tsx sits under app/).
+const GENERATED_FILES = new Set(["README.md", "app/src/landing/Proof.tsx", "judges/JUDGES.md"]);
+const notGenerated = (list) =>
+  list
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !GENERATED_FILES.has(l));
+
+// Freshness: TESTS.json is fresh iff no file under SOURCE_PATHS changed
+// between the commit it was generated from and HEAD, and no uncommitted
+// change sits in those paths. Fail closed (stale) when git is unavailable
+// or the recorded commit is unknown. Note the commit-landing case works:
+// after TESTS.json is committed, HEAD moves but the diff over
+// SOURCE_PATHS is empty (the commit only touched TESTS.json / 0.8 files).
+function freshness(tests) {
+  const commit = tests.commit;
+  if (!commit || commit === "unknown") {
+    return { fresh: false, reason: `TESTS.json commit is "${commit ?? "missing"}" — re-run \`make test-all\`` };
+  }
+  try {
+    const head = execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+    const changed = notGenerated(
+      execSync(`git diff --name-only ${commit} ${head} -- ${SOURCE_PATHS.join(" ")}`, {
+        cwd: ROOT,
+        encoding: "utf8",
+      })
+    );
+    if (changed.length > 0) {
+      return {
+        fresh: false,
+        reason:
+          `sources changed since TESTS.json commit ${commit.slice(0, 7)}: ` +
+          changed.join(", ") +
+          " — re-run `make test-all`",
+      };
+    }
+    // git status --porcelain lines carry a 3-char "XY " prefix (" M ",
+    // "M  ", "?? "); strip it BEFORE notGenerated — trimming first
+    // would eat the leading status space and break the prefix, so a
+    // sync's own write to the generated Proof.tsx would read as a
+    // stale source change (caught 2026-11-15: check-tests failed on
+    // "M app/src/landing/Proof.tsx" right after a green sync).
+    const dirty = notGenerated(
+      execSync(`git status --porcelain -- ${SOURCE_PATHS.join(" ")}`, {
+        cwd: ROOT,
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((l) => l.slice(3))
+        .join("\n")
+    );
+    if (dirty.length > 0) {
+      return {
+        fresh: false,
+        reason:
+          "uncommitted changes under " +
+          SOURCE_PATHS.join("/") +
+          " — re-run `make test-all` after committing them: " +
+          dirty.slice(0, 5).join(", "),
+      };
+    }
+    return { fresh: true, reason: "" };
+  } catch (e) {
+    return { fresh: false, reason: `cannot verify freshness against git (${String(e.message).split("\n")[0]}) — re-run \`make test-all\`` };
+  }
+}
 
 function suite(tests, name) {
   return tests.suites.find((s) => s.name === name);
@@ -66,11 +153,15 @@ function main() {
   const contracts =
     (passed(tests, "contracts-unit") ?? 0) +
     (passed(tests, "contracts-fuzz") ?? 0) +
-    (passed(tests, "contracts-invariant") ?? 0);
+    (passed(tests, "contracts-invariant") ?? 0) +
+    (passed(tests, "contracts-account") ?? 0) +
+    (passed(tests, "contracts-routes") ?? 0);
   const contractsKnown =
     isCompleted(tests, "contracts-unit") ||
     isCompleted(tests, "contracts-fuzz") ||
-    isCompleted(tests, "contracts-invariant");
+    isCompleted(tests, "contracts-invariant") ||
+    isCompleted(tests, "contracts-account") ||
+    isCompleted(tests, "contracts-routes");
   const sdk = passed(tests, "sdk");
   const backend = passed(tests, "backend");
   const app = passed(tests, "app");
@@ -84,23 +175,42 @@ function main() {
     (tests.total?.failed ?? 0) > 0 ||
     tests.suites.some((s) => s.status === "error") ||
     tests.suites.some((s) => s.status === "completed" && s.failed > 0);
+  const redDetail =
+    `(total failed=${tests.total?.failed ?? 0}; ` +
+    tests.suites
+      .filter((s) => s.status === "error" || (s.status === "completed" && s.failed > 0))
+      .map((s) => `${s.name}[${s.status},failed=${s.failed}]`)
+      .join(", ") +
+    ")";
+  const stale = freshness(tests);
   if (red && !CHECK) {
     console.error(
       "sync-proof: REFUSING to write — TESTS.json is red " +
-        `(total failed=${tests.total?.failed ?? 0}; ` +
-        tests.suites
-          .filter((s) => s.status === "error" || (s.status === "completed" && s.failed > 0))
-          .map((s) => `${s.name}[${s.status},failed=${s.failed}]`)
-          .join(", ") +
-        "). Fix the failing suites, re-run `make test-all`, then sync."
+        redDetail +
+        ". Fix the failing suites, re-run `make test-all`, then sync."
     );
     process.exit(1);
   }
   if (red) {
     console.error(
-      "sync-proof: WARNING — TESTS.json is red " +
-        `(total failed=${tests.total?.failed ?? 0}). ` +
-        "Drift is still checked below, but the README badge must not be read as green."
+      "sync-proof: FAIL — TESTS.json is red " +
+        redDetail +
+        ". Drift is still checked below, but this check exits 1: a red TESTS.json must never read as green."
+    );
+  }
+  if (!stale.fresh && !CHECK) {
+    console.error(`sync-proof: REFUSING to write — TESTS.json is stale: ${stale.reason}`);
+    process.exit(1);
+  }
+  if (!stale.fresh) {
+    console.error(`sync-proof: FAIL — TESTS.json is stale: ${stale.reason}`);
+  }
+  const rec = tests.reconciliation;
+  if (rec) {
+    console.log(
+      `sync-proof: reconciliation — total.passed=${total} is a NON-FORK subtotal; ` +
+        `non-fork declared=${rec.nonForkDeclared}, fork declared=${rec.forkDeclared ?? "n/a"}, ` +
+        `passed incl. fork=${rec.passedInclFork}, distinct declared=${rec.forkDeclared === null ? "n/a" : rec.nonForkDeclared + rec.forkDeclared + 2} (C12: +2 invariant properties)`
     );
   }
   if (typeof total !== "number" || !contractsKnown || sdk === null || backend === null || app === null) {
@@ -120,9 +230,18 @@ function main() {
   const add = (file, pattern, replacement, label, skip = false) =>
     edits.push({ file, pattern, replacement, label, skip });
 
-  // README.md — badge (line 13) and "N in total" (line 125).
+  // README.md — badge (line 13) and "N passing (non-fork subtotal)"
+  // (line 125). The pattern matches BOTH the old "N in total" label and
+  // the new one, so the first sync after this change still rewrites it.
+  // The label is the J2-F5 fix: total.passed is a non-fork subtotal, and
+  // "N in total" let it be read as the whole table's total.
   add("README.md", /tests-\d+%20passing/, `tests-${total}%20passing`, `badge -> ${total} passing`);
-  add("README.md", /\d+ in total \(E2E not counted\)/, `${total} in total (E2E not counted)`, `"N in total" -> ${total}`);
+  add(
+    "README.md",
+    /\d+ in total \(E2E not counted\)|\d+ passing \(non-fork subtotal; E2E not counted\)/,
+    `${total} passing (non-fork subtotal; E2E not counted)`,
+    `"N passing (non-fork subtotal)" -> ${total}`
+  );
   // README.md — Tests table bold numbers (row-anchored so only the number moves).
   add(
     "README.md",
@@ -278,6 +397,15 @@ function main() {
       "are hand-written prose and are NOT rewritten by this script — their owning tasks must refresh them."
   );
   if (CHECK) {
+    // A red or stale TESTS.json fails the check even when the numbers
+    // match: the old behaviour (exit 0 on matching numbers) let red
+    // counts ship as a passing drift gate.
+    if (red || !stale.fresh) {
+      console.error(
+        `sync-proof: CHECK FAILED — TESTS.json is ${red ? "red" : ""}${red && !stale.fresh ? " and " : ""}${!stale.fresh ? "stale" : ""}; fix it and re-run \`make test-all\``
+      );
+      process.exit(1);
+    }
     if (changed > 0) {
       console.error(`sync-proof: CHECK FAILED — ${changed} number(s) drift from TESTS.json; run \`node scripts/sync-proof.mjs\` to regenerate`);
       process.exit(1);

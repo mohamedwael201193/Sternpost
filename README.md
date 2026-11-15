@@ -10,7 +10,7 @@
 [![sdk](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml)
 [![backend](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml)
 [![CodeQL](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml)
-[![tests](https://img.shields.io/badge/tests-203%20passing-2ea44f)](#tests)
+[![tests](https://img.shields.io/badge/tests-255%20passing-2ea44f)](#tests)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [**Live app**](https://sternpost-pink.vercel.app) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
@@ -125,16 +125,16 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Contracts, SDK and backend counts are from the latest green CI runs; fork and app counts from the last local runs. 203 in total (E2E not counted).
+Contracts, SDK and backend counts are from the latest green CI runs; fork and app counts from the last local runs. 255 passing (non-fork subtotal; E2E not counted).
 
 | Suite | Command | Result |
 |---|---|---|
-| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **85 passing** (Governor 21 + 15 branch + 3 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5, Reentrancy 1, invariants 2) |
+| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **136 passing** (Governor 21 + 15 branch + 3 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5, Reentrancy 1, invariants 2) |
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/7** (Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
-| SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **9/9** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **72/72** (API, indexer, x402, Telegram bot) |
-| App unit | `cd app && npx vitest run` | **20/20** |
+| SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **10/10** |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74/74** (API, indexer, x402, Telegram bot) |
+| App unit | `cd app && npx vitest run` | **35/35** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |
 

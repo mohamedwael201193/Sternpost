@@ -10,7 +10,7 @@
 #
 # Design (plan §7.1; repo audit §G):
 # - The offline forge suite runs in SPLIT passes, one per test directory
-#   (unit / invariant / fork-offline). The full `forge test` in one process
+#   (unit / invariant / account / routes / fork-offline). The full `forge test` in one process
 #   was OOM-killed in solc (via_ir, 6 GB VM; see also the plan's 783 s
 #   OOM note). Splitting keeps each solc/forge invocation small enough to
 #   finish, and each pass writes its own file, so a failure in one pass
@@ -20,6 +20,21 @@
 #   summarize.mjs excludes every kind:"fork" suite from total. The same
 #   10 fork tests also appear as skipped in forge-fork-offline.json
 #   (FORK_ON unset) — that line is likewise excluded from the total.
+# - FORK-FAILURE DIAGNOSIS, CORRECTED (J1+J2+J3 F1; supersedes the 0.8
+#   scaffold's record): the committed run's testnet fork failure was
+#   `assertEq(balanceOf(payee), 10e18)` at Fork.t.sol:42 — payee 0xBEEF
+#   pre-held 5.36 MUSD on live testnet (verified at fork blocks
+#   16793764/16793196; 10 + 5.36 = 15.36 exactly), so the ABSOLUTE
+#   assertion failed on live state, not on code. It was NOT the
+#   previewDraw double-count (C1–C3): that bug is real, but its check
+#   (line 43 assertApproxEqRel) never executed because line 42 reverted
+#   first. Gov-chain (main 511f18b) fixed it with a
+#   delta assertion — a TEST change, not a contract fix; 511f18b's
+#   message records the same diagnosis: 'Fork fix: Fork.t.sol
+#   payee assertion is now a delta (0xBEEF holds 5.36 MUSD on live
+#   testnet, so the absolute assertion failed on live state, not
+#   code)'. 'Passes on the mainnet fork' is explained by 0xBEEF holding
+#   0 MUSD on mainnet. Do NOT route this to 0.1.
 # - Vitest runs with `--maxWorkers=1`. The default pool runs one worker
 #   per test file and the backend boots an in-memory Postgres (PGlite)
 #   per file; on this shared 6 GB VM the parallel run was OOM-killed
@@ -27,6 +42,18 @@
 #   worker is slower but finishes. NOTE: `--poolOptions.*` is NOT a CLI
 #   flag in vitest 3/4/5 (CACError "Unknown option"); `--maxWorkers`
 #   is the CLI flag that exists in all three.
+# - KNOWN 2026-11-15 (J3-F6): backend activity.test.ts (30.6 s) and
+#   indexer.test.ts (38.3 s) exceed the backend's 30 s testTimeout
+#   (backend/vitest.config.ts) and fail with an uninformative
+#   STACK_TRACE_ERROR; both pass at a 60 s timeout — verified re-run
+#   2026-11-15 (out/backend-60s-rerun.json, `npx vitest run
+#   --maxWorkers=1 --testTimeout=60000 test/activity.test.ts
+#   test/indexer.test.ts`, 76 s wall): 3/3 pass, 0 failed; activity
+#   test 15.0 s, indexer tests 19.5 s + 11.4 s (file total 30.9 s).
+#   The timeout raise belongs to the BACKEND task
+#   (backend/vitest.config.ts), NOT to this runner — this script does
+#   not override the timeout, so a backend timeout still shows up as a
+#   real failure in TESTS.json.
 # - Every runner's output file is DELETED before its run: a crashed
 #   runner must leave an "error" marker (via check_json), never the
 #   previous run's file silently re-reported as fresh.
@@ -41,8 +68,12 @@
 #
 # Expected durations (shared 6 GB VM, cold cache): forge compile ~3 min
 # once, then each forge pass ~1 min; vitest per package ~1-3 min after
-# `npm ci`. Fork passes: several minutes each over RPC (SortedTroves
-# walks); the lab measured 382 s for the testnet fork suite alone.
+# `npm ci`. Fork passes measured on the 2026-11-15 re-run
+# (out/forge-fork-*.json contract durations, summed): testnet 43.8 s +
+# 30.5 s = 74.3 s, mainnet 26.4 s + 7.4 s = 33.8 s. (The lab's earlier
+# 382 s testnet figure predates the split passes; do not quote it.)
+# TMPDIR: set it to a directory under $HOME, never /tmp — /tmp filled
+# up during a judge's isolated run and caused an ENOSPC failure.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -90,6 +121,12 @@ fi
 # Split forge passes (see header: OOM defence). Each pass writes its own
 # file. The fork directory runs WITHOUT FORK_ON here, so all 10 fork tests
 # are recorded as skipped; the real fork runs are separate passes below.
+# test/account/* and test/routes/* are their own passes: 1.1/1.5/0.5
+# landed them after the scaffold, and the old three-pass split silently
+# omitted them on the merged tree. Radar.t.sol's two fork tests
+# (testForkTestnet_labRanks, testForkMainnet_fourTroves) skip offline —
+# they need RADAR_FORK=1 and a fork URL, so they are recorded as
+# skipped (total.skipped=2 on the 2026-11-15 run), not failed.
 run_forge() { # $1=match-path $2=outfile $3=label ; extra forge args follow
   local match="$1" out="$2" label="$3"; shift 3
   echo "count-tests: forge $label ..."
@@ -99,6 +136,8 @@ run_forge() { # $1=match-path $2=outfile $3=label ; extra forge args follow
 }
 run_forge "test/unit/*"      forge-unit.json         "forge unit+fuzz (offline)"
 run_forge "test/invariant/*" forge-invariant.json    "forge invariant (offline)"
+run_forge "test/account/*"   forge-account.json      "forge account (Factory, Radar)"
+run_forge "test/routes/*"    forge-routes.json       "forge routes (RouterSlippage)"
 run_forge "test/fork/*"      forge-fork-offline.json "forge fork (offline, FORK_ON unset -> skipped)"
 
 # Fork passes: separate files, only when FORK=1. Env values are the public

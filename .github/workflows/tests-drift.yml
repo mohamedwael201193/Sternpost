@@ -10,27 +10,19 @@
 # the suites themselves). Fork rows are skipped while the fork suites in
 # TESTS.json are "not-run"; sync-proof warns about that instead of
 # failing, so a fork run is never claimed that did not happen.
+#
+# NO path filter, deliberately (J3-F4): a `paths:` filter blinded this
+# gate to exactly the merges that stale the numbers — a gov-chain or
+# backend merge touches none of the listed files, so stale counts
+# shipped green. The job is ~30 s, so it runs on every push and PR.
+# `make check-tests` also fails on a red or stale TESTS.json now, not
+# just on drift, so a merge that breaks tests or moves counts without
+# re-running `make test-all` cannot land green.
 name: tests-drift
 
 on:
   push:
-    paths:
-      - TESTS.json
-      - README.md
-      - app/src/landing/Proof.tsx
-      - judges/JUDGES.md
-      - scripts/sync-proof.mjs
-      - Makefile
-      - .github/workflows/tests-drift.yml
   pull_request:
-    paths:
-      - TESTS.json
-      - README.md
-      - app/src/landing/Proof.tsx
-      - judges/JUDGES.md
-      - scripts/sync-proof.mjs
-      - Makefile
-      - .github/workflows/tests-drift.yml
 
 jobs:
   check:
