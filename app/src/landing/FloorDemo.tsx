@@ -15,11 +15,11 @@ export function FloorDemo() {
   const now = Number((COLL * PRICE * 100n) / DEBT / WAD)
   const after = Number((v.icrAfter * 100n) / WAD)
   return (
-    <Plate id="floor" n="V" kicker="Safety floor" title={<>Try to sink it. <em>The floor holds.</em></>} className="bg-paper2/60">
+    <Plate id="floor" n="V" kicker="Safety floor" title={<>Try to sink it. <em>The floor holds — even in a storm.</em></>} className="bg-paper2/60">
       <div className="grid items-center gap-12 lg:grid-cols-[1fr_1fr]">
         <div className="flex min-w-0 justify-center [&_figure]:max-w-full [&_svg]:h-auto [&_svg]:max-w-full"><Gauge value={now} floor={floor} projected={after} size={380} /></div>
         <div className="plate min-w-0 p-8">
-          <p className="caps text-muted">Simulator · illustrative trove (0.1 BTC at $100k, 2,500 MUSD debt, 0.1% fee assumed)</p>
+          <p className="caps text-muted">Simulator · illustrative trove (0.1 BTC at $100k, 2,500 MUSD debt, 0.1% fee assumed) — the live Governor floor is 250%</p>
           <label className="mt-8 block">
             <span className="flex justify-between"><span className="caps">Draw</span><span className="mono">{amount.toLocaleString()} MUSD</span></span>
             <input aria-label="Draw amount" type="range" min={0} max={1500} step={25} value={amount} onChange={(e) => setAmount(+e.target.value)} className="mt-3 w-full accent-[#A3204F]" />

@@ -1,14 +1,14 @@
 import { Plate, Reveal } from './Plate'
 
 const MILES = [
-  { d: 'Wave 2 · November 2026', s: 'Planned', t: 'Mezo mainnet launch', b: 'Governor, Router and SpendWallet on Mezo mainnet with capped limits and source-verified contracts.' },
-  { d: 'Next', s: 'Planned', t: 'Audit, then higher caps', b: 'External audit of the Governor and Router, then higher limits.' },
-  { d: 'Then', s: 'Planned', t: 'Deeper Mezo DeFi', b: 'More routes into Mezo DeFi (pool liquidity and gauges), bot-driven draw approvals end to end, and an agent SDK quickstart.' },
+  { d: 'Wave 2 · November 2026', s: 'Live on testnet', t: '0.9 contracts, and a guard that heals', b: 'Factory, Governor, SpendWallet and Router redeployed on Mezo testnet 31611, Blockscout-verified. defend() repaid 30 MUSD in a live re-run, lifting ICR from 2.3791 to 2.4081. Shield by a stranger is in progress on the production contracts.' },
+  { d: 'Next', s: 'Planned', t: 'Mezo mainnet launch', b: 'Governor, Router and SpendWallet on Mezo mainnet with capped limits and source-verified contracts.' },
+  { d: 'Then', s: 'Planned', t: 'Audit, then higher caps', b: 'External audit of the Governor and Router, then higher limits.' },
 ]
 
 const TRACKS = [
   { n: 'Track 1', t: 'DeFi (Borrowing, Lending, Looping, and Yield)', b: 'Governed MUSD borrowing with an on-chain floor, Save into sMUSD, Swap on the Mezo DEX, and Loop back into collateral.' },
-  { n: 'Track 2', t: 'Access and Distribution for MUSD/MEZO', b: 'A Telegram bot for monitoring and approvals, x402 MUSD payments for agents, and Mezo-style multi-wallet access.' },
+  { n: 'Track 2', t: 'Access and Distribution for MUSD/MEZO', b: 'A Telegram bot for monitoring and approvals, x402 MUSD payments for agents, and Bitcoin-wallet sign-in via OrangeKit.' },
 ]
 
 export function Roadmap() {

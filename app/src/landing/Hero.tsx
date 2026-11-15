@@ -31,11 +31,11 @@ export function Hero() {
       <div className="relative mx-auto grid w-full max-w-[1280px] items-center gap-8 px-6 pb-16 pt-12 lg:grid-cols-[1fr_1.3fr] lg:px-10">
         <div className="relative z-10">
           <motion.h1 {...fade(0)} className="display text-[clamp(2.8rem,5.6vw,5.2rem)] leading-[1.02] tracking-tight">
-            Borrow against Bitcoin.<br />Never sail past the <em>floor.</em>
+            Borrow against Bitcoin.<br />The account holds it — <em>even in a storm.</em>
           </motion.h1>
           <motion.div {...fade(.2)} className="my-8 h-[3px] w-24 origin-left bg-magenta" />
           <motion.p {...fade(.3)} className="max-w-lg text-[1.2rem] leading-relaxed text-ink/80">
-            Give apps and AI agents a MUSD budget on your Mezo trove. Every draw is checked on chain against the collateral floor you set, and anything below it reverts.
+            Guarded MUSD credit lines for your apps and AI agents, drawn against your Bitcoin trove on Mezo. Set the floor once: every draw is checked on chain against it, and anything below it reverts. When the market turns, the account defends itself — it repays, it heals, it holds. Recovery Mode — mainnet fork-tested — blocks new draws while repay and add collateral stay open. A stranger can shield your trove — in progress on the production contracts. Redemptions settle through claimCollateral, built for the surplus a lab redemption left behind. And you can close and exit — except in Recovery Mode.
           </motion.p>
           <motion.div {...fade(.45)} className="mt-10 flex flex-wrap gap-3">
             <Link to="/app" className="pill !normal-case !tracking-normal text-base">Launch app <span aria-hidden>→</span></Link>
@@ -45,7 +45,7 @@ export function Hero() {
           </motion.div>
         </div>
 
-        <motion.div style={{ x: shipX, y: shipY }} className="relative mx-auto w-full max-w-[780px] lg:-my-10">
+        <motion.div style={{ x: shipX, y: shipY }} className="relative mx-auto w-full max-w-[660px] lg:-my-10">
           <div className="relative" style={{ aspectRatio: '1000 / 960' }}>
             <motion.img src="/art/hero-stern.webp" width={590} height={895} fetchPriority="high"
               alt="Ink blueprint of a ship's stern and rudder with a Bitcoin compass"

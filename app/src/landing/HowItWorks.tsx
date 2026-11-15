@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import { Plate } from './Plate'
 
 const STEPS = [
-  { t: 'Set the floor', s: 'Once, from your wallet', d: 'Create your Governor, pick a floor ICR and a defend line, and give each app a budget, a per-draw cap and an expiry. Your trove never moves.', x: 200 },
+  { t: 'Set the floor', s: 'Once, from your wallet', d: 'Create your Governor, pick a floor ICR and a defend line, and give each app a budget, a per-draw cap and an expiry. Your trove never moves. Live on Mezo testnet 31611 as the 0.9 contracts — Blockscout-verified.', x: 200 },
   { t: 'Sign a draw', s: 'One click: Sign & send', d: 'You sign a short-lived Mezo withdraw that names the Governor, plus a standby repay. The app or agent submits it.', x: 600 },
   { t: 'Governor decides', s: 'Same transaction', d: 'It withdraws, reads live ICR and pays out only at or above your floor. Otherwise the whole transaction reverts.', x: 1000 },
 ]
@@ -47,7 +47,7 @@ export function HowItWorks() {
           {[
             ['Gated receive', 'A Governor-addressed signature sent straight to Mezo reverts: the Governor refuses the callback unless it is inside its own draw().'],
             ['120-second window', 'Withdraw signatures expire fast, so a leaked one is worth little.'],
-            ['Nonce-burn revoke', 'One transaction advances your Mezo nonce. Every outstanding signature dies at once.'],
+            ['Nonce-burn revoke', 'One transaction advances your Mezo nonce. Every outstanding signature dies at once. In Recovery Mode draws stay blocked and close waits — repay and add collateral stay open.'],
           ].map(([t, d]) => (
             <div key={t} className="bg-paper p-7"><h4 className="display text-2xl">{t}</h4><p className="mt-3 text-ink/75">{d}</p></div>
           ))}

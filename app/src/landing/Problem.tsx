@@ -1,14 +1,14 @@
 import { Plate, Reveal } from './Plate'
 
 const CARDS = [
-  { k: 'Option A', t: 'Hand the agent your keys', d: 'It can borrow until liquidation. There is no limit you can enforce, only hope.', fig: 'M10 40 h40 M30 40 V14 a8 8 0 1 1 0.1 0 M30 24 h8 M30 30 h6' },
-  { k: 'Option B', t: 'Move the trove into a vault', d: 'Custody leaves your wallet, and the vault becomes one more contract to trust and migrate.', fig: 'M8 18 h44 v28 h-44 z M8 26 h44 M24 34 h12' },
+  { k: 'Option A', t: 'Hand the agent your keys', d: 'It can borrow until liquidation. No limit you can enforce — only hope, and hope does not hold in a storm.', fig: 'M10 40 h40 M30 40 V14 a8 8 0 1 1 0.1 0 M30 24 h8 M30 30 h6' },
+  { k: 'Option B', t: 'Move the trove into a vault', d: 'Custody leaves your wallet, and the vault becomes one more contract to trust and migrate — the risk just changes address.', fig: 'M8 18 h44 v28 h-44 z M8 26 h44 M24 34 h12' },
   { k: 'Option C', t: 'Sign raw Mezo withdrawals', d: 'withdrawMUSDWithSignature binds amount, recipient, nonce and deadline. It does not bind who submits it or your collateral floor, so any holder can push the trove toward liquidation.', fig: 'M10 46 C20 10 40 10 50 46 M10 30 h40' },
 ]
 
 export function Problem() {
   return (
-    <Plate id="problem" n="II" kicker="The problem" title={<>Apps that draw from your trove <em>can sink it.</em></>}>
+    <Plate id="problem" n="II" kicker="The problem" title={<>One bad draw in a storm, <em>and the trove is gone.</em></>}>
       <div className="grid gap-px overflow-hidden border border-ink/20 bg-ink/20 md:grid-cols-3">
         {CARDS.map((c, i) => (
           <Reveal key={c.t} i={i} className="group bg-paper p-8 transition-colors hover:bg-paper2">
@@ -23,7 +23,7 @@ export function Problem() {
         ))}
       </div>
       <Reveal className="mt-10 max-w-2xl display text-2xl italic text-ink/80">
-        Sternpost is the fourth option: the trove never moves, and every draw passes a floor you set, in the same transaction.
+        Sternpost is the fourth option: the trove never moves, every draw passes the floor you set in the same transaction — and when the storm comes, the account defends itself instead of waiting for you.
       </Reveal>
     </Plate>
   )
