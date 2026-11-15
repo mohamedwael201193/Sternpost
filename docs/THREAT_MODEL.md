@@ -26,15 +26,15 @@ A withdraw signature names the governor as `recipient`. During a withdraw, Mezo'
 
 | # | Threat | Mitigation | Evidence |
 |---|---|---|---|
-| 1 | An app submits the borrower's signature straight to Mezo | `receive()` reverts outside `draw()` | fork `directBypassReverts`; testnet tx `0xcb54e35d…` |
-| 2 | A draw pushes the trove below the floor | Post-draw ICR check | fork `unsafeDrawRefused`; testnet tx `0xa489db6a…` |
+| 1 | An app submits the borrower's signature straight to Mezo | `receive()` reverts outside `draw()` | fork `directBypassReverts`; testnet tx `0xfd93314c…` |
+| 2 | A draw pushes the trove below the floor | Post-draw ICR check | fork `unsafeDrawRefused`; testnet tx `0xf3920683…` |
 | 3 | An app overspends or pays another address | Per-app budget, per-draw cap, payee lock | unit + fuzz + invariant |
 | 4 | A leaked signature is replayed later | 120 s window, and the shared nonce advances on every use | unit |
-| 5 | The borrower wants every outstanding signature dead now | `revoke()` freezes and burns the nonce (1 wei AddColl) | fork `revokeBurnsNonce`; tx `0xda372cf8…`, then `0xe783e1f4…` reverts |
+| 5 | The borrower wants every outstanding signature dead now | `revoke()` freezes and burns the nonce (1 wei AddColl) | fork `revokeBurnsNonce`; tx `0xf0763cf4…`, then `0x1938e472…` reverts |
 | 6 | **Mezo removes the ActivePool callback** | `draw()` requires exactly one callback (`CallbackMismatch`), so draws fail closed. Without the callback the governor cannot block a direct submission, but the signature still pays MUSD to the governor, not to the app. | fork `callbackRemoved` |
 | 7 | Reentrancy through MUSD, sMUSD or the callback | `nonReentrant`, a one-shot callback flag, CEI | `Reentrancy.t.sol`, slither |
 | 8 | The price drops sharply after a draw | A permissionless `defend()` repays the armed standby from the buffer below `defendICR`, then freezes | fork `defend` |
-| 9 | A stale standby: any other signed action uses the shared nonce | `standby().live` exposes it, the SDK explains it, and `rearm()` restores it | fork `nonceRace`; tx `0x1e1a5421…` |
+| 9 | A stale standby: any other signed action uses the shared nonce | `standby().live` exposes it, the SDK explains it, and `rearm()` restores it | fork `nonceRace` |
 | 10 | A compromised agent key | SpendWallet expiry, the Permit2 budget, `revokeAgent()`, and owner `sweep()` | `SpendWallet.t.sol` |
 
 ## Known limits (honest)
