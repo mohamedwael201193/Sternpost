@@ -16,6 +16,8 @@ contract StubTroveAccount is ITroveAccount {
     bool public initialized;
     bool public opened;
     Policy public policy;
+    address public feeRecipient;
+    uint16 public feeBps;
     uint256 public openDebt;
     uint256 public openValue;
     address public openUpHint;
@@ -26,12 +28,22 @@ contract StubTroveAccount is ITroveAccount {
     error NotFactory();
     error AlreadyOpened();
 
-    function initialize(address owner_, Policy calldata p) external {
+    /// @notice The stub's "implementation" fee values, backing the feeBps() /
+    ///         feeRecipient() getters the Factory constructor parity-checks
+    ///         (J3-extra round 2 item 1).
+    constructor(address feeRecipient_, uint16 feeBps_) {
+        feeRecipient = feeRecipient_;
+        feeBps = feeBps_;
+    }
+
+    function initialize(address owner_, Policy calldata p, address feeRecipient_, uint16 feeBps_) external {
         if (initialized) revert AlreadyInitialized();
         initialized = true;
         factory = msg.sender;
         owner = owner_;
         policy = p;
+        feeRecipient = feeRecipient_;
+        feeBps = feeBps_;
     }
 
     function openFor(uint256 debt, address upHint, address loHint, uint256 minDebtAhead) external payable {
@@ -58,7 +70,7 @@ contract FactoryTest is Test {
     uint256 public constant DEBT = 2000e18;
 
     function setUp() public {
-        implementation = new StubTroveAccount();
+        implementation = new StubTroveAccount(feeRecipient, 10);
         factory = new TroveAccountFactory(address(implementation), feeRecipient, 10);
         vm.deal(address(this), 10 ether);
     }
@@ -78,7 +90,7 @@ contract FactoryTest is Test {
     // --- predict == created ---
 
     function test_predictMatchesCreated() public {
-        address predicted = factory.predict(owner, SALT);
+        address predicted = factory.predict(owner, SALT, _policy());
         assertFalse(factory.isAccount(predicted));
         address account = factory.createAccount(owner, SALT, _policy());
         assertEq(account, predicted, "created != predicted");
@@ -97,7 +109,7 @@ contract FactoryTest is Test {
     function testFuzz_predictMatchesCreated(address fuzzOwner, bytes32 fuzzSalt) public {
         vm.assume(fuzzOwner != address(0));
         vm.assume(fuzzOwner != address(factory));
-        address predicted = factory.predict(fuzzOwner, fuzzSalt);
+        address predicted = factory.predict(fuzzOwner, fuzzSalt, _policy());
         address account = factory.createAccount(fuzzOwner, fuzzSalt, _policy());
         assertEq(account, predicted);
         assertTrue(factory.isAccount(account));
@@ -119,7 +131,7 @@ contract FactoryTest is Test {
     }
 
     function test_createAccountEmitsAccountCreated() public {
-        address predicted = factory.predict(owner, SALT);
+        address predicted = factory.predict(owner, SALT, _policy());
         Policy memory p = _policy();
         vm.expectEmit(true, true, false, true, address(factory));
         emit TroveAccountFactory.AccountCreated(
@@ -136,9 +148,53 @@ contract FactoryTest is Test {
     }
 
     function test_constructorAcceptsFeeBpsAtCap() public {
-        TroveAccountFactory f = new TroveAccountFactory(address(implementation), feeRecipient, 50);
+        StubTroveAccount impl50 = new StubTroveAccount(feeRecipient, 50);
+        TroveAccountFactory f = new TroveAccountFactory(address(impl50), feeRecipient, 50);
         assertEq(f.feeBps(), 50);
         assertEq(f.MAX_FEE_BPS(), 50);
+    }
+
+    // --- J3-extra round 2 item 1: constructor asserts implementation fee parity ---
+
+    function test_constructorRevertsOnImplementationFeeBpsMismatch() public {
+        StubTroveAccount impl50 = new StubTroveAccount(feeRecipient, 50);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TroveAccountFactory.ImplementationFeeMismatch.selector, feeRecipient, uint16(50)
+            )
+        );
+        new TroveAccountFactory(address(impl50), feeRecipient, 10);
+    }
+
+    function test_constructorRevertsOnImplementationFeeRecipientMismatch() public {
+        address otherRecipient = makeAddr("otherRecipient");
+        StubTroveAccount implOther = new StubTroveAccount(otherRecipient, 10);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TroveAccountFactory.ImplementationFeeMismatch.selector, otherRecipient, uint16(10)
+            )
+        );
+        new TroveAccountFactory(address(implOther), feeRecipient, 10);
+    }
+
+    // --- J3-extra round 2 item 3: createAccount validates the policy ---
+
+    function test_createAccountRejectsBadPolicy() public {
+        Policy memory p = _policy();
+        p.floorICR = 0; // shield 1.60 >= floor 0
+        vm.expectRevert(TroveAccountFactory.BadPolicy.selector);
+        factory.createAccount(owner, SALT, p);
+        p = _policy();
+        p.shieldICR = 2000000000000000000; // shield == target
+        vm.expectRevert(TroveAccountFactory.BadPolicy.selector);
+        factory.createAccount(owner, SALT, p);
+    }
+
+    function test_createAccountRejectsBountyAboveCap() public {
+        Policy memory p = _policy();
+        p.bounty = 5000000000000000001; // 5 MUSD + 1 wei
+        vm.expectRevert(TroveAccountFactory.BountyTooHigh.selector);
+        factory.createAccount(owner, SALT, p);
     }
 
     function test_constructorRevertsOnZeroFeeRecipient() public {
@@ -179,7 +235,7 @@ contract FactoryTest is Test {
     function test_reinitializeOnCloneReverts() public {
         address account = factory.createAccount(owner, SALT, _policy());
         vm.expectRevert(StubTroveAccount.AlreadyInitialized.selector);
-        StubTroveAccount(account).initialize(owner, _policy());
+        StubTroveAccount(account).initialize(owner, _policy(), feeRecipient, 10);
     }
 
     function test_createAccountWithZeroOwnerReverts() public {
@@ -201,7 +257,7 @@ contract FactoryTest is Test {
         address up = makeAddr("up");
         address lo = makeAddr("lo");
         uint256 minDebtAhead = 1000e18;
-        address predicted = factory.predict(address(this), salt);
+        address predicted = factory.predict(address(this), salt, _policy());
         address account = factory.createAndOpen{value: 0.01 ether}(salt, _policy(), DEBT, up, lo, minDebtAhead);
         assertEq(account, predicted);
         assertTrue(factory.isAccount(account));
@@ -213,5 +269,50 @@ contract FactoryTest is Test {
         assertEq(stub.openUpHint(), up);
         assertEq(stub.openLoHint(), lo);
         assertEq(stub.openMinDebtAhead(), minDebtAhead);
+    }
+
+    // --- F1: policy bound into the CREATE2 salt (task 1.2 fix) ---
+    // Before the fix the salt bound (owner, userSalt) only, so an attacker
+    // watching the mempool could front-run a victim's creation with an
+    // attacker-chosen Policy; the victim's tx then reverted AlreadyCreated
+    // and their account existed under the attacker's policy.
+
+    function test_predictBindsPolicy() public view {
+        Policy memory pA = _policy();
+        Policy memory pB = _policy();
+        pB.bounty = 5e18; // max bounty: the attacker's griefing policy
+        pB.minDebtAhead = 1_000_000e18;
+        address a = factory.predict(owner, SALT, pA);
+        address b = factory.predict(owner, SALT, pB);
+        assertTrue(a != b, "same (owner, salt) with different policy must predict different addresses");
+    }
+
+    function test_policyFrontRunCannotStealAddress() public {
+        address attacker = makeAddr("attacker");
+        Policy memory victimPolicy = _policy();
+        Policy memory attackerPolicy = _policy();
+        attackerPolicy.bounty = 5e18;
+        attackerPolicy.minDebtAhead = 1_000_000e18;
+        // Attacker front-runs with the victim's (owner, salt), attacker policy.
+        address attackerAccount = factory.createAccount(owner, SALT, attackerPolicy);
+        assertTrue(attackerAccount != address(0));
+        // The victim's creation with THEIR policy still succeeds, at a
+        // different address, with the victim's policy intact.
+        address victimAccount = factory.createAccount(owner, SALT, victimPolicy);
+        assertTrue(victimAccount != attackerAccount);
+        assertEq(factory.predict(owner, SALT, victimPolicy), victimAccount);
+        assertTrue(factory.isAccount(victimAccount));
+        StubTroveAccount stub = StubTroveAccount(victimAccount);
+        assertEq(stub.owner(), owner);
+        (,,, uint128 bounty, uint128 minDebtAhead,) = stub.policy();
+        assertEq(bounty, uint128(1e18));
+        assertEq(minDebtAhead, uint128(0));
+    }
+
+    // --- F4: predict(address(0)) must revert, not return a plausible address ---
+
+    function test_predictZeroOwnerReverts() public {
+        vm.expectRevert(TroveAccountFactory.ZeroOwner.selector);
+        factory.predict(address(0), SALT, _policy());
     }
 }

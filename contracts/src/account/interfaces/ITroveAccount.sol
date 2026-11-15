@@ -22,9 +22,27 @@ struct Policy {
 /// @notice Minimal surface the Factory needs from a TroveAccount clone.
 /// @dev Implemented by TroveAccount (task 1.2). The Factory is the only
 ///      caller of initialize (once) and of openFor (during creation only).
+///      Fee parity (adversarial review of task 1.1, finding F2, and J3-extra
+///      round 2 item 1): `initialize` takes the Factory's feeRecipient/
+///      feeBps and the implementation reverts unless they equal its own
+///      immutables, so a mismatched implementation deployment cannot silently
+///      charge a different fee from the one the Factory advertises. The
+///      fee getters below let the Factory constructor assert that parity at
+///      deploy time too (the fee lives as immutables in the implementation
+///      bytecode, which the Factory never verified before).
 interface ITroveAccount {
     /// @notice Set the owner and policy exactly once. Callable only by the Factory.
-    function initialize(address owner, Policy calldata policy) external;
+    /// @param feeRecipient_ The Factory's fee recipient; must equal the
+    ///        implementation's immutable feeRecipient.
+    /// @param feeBps_ The Factory's fee in bps; must equal the
+    ///        implementation's immutable feeBps.
+    function initialize(address owner, Policy calldata policy, address feeRecipient_, uint16 feeBps_) external;
+
+    /// @notice Agent-draw fee in basis points (implementation immutable).
+    function feeBps() external view returns (uint16);
+
+    /// @notice Receives the agent-draw fee (implementation immutable).
+    function feeRecipient() external view returns (address);
 
     /// @notice Open the trove with the BTC sent to the Factory. Callable only
     ///      by the Factory, during creation only (via createAndOpen).
