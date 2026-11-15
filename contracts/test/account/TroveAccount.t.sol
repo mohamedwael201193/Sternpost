@@ -13,11 +13,17 @@ import {Policy} from "../../src/account/interfaces/ITroveAccount.sol";
 ///         closeTrove, and its MockTroveManager has no getTroveStatus /
 ///         checkRecoveryMode / getTCR). Behaviour follows the plan: borrowing
 ///         fee 0.1%, min net debt 1800 MUSD, gas comp 200 MUSD, MCR 110%.
+///         Recovery Mode is GLOBAL and price-derived exactly as on real Mezo:
+///         RM ⟺ TCR < 1.5e18. TCR is proportional to price, so price 0
+///         implies TCR 0 and therefore Recovery Mode; the mock models that
+///         directly (getTCR returns 0 at price 0). There is deliberately NO
+///         per-borrower recovery flag: a state with TCR 3e18 while in
+///         Recovery Mode is unreachable on mainnet and must not be
+///         assertable here.
 contract TestTroveManager {
     mapping(address => uint256) public coll;
     mapping(address => uint256) public debt;
     mapping(address => uint8) public status;
-    mapping(address => bool) public recoveryMode;
     uint256 public tcr = 3e18;
 
     function setTrove(address b, uint256 c, uint256 d) external {
@@ -25,7 +31,6 @@ contract TestTroveManager {
         debt[b] = d;
     }
     function setStatus(address b, uint8 s) external { status[b] = s; }
-    function setRecoveryMode(address b, bool rm) external { recoveryMode[b] = rm; }
     function setTCR(uint256 t) external { tcr = t; }
     function addDebt(address b, uint256 d) external { debt[b] += d; }
     function subDebt(address b, uint256 d) external { debt[b] -= d; }
@@ -45,11 +50,13 @@ contract TestTroveManager {
     function getTroveStatus(address b) external view returns (uint8) {
         return status[b];
     }
-    function checkRecoveryMode(uint256) external view returns (bool) {
-        return recoveryMode[msg.sender];
+    function checkRecoveryMode(uint256 price) external view returns (bool) {
+        // Real Mezo: RM ⟺ TCR < 1.5e18, and TCR scales with price, so a
+        // zero price implies TCR 0 and therefore Recovery Mode.
+        return price == 0 || tcr < 1.5e18;
     }
-    function getTCR(uint256) external view returns (uint256) {
-        return tcr;
+    function getTCR(uint256 price) external view returns (uint256) {
+        return price == 0 ? 0 : tcr;
     }
 }
 
@@ -551,8 +558,8 @@ contract TroveAccountTest is Test {
     }
 
     function test_I5_closeAccountInRecoveryModeReverts() public {
-        tm.setRecoveryMode(address(account), true);
-        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(3e18)));
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(1.4e18)));
         account.closeAccount();
     }
 
@@ -804,7 +811,7 @@ contract TroveAccountTest is Test {
 
     function test_previewDrawRecoveryMode() public {
         _setSession(agent, 1000e18, 500e18, 0, true, false);
-        tm.setRecoveryMode(address(account), true);
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
         (bool ok, uint8 reason,,) = account.previewDraw(agent, payee, 10e18);
         assertFalse(ok);
         assertEq(reason, 7, "RECOVERY_MODE");
@@ -812,8 +819,8 @@ contract TroveAccountTest is Test {
 
     function test_drawInRecoveryModeReverts() public {
         _setSession(agent, 1000e18, 500e18, 0, true, false);
-        tm.setRecoveryMode(address(account), true);
-        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(3e18)));
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(1.4e18)));
         _drawAs(agent, payee, 10e18);
     }
 

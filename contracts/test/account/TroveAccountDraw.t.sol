@@ -11,7 +11,10 @@ import {TestTroveManager, TestBorrowerOperations, TestSavings, TestSortedTroves}
 /// @notice Task 1.3 acceptance tests (plan section 10, row 1.3; invariants
 ///         section 3.12, security rules section 7.2): I1, I8, I9, I10, I11,
 ///         S8, S9, plus previewDraw reason codes 0-9, the EIP-1271
-///         validation path, and status reporting.
+///         validation path, and status reporting. J3 round (ef11fb1c)
+///         additions: M6 exact-boundary caps, M7 ZeroAmount, M8 exact-floor
+///         boundary, I9 Recovery Mode via TCR (see TestTroveManager),
+///         S17 price-feed zero/revert, I11 same-nonce different-payload.
 /// @dev Harness mirrors TroveAccount.t.sol (same mocks, same main account:
 ///      owner = this test contract, 0.1 BTC collateral, 2000 MUSD debt,
 ///      price 100_000e18 -> ICR ~4.995e18, production policy floor 2.50 /
@@ -149,6 +152,80 @@ contract TroveAccountDrawTest is Test {
         assertEq(account.intentNonce(signer), 0, "reverted drawBySig consumes no nonce");
     }
 
+    // ============ J3 M7: ZeroAmount on draw and drawBySig ============
+
+    function test_M7_zeroAmountDrawReverts() public {
+        _setSession(agent, 1000e18, 500e18, 0, true, false);
+        vm.expectRevert(TroveAccount.ZeroAmount.selector);
+        _drawAs(agent, payee, 0);
+        assertEq(musd.balanceOf(payee), 0, "zero draw pays nothing");
+    }
+
+    function test_M7_zeroAmountDrawBySigRevertsWithoutConsumingNonce() public {
+        uint256 pk = 0xC10C;
+        address signer = vm.addr(pk);
+        _setSession(signer, 1000e18, 500e18, 0, true, false);
+        uint256 deadline = block.timestamp + 10 minutes;
+        // A valid signature for the zero-amount intent: the ZeroAmount
+        // revert must come from _draw, not from a bad signature.
+        bytes memory sig = _signIntent(pk, signer, payee, 0, deadline);
+        vm.expectRevert(TroveAccount.ZeroAmount.selector);
+        account.drawBySig(signer, payee, 0, deadline, sig);
+        assertEq(account.intentNonce(signer), 0, "zero-amount drawBySig consumes no nonce");
+        // The nonce is still 0, so a normal intent signed at nonce 0 works.
+        bytes memory goodSig = _signIntent(pk, signer, payee, 50e18, deadline);
+        account.drawBySig(signer, payee, 50e18, deadline, goodSig);
+        assertEq(account.intentNonce(signer), 1);
+    }
+
+    // ============ J3 M6: exact-boundary session caps ============
+
+    function test_M6_exactBoundarySessionCaps() public {
+        // Gross of a 100e18 draw at 10 bps: 100e18 + 0.1e18 = 100.1e18.
+        // perTx EXACTLY the gross: `gross > perTx` is false, draw
+        // succeeds. (Mutating `>` to `>=` must fail this test.)
+        _setSession(agent, 10000e18, 1001e17, 0, true, false);
+        _drawAs(agent, payee, 100e18);
+        assertEq(musd.balanceOf(payee), 100e18, "perTx == gross: draw succeeds");
+
+        // Budget EXACTLY one gross: first draw succeeds, second reverts
+        // with remaining 0.
+        _setSession(agent, 1001e17, 5000e18, 0, true, false);
+        _drawAs(agent, payee, 100e18);
+        assertEq(musd.balanceOf(payee), 200e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(TroveAccount.OverBudget.selector, uint256(1001e17), uint256(0))
+        );
+        _drawAs(agent, payee, 100e18);
+
+        // Daily limit EXACTLY one gross: first draw succeeds, second
+        // reverts with remaining 0.
+        _setSession(agent, 10000e18, 5000e18, 1001e17, true, false);
+        _drawAs(agent, payee, 100e18);
+        assertEq(musd.balanceOf(payee), 300e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(TroveAccount.OverDaily.selector, uint256(1001e17), uint256(0))
+        );
+        _drawAs(agent, payee, 100e18);
+    }
+
+    // ============ J3 M8: exact-floor boundary (ICR == floorICR) ============
+
+    function test_M8_drawAtExactFloorSucceeds() public {
+        _setSession(agent, 10000e18, 5000e18, 0, true, false);
+        (bool ok,, uint256 icrAfter,) = account.previewDraw(agent, payee, 100e18);
+        assertTrue(ok);
+        assertGt(icrAfter, 0, "preview computes a post-draw ICR");
+        // Set the policy floor EXACTLY to the post-draw ICR: `icr < floor`
+        // is false at equality, so the draw must succeed. (Mutating `<`
+        // to `<=` in _borrowChecked must fail this test.)
+        Policy memory p = _policy();
+        p.floorICR = uint64(icrAfter);
+        account.setPolicy(p);
+        _drawAs(agent, payee, 100e18);
+        assertEq(musd.balanceOf(payee), 100e18, "draw landing exactly on the floor succeeds");
+    }
+
     // ============ I8: non-active trove freezes draws, keeps exits ============
 
     function test_I8_drawRevertsWhenTroveNotActive() public {
@@ -225,14 +302,14 @@ contract TroveAccountDrawTest is Test {
 
     function test_I9_drawRevertsRecoveryModeBeforeMezo() public {
         _setSession(agent, 1000e18, 500e18, 0, true, false);
-        tm.setRecoveryMode(address(account), true);
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
         uint256 debtBefore = _debtOf(address(account));
-        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(3e18)));
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(1.4e18)));
         _drawAs(agent, payee, 10e18);
         assertEq(_debtOf(address(account)), debtBefore, "no Mezo borrow happened");
         assertEq(musd.balanceOf(payee), 0, "payee received nothing");
         // The gate is the RM check, not a broken session: RM off -> same draw works.
-        tm.setRecoveryMode(address(account), false);
+        tm.setTCR(3e18);
         _drawAs(agent, payee, 10e18);
         assertEq(musd.balanceOf(payee), 10e18);
     }
@@ -241,16 +318,16 @@ contract TroveAccountDrawTest is Test {
         uint256 pk = 0xC10C;
         address signer = vm.addr(pk);
         _setSession(signer, 1000e18, 500e18, 0, true, false);
-        tm.setRecoveryMode(address(account), true);
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
         uint256 deadline = block.timestamp + 10 minutes;
         bytes memory sig = _signIntent(pk, signer, payee, 50e18, deadline);
-        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(3e18)));
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(1.4e18)));
         account.drawBySig(signer, payee, 50e18, deadline, sig);
         assertEq(account.intentNonce(signer), 0, "RM-reverted drawBySig consumes no nonce");
     }
 
     function test_I9_repayAndAddCollSucceedInRecoveryMode() public {
-        tm.setRecoveryMode(address(account), true);
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
         account.repay(100e18, address(0), address(0));
         assertEq(_debtOf(address(account)), 1902e18, "repay works in Recovery Mode");
         account.addColl{value: 0.01 ether}(address(0), address(0));
@@ -258,8 +335,43 @@ contract TroveAccountDrawTest is Test {
         assertEq(coll, COLL + 0.01 ether, "addColl works in Recovery Mode");
         // And the draw gate is still up while RM lasts.
         _setSession(agent, 1000e18, 500e18, 0, true, false);
-        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(3e18)));
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(1.4e18)));
         _drawAs(agent, payee, 10e18);
+    }
+
+    // ============ J3 S17: price-feed zero / revert ============
+
+    function test_S17_priceZeroImpliesRecoveryMode() public {
+        _setSession(agent, 1000e18, 500e18, 0, true, false);
+        // On real Mezo price 0 implies TCR 0, i.e. Recovery Mode (reason
+        // 7), not BELOW_FLOOR: the mock models that (getTCR returns 0 at
+        // price 0, checkRecoveryMode is true), so the live reason is 7.
+        pf.set(0);
+        (bool ok, uint8 reason,,) = account.previewDraw(agent, payee, 10e18);
+        assertFalse(ok);
+        assertEq(reason, 7, "price 0 => RECOVERY_MODE, not BELOW_FLOOR");
+        vm.expectRevert(abi.encodeWithSelector(TroveAccount.RecoveryMode.selector, uint256(0)));
+        _drawAs(agent, payee, 10e18);
+        assertEq(musd.balanceOf(payee), 0, "no borrow happened at price 0");
+        // Restoring the price restores normal operation.
+        pf.set(100_000e18);
+        _drawAs(agent, payee, 10e18);
+        assertEq(musd.balanceOf(payee), 10e18);
+    }
+
+    function test_S17_priceFeedRevertPropagates() public {
+        _setSession(agent, 1000e18, 500e18, 0, true, false);
+        vm.mockCallRevert(
+            address(pf),
+            abi.encodeWithSelector(MockPriceFeed.fetchPrice.selector),
+            abi.encodeWithSignature("Error(string)", "price feed down")
+        );
+        // draw reverts with the feed's error instead of returning a reason...
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "price feed down"));
+        _drawAs(agent, payee, 10e18);
+        // ...and so does the preview path.
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "price feed down"));
+        account.previewDraw(agent, payee, 10e18);
     }
 
     // ============ I10: fee = ceil(amount * feeBps / 10000), cap 50 bps ============
@@ -399,6 +511,29 @@ contract TroveAccountDrawTest is Test {
         vm.expectRevert(TroveAccount.BadSig.selector);
         account.drawBySig(signerB, payee, 70e18, deadline, sigB);
         assertEq(account.intentNonce(signerB), 1, "B's replay consumed nothing");
+    }
+
+    function test_I11_sameNonceDifferentPayloadOrder() public {
+        uint256 pk = 0xC10C;
+        address signer = vm.addr(pk);
+        _setSession(signer, 1000e18, 500e18, 0, true, false);
+        uint256 deadline = block.timestamp + 10 minutes;
+        // Both intents are signed at nonce 0, BEFORE either is submitted.
+        // The existing tests prove only same-signature replay; this proves
+        // a second, DIFFERENT payload signed at the same nonce cannot
+        // execute after the first one consumed it.
+        bytes memory sig50 = _signIntent(pk, signer, payee, 50e18, deadline);
+        bytes memory sig70 = _signIntent(pk, signer, payee, 70e18, deadline);
+        assertEq(account.intentNonce(signer), 0);
+        // Submit the 70e18 intent first: it succeeds and consumes nonce 0.
+        account.drawBySig(signer, payee, 70e18, deadline, sig70);
+        assertEq(account.intentNonce(signer), 1);
+        assertEq(musd.balanceOf(payee), 70e18);
+        // The 50e18 intent was signed over nonce 0, which is spent.
+        vm.expectRevert(TroveAccount.BadSig.selector);
+        account.drawBySig(signer, payee, 50e18, deadline, sig50);
+        assertEq(account.intentNonce(signer), 1, "rejected intent consumed no nonce");
+        assertEq(musd.balanceOf(payee), 70e18, "nothing extra was paid");
     }
 
     // ============ S8: no replay across accounts or chains ============
@@ -575,11 +710,11 @@ contract TroveAccountDrawTest is Test {
         assertEq(reason, 6, "6 BELOW_FLOOR");
         assertLt(icrAfter, 25e17);
         // 7 RECOVERY_MODE.
-        tm.setRecoveryMode(address(account), true);
+        tm.setTCR(1.4e18); // TCR < 1.5e18 => global Recovery Mode on real Mezo
         (ok, reason,,) = account.previewDraw(agent, payee, 10e18);
         assertFalse(ok);
         assertEq(reason, 7, "7 RECOVERY_MODE");
-        tm.setRecoveryMode(address(account), false);
+        tm.setTCR(3e18);
         // 8 TROVE_NOT_ACTIVE.
         tm.setStatus(address(account), 3);
         (ok, reason,,) = account.previewDraw(agent, payee, 10e18);
