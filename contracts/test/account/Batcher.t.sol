@@ -695,8 +695,7 @@ contract BatcherTest is Test {
         TroveAccountFactory forkFactory = new TroveAccountFactory(address(forkImpl), forkFeeRecipient, 10);
         Batcher forkBatcher = new Batcher();
 
-        // Open: 0.05 BTC / 2000 MUSD. Composite debt is 2202.2 MUSD
-        // (2000 + 0.1% borrowing fee + 200 gas comp, plan 3.13/G1), so
+        // Open: 0.05 BTC / 2000 MUSD. Composite debt is 2202.0 MUSD (2000 + 0.1% borrowing fee on the drawn amount = 2.0 + 200 gas comp, plan 3.13/G1), so
         // ICR at the stubbed price is ~1.49x and NICR is ~2.27e15:
         // behind #1 (~1.77e15) and #2 (~2.16e15), ahead of #3 (~2.83e15).
         address acct = forkFactory.createAndOpen{value: 0.05 ether}(
