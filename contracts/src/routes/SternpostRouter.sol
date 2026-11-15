@@ -16,7 +16,8 @@ import {IMUSDSavingsRate, IMezoRouter, IGovernorView, IFactoryView} from "../int
 ///      - Every output (sMUSD shares, BTC, surplus) is delivered to the borrower; the caller can never redirect it.
 ///      - All targets (sMUSD, DEX router, pool factory, tokens) are immutable: the route set is a fixed allowlist.
 ///      - Each route can be enabled/disabled per borrower (default: all disabled).
-///      - Slippage: Swap takes an explicit minOut; Loop uses the borrower-signed AddColl amount as minOut.
+///      - Slippage: Swap takes an explicit minOut, bounded below by the borrower's maxSlippageBps
+///        cap against quoteSwap (default 100 bps; C9). Loop uses the borrower-signed AddColl amount as minOut.
 ///      - Reentrancy guard on every route; approvals are exact and reset to zero; the contract ends every call
 ///        holding no MUSD and no BTC it did not hold before (checked).
 contract SternpostRouter {
@@ -27,6 +28,10 @@ contract SternpostRouter {
     /// @dev 2, not more: on Mezo testnet a third leg fails inside the price precompile (observed 2026-10-23).
     uint256 public constant MAX_LEGS = 2;
     uint256 public constant MAX_SWAP_WINDOW = 300; // seconds
+    /// @dev C9: borrower-set cap on swap slippage, in bps. 100 bps = 1% by default.
+    uint16 public constant DEFAULT_MAX_SLIPPAGE_BPS = 100;
+    /// @dev 10_000 bps = 100%: setting the cap to this value opts out of the cap entirely.
+    uint16 public constant MAX_SLIPPAGE_BPS = 10_000;
 
     /// @notice One loop leg. Nonces: withdrawSig at n, healSig and addCollSig both at n+1 (the AddColl consumes n+1,
     ///         so the next leg starts at n+2). `collAmount` is the exact BTC the borrower signed to add and is the
@@ -55,12 +60,16 @@ contract SternpostRouter {
     // ---------------------------------------------------------------- state
     mapping(address => uint8) public routesOf; // borrower => enabled route bitmask
     mapping(address => mapping(address => bool)) public isOperator; // borrower => operator => allowed
+    /// @dev C9: borrower-set max slippage for swaps, in bps. 0 = unset, DEFAULT_MAX_SLIPPAGE_BPS applies.
+    mapping(address => uint16) private _maxSlippageBps;
     uint256 private _lock = 1;
     bool private _acceptBtc;
 
     // ---------------------------------------------------------------- events / errors
     event RoutesSet(address indexed borrower, uint8 mask);
     event OperatorSet(address indexed borrower, address indexed operator, bool allowed);
+    /// @dev C9: emitted when a borrower sets (or changes) their swap slippage cap.
+    event MaxSlippageSet(address indexed borrower, uint16 bps);
     event Saved(address indexed governor, address indexed borrower, uint256 musdIn, uint256 sharesOut);
     event Swapped(address indexed governor, address indexed borrower, uint256 musdIn, uint256 btcOut);
     event LoopLeg(
@@ -75,6 +84,8 @@ contract SternpostRouter {
     error ZeroAmount();
     error BadLegs(uint256 legs);
     error Slippage(uint256 out, uint256 minOut);
+    /// @dev C9: `bps` outside 1..MAX_SLIPPAGE_BPS (0 = unset is not settable; 10_000 opts out).
+    error BadSlippage(uint256 bps);
     error Unsafe(uint256 icrAfter, uint256 floor);
     error Residue();
     error TransferFailed();
@@ -126,6 +137,22 @@ contract SternpostRouter {
         emit OperatorSet(msg.sender, operator, allowed);
     }
 
+    /// @notice C9: set the borrower's own cap on swap slippage, in bps (1..10_000).
+    /// @dev 10_000 opts out of the cap. The cap bounds the `minBtcOut` a caller may pass to
+    ///      `drawAndSwap`: it must be at least `quoteSwap(amount) * (10_000 - bps) / 10_000`.
+    ///      Unset borrowers get DEFAULT_MAX_SLIPPAGE_BPS (100 bps = 1%).
+    function setMaxSlippageBps(uint16 bps) external {
+        if (bps == 0 || bps > MAX_SLIPPAGE_BPS) revert BadSlippage(bps);
+        _maxSlippageBps[msg.sender] = bps;
+        emit MaxSlippageSet(msg.sender, bps);
+    }
+
+    /// @notice C9: the borrower's effective swap slippage cap in bps (their setting, or the default).
+    function maxSlippageBps(address borrower) external view returns (uint16) {
+        uint16 s = _maxSlippageBps[borrower];
+        return s == 0 ? DEFAULT_MAX_SLIPPAGE_BPS : s;
+    }
+
     // ---------------------------------------------------------------- views
     function quoteSwap(uint256 musdIn) public view returns (uint256 btcOut) {
         uint256[] memory a = dex.getAmountsOut(musdIn, _path());
@@ -158,6 +185,13 @@ contract SternpostRouter {
     }
 
     /// @notice Draw `amount` MUSD through `governor` and swap it to BTC for the borrower (min `minBtcOut`).
+    /// @dev C9: `minBtcOut` must also respect the borrower's `maxSlippageBps` cap against `quoteSwap`.
+    ///      The cap is measured against the PRE-swap quote (`minRequired` is captured before `_swap`):
+    ///      on a real vAMM the quote after the swap reflects post-swap reserves (lower), so measuring
+    ///      after the swap would let a minOut below the intended floor pass. Enforcement happens
+    ///      after `_swap` but before any value leaves the router, so a re-entrant call during the
+    ///      swap still surfaces as `Reentrancy`, and a revert unwinds the draw and the swap
+    ///      atomically — a too-loose minOut can never settle and no value can bleed to MEV.
     function drawAndSwap(
         address governor,
         uint256 amount,
@@ -171,10 +205,12 @@ contract SternpostRouter {
         if (minBtcOut == 0) revert Slippage(0, 0);
         uint256 m0 = musd.balanceOf(address(this));
         _draw(governor, amount, withdrawDeadline, withdrawSig, healDeadline, healSig, m0);
+        uint256 minRequired = _minOutFor(b, amount); // pre-swap quote; enforced after the swap (see NatSpec)
         uint256 bb0 = btc.balanceOf(b);
         _swap(amount, minBtcOut, b);
         out = btc.balanceOf(b) - bb0;
         if (out < minBtcOut) revert Slippage(out, minBtcOut);
+        if (minBtcOut < minRequired) revert Slippage(minBtcOut, minRequired);
         if (musd.balanceOf(address(this)) != m0) revert Residue();
         emit Swapped(governor, b, amount, out);
     }
@@ -260,6 +296,14 @@ contract SternpostRouter {
     function _path() internal view returns (IMezoRouter.Route[] memory r) {
         r = new IMezoRouter.Route[](1);
         r[0] = IMezoRouter.Route(address(musd), address(btc), stablePool, dexFactory);
+    }
+
+    /// @dev C9: lowest `minBtcOut` the borrower's slippage cap allows for this `amount`,
+    ///      i.e. `quoteSwap(amount)` less the capped slippage (rounded down, slightly permissive).
+    function _minOutFor(address borrower, uint256 amount) internal view returns (uint256) {
+        uint256 bps = _maxSlippageBps[borrower];
+        if (bps == 0) bps = DEFAULT_MAX_SLIPPAGE_BPS;
+        return quoteSwap(amount) * (MAX_SLIPPAGE_BPS - bps) / MAX_SLIPPAGE_BPS;
     }
 
     function _approve(address spender, uint256 amount) internal {
