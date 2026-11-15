@@ -77,7 +77,7 @@ Mezo charges at least half the gas limit on a reverted tx, so gasUsed on the thr
 
 The first run of the hardened flow stopped after step 2 because of a gas-estimate bug in `createSpendWallet`, fixed in `2e79dfc`. A later re-run stopped after `revoke()`. Before the final run the script called `unfreeze()` ([`0x92743630…`](https://explorer.test.mezo.org/tx/0x92743630495e9a6b099d8c9f365a9b0f8e27ee92783d268e2225a44438c84c8b)). Those earlier partial txs are on-chain but not listed here.
 
-## Routes after a draw, v2 (SternpostRouter `0xEC30280134f06668f35753D640c6760984179674`)
+## Routes after a draw, v2 (SternpostRouter `0xEC30280134f06668f35753D640c6760984179674`, superseded)
 
 v2 reads the oracle price once per loop. On Mezo testnet, calling the price precompile again late in a long tx reverts with empty data, so v1 could not run 2 legs. The price cannot change inside one tx, so the cached value is exact. Legs are capped at 2: a third leg still fails inside Mezo's precompile (the governor's own price read), seen in an `eth_call` simulation.
 

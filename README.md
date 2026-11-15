@@ -20,8 +20,8 @@
 ## TL;DR
 
 - **Problem:** a Mezo `WithdrawMUSD` signature is all-or-nothing. It has no budget, no payee, and nothing stops it pushing your trove toward liquidation.
-- **Solution:** give an app or agent a *budget*, not your keys. The `SternpostGovernor` checks budget, cap, expiry and payee, then re-checks your collateral ratio **after** the withdraw and reverts below your floor ([`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf)).
-- **The gate:** a signature sent straight to Mezo reverts ([`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2)). **Revoke** kills every outstanding signature in one tx ([`0xf0763cf4…`](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb)).
+- **Solution:** give an app or agent a *budget*, not your keys. The `SternpostGovernor` checks budget, cap, expiry and payee, then re-checks your collateral ratio **after** the withdraw and reverts below your floor ([`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf)) (Wave-1 run).
+- **The gate:** a signature sent straight to Mezo reverts ([`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2)) (Wave-1 run). **Revoke** kills every outstanding signature in one tx ([`0xf0763cf4…`](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb)) (Wave-1 run).
 - **Composable:** Keep / Save / Swap / Loop routes, x402 payments from an EIP-1271 SpendWallet, and a Telegram bot.
 - **Proof:** live on Mezo testnet, fork-tested on Mezo testnet *and* mainnet, deployed bytecode matched byte-for-byte to this repo.
 
@@ -101,22 +101,25 @@ The full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts
 
 ABIs: [`shared/abis`](shared/abis). Every address and hash: [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
 
-## Live proof
+## Live proof (Wave-1 run on the superseded deployment, plus the 0.9 `defend()` re-run)
 
-| What it proves | Tx |
-|---|---|
-| Factory deployed | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
-| Safe draw by an app key → SpendWallet | [`0xba4eb129…`](https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523) |
-| Unsafe draw refused (`Unsafe`, ICR 218% < floor 250%) | [`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf) |
-| Direct Mezo submission blocked by the gate | [`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2) |
-| Revoke + nonce burn | [`0xf0763cf4…`](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb) |
-| Pre-revoke signature is dead (`BadHeal`) | [`0x1938e472…`](https://explorer.test.mezo.org/tx/0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f) |
-| Reserve parked in sMUSD | [`0x00a348fc…`](https://explorer.test.mezo.org/tx/0x00a348fc43ea08e94451d4c340ef5af1d3f74ed98738b1bd27fb39f243ffb3e6) |
-| x402 settle from the SpendWallet | [`0x4833c4a8…`](https://explorer.test.mezo.org/tx/0x4833c4a878d7efc6a7d7c47baca8a6901b12dfa7e3ca63d9985a5b565f114140) |
-| x402 purchase of the paid API brief (live API) | [`0x2a6d515c…`](https://explorer.test.mezo.org/tx/0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06) |
-| Save route: draw → sMUSD | [`0x2e775fc4…`](https://explorer.test.mezo.org/tx/0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311) |
-| Swap route: draw → BTC with min-out | [`0x8f1cffa6…`](https://explorer.test.mezo.org/tx/0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91) |
-| Loop route: 2 legs, floor re-checked each leg | [`0x589fd815…`](https://explorer.test.mezo.org/tx/0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1) |
+Every row marked **Wave 1** ran on the Wave-1 deployment, superseded by the 0.9 Classic redeploy on 2026-11-15 (see [Deployments](#deployments-mezo-testnet-chain-31611)). Those rows demonstrate the flows on the pre-0.9 contracts — the 0.9 redeploy changed the governor code, so they are not proof of the current deployment. The only flow re-run on the current 0.9 deployment is `defend()` (last row); the full 0.9 run is in [`judges/TESTNET_TXS.md`](judges/TESTNET_TXS.md).
+
+| What it proves | Deployment | Tx |
+|---|---|---|
+| Factory deployed | 0.9 (current) | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
+| Safe draw by an app key → SpendWallet | Wave 1 (superseded) | [`0xba4eb129…`](https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523) |
+| Unsafe draw refused (`Unsafe`, ICR 218% < floor 250%) | Wave 1 (superseded) | [`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf) |
+| Direct Mezo submission blocked by the gate | Wave 1 (superseded) | [`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2) |
+| Revoke + nonce burn | Wave 1 (superseded) | [`0xf0763cf4…`](https://explorer.test.mezo.org/tx/0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb) |
+| Pre-revoke signature is dead (`BadHeal`) | Wave 1 (superseded) | [`0x1938e472…`](https://explorer.test.mezo.org/tx/0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f) |
+| Reserve parked in sMUSD | Wave 1 (superseded) | [`0x00a348fc…`](https://explorer.test.mezo.org/tx/0x00a348fc43ea08e94451d4c340ef5af1d3f74ed98738b1bd27fb39f243ffb3e6) |
+| x402 settle from the SpendWallet | Wave 1 (superseded) | [`0x4833c4a8…`](https://explorer.test.mezo.org/tx/0x4833c4a878d7efc6a7d7c47baca8a6901b12dfa7e3ca63d9985a5b565f114140) |
+| x402 purchase of the paid API brief (live API) | Wave 1 (superseded) | [`0x2a6d515c…`](https://explorer.test.mezo.org/tx/0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06) |
+| Save route: draw → sMUSD | Wave 1 (superseded) | [`0x2e775fc4…`](https://explorer.test.mezo.org/tx/0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311) |
+| Swap route: draw → BTC with min-out | Wave 1 (superseded) | [`0x8f1cffa6…`](https://explorer.test.mezo.org/tx/0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91) |
+| Loop route: 2 legs, floor re-checked each leg | Wave 1 (superseded) | [`0x589fd815…`](https://explorer.test.mezo.org/tx/0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1) |
+| `defend()` re-run on 0.9: repaid 30 MUSD, ICR 2.3791 → 2.4081 (block 16794538) | 0.9 (current) | [`0x3e57c0b2…`](https://explorer.test.mezo.org/tx/0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2) |
 
 The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judges/TESTNET_TXS.md).
 
@@ -185,7 +188,7 @@ Contracts, SDK and backend counts are from the latest green CI runs; fork and ap
 
 ## Roadmap
 
-Wave 1 is live on Mezo testnet now.
+The 0.9 (Classic) redeploy is live on Mezo testnet now (chain 31611); Wave 1 is superseded.
 
 | When | Milestone |
 |---|---|
