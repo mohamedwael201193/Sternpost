@@ -64,10 +64,30 @@ const TEAM = new Set(
 // Last occurrence wins. Any other token starting with "--" (unknown flag
 // or typo, e.g. --rcp) is a hard error: exit 1 with usage on stderr —
 // never silently fall back to the default RPC / output dir. A space-form
-// flag whose next token starts with "--" is treated as missing (default).
+// flag whose next token is missing (last arg) or starts with "--" is
+// treated as missing (default) — that guard is specified and kept.
+// Empty values are NEVER "unset": an empty value in either form
+// (--rpc=, --out=, --rpc "", --out "") is a hard error. A value starting
+// with "=" (--rpc==URL, --out==DIR) is a hard error. Any other token
+// (positional, or a single-dash typo such as -rpc) is a hard error:
+// error: unexpected argument <token>. The RPC is validated with new URL()
+// before first use, so an invalid URL fails cleanly, never with a stack.
 const USAGE = `Usage: node scripts/muster-report.mjs [--rpc URL | --rpc=URL] [--out DIR | --out=DIR]
   Defaults: RPC from shared/deployments/testnet.json, output
   docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).`;
+function fail(msg) {
+  process.stderr.write(`error: ${msg}\n${USAGE}\n`);
+  process.exit(1);
+}
+function checkValue(flag, value) {
+  if (value === "") {
+    fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
+  }
+  if (value.startsWith("=")) {
+    fail(`invalid value for ${flag}: value must not start with '='`);
+  }
+  return value;
+}
 let rpcArg;
 let outArg;
 const args = process.argv.slice(2);
@@ -76,20 +96,25 @@ for (let i = 0; i < args.length; i++) {
   if (a === "--rpc" || a === "--out") {
     const next = args[i + 1];
     if (next === undefined || next.startsWith("--")) continue; // missing value -> default
-    if (a === "--rpc") rpcArg = next;
-    else outArg = next;
+    if (a === "--rpc") rpcArg = checkValue(a, next);
+    else outArg = checkValue(a, next);
     i++;
   } else if (a.startsWith("--rpc=")) {
-    rpcArg = a.slice("--rpc=".length);
+    rpcArg = checkValue("--rpc", a.slice("--rpc=".length));
   } else if (a.startsWith("--out=")) {
-    outArg = a.slice("--out=".length);
+    outArg = checkValue("--out", a.slice("--out=".length));
   } else if (a.startsWith("--")) {
-    process.stderr.write(`error: unknown flag ${a}\n${USAGE}\n`);
-    process.exit(1);
+    fail(`unknown flag ${a}`);
+  } else {
+    fail(`unexpected argument ${a}`);
   }
-  // any other (non-flag) token is ignored, as before
 }
 const RPC = rpcArg || DEPLOYMENTS.rpc;
+try {
+  new URL(RPC);
+} catch {
+  fail(`invalid value for --rpc: '${RPC}' is not a valid URL`);
+}
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
 const GOVERNOR = DEPLOYMENTS.sternpost.governor;
