@@ -8,10 +8,10 @@ const MEZO = [
   ['PriceFeed', 'BTC price used in every floor check'],
   ['MUSD', 'Drawn, budgeted, paid'],
   ['Governor fee', '10 bps per agent draw, immutable, cap 50 bps'],
-  ['Recovery Mode', 'Draws blocked; repay and add collateral stay open — mainnet fork-tested'],
+  ['Recovery Mode', 'Draws blocked; repay and add collateral stay open — unit-tested (fork tests cover draw/heal/revoke/defend)'],
   ['Bitcoin wallets', 'OrangeKit sign-in for owners — but a Bitcoin wallet cannot draw: Mezo checks ECDSA.recover only'],
   ['Shield (in progress)', 'A stranger tops up your defence for a keeper bounty — owner-set, capped at 5 MUSD per shield'],
-  ['Test suite', '256 passing / 270 distinct / 273 incl. fork / 137 contracts (TESTS.json @ 7b1ffcd; refresh pending)'],
+  ['Test suite', '256 passing / 270 distinct / 273 incl. fork / 137 contracts (TESTS.json @ 3374eee)'],
   ['x402 facilitator', 'Per-request API payments settled on Mezo'],
 ]
 

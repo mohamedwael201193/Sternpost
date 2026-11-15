@@ -11,7 +11,7 @@ export function Agents() {
         <Reveal className="bg-paper p-8 lg:p-10">
           <p className="caps text-magenta">x402 payments</p>
           <h3 className="display mt-2 text-3xl leading-tight">An agent buys an API call with borrowed MUSD</h3>
-          <p className="mt-4 text-ink/75">Draws land in a SpendWallet: an EIP-1271 wallet run by the agent's session key, with a Permit2 budget. It pays per request over x402, and a facilitator pays the gas. The receipt is a settlement transaction on Mezo. Lab: a pay-by-borrow settle of 0.001 MUSD reached demo.vativ.io (settle 0x0b202fa0…6e5f) — labelled lab, not production.</p>
+          <p className="mt-4 text-ink/75">Draws land in a SpendWallet: an EIP-1271 wallet run by the agent's session key, with a Permit2 budget. It pays per request over x402, and a facilitator pays the gas. The receipt is a settlement transaction on Mezo. Lab: a pay-by-borrow settle of 0.001 MUSD reached demo.vativ.io (<a className="mono ink-link text-magenta" href={txUrl('0x0b202fa0103e02847758e2bfdb7d429b95958068b75a3b3e57a2c19221946e5f')} target="_blank" rel="noreferrer">settle 0x0b202fa0…6e5f ↗</a>) — labelled lab, not production.</p>
           <a href={txUrl('0x2a6d515c2f325a917e33a77c7f611ca86ffbd7fb21489d0225f296e4ecf38d06')} target="_blank" rel="noreferrer" className="mono ink-link mt-6 inline-block text-sm text-magenta">Paid API brief, 0x2a6d515c… ↗</a>
         </Reveal>
         <Reveal i={1} className="bg-paper p-8 lg:p-10">

@@ -47,7 +47,7 @@ export function HowItWorks() {
           {[
             ['Gated receive', 'A Governor-addressed signature sent straight to Mezo reverts: the Governor refuses the callback unless it is inside its own draw().'],
             ['120-second window', 'Withdraw signatures expire fast, so a leaked one is worth little.'],
-            ['Nonce-burn revoke', 'One transaction advances your Mezo nonce. Every outstanding signature dies at once. In Recovery Mode draws stay blocked and close waits — repay and add collateral stay open.'],
+            ['Nonce-burn revoke', 'One transaction advances your Mezo nonce. Every outstanding signature dies at once. In Recovery Mode draws stay blocked — repay and add collateral stay open.'],
           ].map(([t, d]) => (
             <div key={t} className="bg-paper p-7"><h4 className="display text-2xl">{t}</h4><p className="mt-3 text-ink/75">{d}</p></div>
           ))}
