@@ -183,6 +183,15 @@
     "facilitator": "https://facilitator.vativ.io",
     "network": "eip155:31611"
   },
+  "sandbox": {
+    "network": "testnet",
+    "chainId": 31611,
+    "status": "not_deployed",
+    "account": null,
+    "dailyCapMusd": "5",
+    "maxDays": 7,
+    "note": "Sandbox auto-approve (task 5.2) is implemented in backend/src/routes/requests.ts (POST /v1/session-requests {sandbox:true}). No sandbox TroveAccount is deployed on testnet yet, so sandbox requests return 503 sandbox_not_configured until SANDBOX_ACCOUNT_ADDRESS is set to a deployed team account. Testnet only; the sandbox flow never touches mainnet (chain 31612)."
+  },
   "liveFlow": {
     "borrower": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
     "app": "0x0508F05fD26811139cf0C3e139FD692Ae7612D1E",

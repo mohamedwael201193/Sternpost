@@ -95,4 +95,25 @@ CREATE TABLE tg_link_codes (
   expires_at TIMESTAMPTZ NOT NULL
 );`,
   },
+  {
+    id: 6,
+    name: "session_requests",
+    sql: `
+CREATE TABLE session_requests (
+  id SERIAL PRIMARY KEY,
+  account TEXT NOT NULL,
+  agent TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  budget TEXT NOT NULL,
+  per_tx TEXT,
+  daily_limit TEXT,
+  days INTEGER NOT NULL,
+  payees JSONB NOT NULL DEFAULT '[]',
+  sandbox BOOLEAN NOT NULL DEFAULT FALSE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX session_requests_account_idx ON session_requests (account);`,
+  },
 ];

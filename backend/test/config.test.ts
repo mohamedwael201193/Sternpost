@@ -34,3 +34,23 @@ describe("config: X402_PAY_TO required (C8)", () => {
     expect(c.CHAIN_ID).toBe(31611);
   });
 });
+
+describe("config: P3 backend vars (tasks 2.4, 2.6, 5.2)", () => {
+  it("rejects a malformed account factory address", () => {
+    expect(() => loadConfig({ X402_PAY_TO: PAY_TO, ACCOUNT_FACTORY_ADDRESS: "0x1" })).toThrow(/ACCOUNT_FACTORY_ADDRESS/);
+  });
+
+  it("rejects a malformed relayer key", () => {
+    expect(() => loadConfig({ X402_PAY_TO: PAY_TO, RELAYER_PRIVATE_KEY: "0x1234" })).toThrow(/RELAYER_PRIVATE_KEY/);
+  });
+
+  it("keeps P3 defaults: no factory/sandbox/relayer until configured, 5 MUSD/day sandbox cap", () => {
+    const c = loadConfig({ X402_PAY_TO: PAY_TO });
+    expect(c.ACCOUNT_FACTORY_ADDRESS).toBeUndefined();
+    expect(c.RELAYER_PRIVATE_KEY).toBeUndefined();
+    expect(c.SANDBOX_ACCOUNT_ADDRESS).toBeUndefined();
+    expect(c.SANDBOX_DAILY_CAP_MUSD).toBe("5");
+    expect(c.SANDBOX_MAX_DAYS).toBe(7);
+    expect(c.TEAM_ADDRESSES).toContain("0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3");
+  });
+});

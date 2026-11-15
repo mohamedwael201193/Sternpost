@@ -9,6 +9,10 @@ import { policiesRoutes } from "./routes/policies.js";
 import { activityRoutes } from "./routes/activity.js";
 import { receiptsRoutes } from "./routes/receipts.js";
 import { demoRoutes, type ChainSnapshot } from "./routes/demo.js";
+import { relayRoutes } from "./routes/relay.js";
+import { musterRoutes, type MusterOpts } from "./routes/muster.js";
+import { sessionRequestRoutes, type SessionRequestOpts } from "./routes/requests.js";
+import type { RelayerDeps } from "./relayer/relayer.js";
 import type { PaywallOpts } from "./x402/paywall.js";
 import type { Indexer } from "./indexer/indexer.js";
 import { HTTPException } from "hono/http-exception";
@@ -24,6 +28,12 @@ export interface AppDeps {
   version?: string;
   indexer?: Pick<Indexer, "tick">;
   telegram?: TelegramRouteOpts;
+  /** POST /v1/relay/draw deps (task 2.4). Absent in tests that do not mount the relayer. */
+  relayer?: RelayerDeps;
+  /** GET /v1/muster opts (task 2.6). */
+  muster?: MusterOpts;
+  /** POST /v1/session-requests opts (task 5.2). */
+  sessionRequests?: SessionRequestOpts;
 }
 
 const originAllowed = (origin: string, list: string[]) =>
@@ -72,6 +82,9 @@ export function createApp(d: AppDeps) {
   app.route("/v1", activityRoutes(d.db));
   app.route("/v1", receiptsRoutes(d.db));
   app.route("/v1", demoRoutes(d.db, d.pay, d.snapshot));
+  if (d.relayer) app.route("/v1", relayRoutes(d.relayer));
+  if (d.muster) app.route("/v1", musterRoutes(d.db, d.muster));
+  if (d.sessionRequests) app.route("/v1", sessionRequestRoutes(d.db, d.sessionRequests));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {
