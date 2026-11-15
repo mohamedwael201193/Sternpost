@@ -801,6 +801,11 @@ contract TroveAccountShieldTest is Test {
         assertEq(collAdded, 0, "no reserve BTC in the fork account");
         uint256 icrAfter = ITM(FORK_TM).getCurrentICR(acct, FORK_PRICE);
         assertGt(icrAfter, icrBefore, "shield improves ICR on the live path");
+        // Band assertion (J2 non-blocking note, round 2): ~1.64 is arithmetically
+        // forced by the asserted repay 202 + stub price + 0.05 coll (1.6391),
+        // so pin it — a drift outside 1.60-1.68 means the live path changed.
+        assertGt(icrAfter, 1.60e18, "fork ICR ~1.64, band low");
+        assertLt(icrAfter, 1.68e18, "fork ICR ~1.64, band high");
         assertEq(IERC20(FORK_MUSD).balanceOf(forkKeeper), 1e18, "stranger keeper is paid the 1 MUSD bounty");
         assertEq(forkAcct.totalBountyPaid(), 1e18);
     }

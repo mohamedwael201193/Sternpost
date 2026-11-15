@@ -57,6 +57,7 @@ contract TroveAccountFactory {
     error ImplementationFeeMismatch(address implementationFeeRecipient, uint16 implementationFeeBps);
     error BadPolicy();
     error BountyTooHigh();
+    error BadCooldown(uint32 cooldownBlocks);
     error ZeroOwner();
     error AlreadyCreated(address account);
     error CloneFailed();
@@ -113,7 +114,10 @@ contract TroveAccountFactory {
     ///      The policy is validated here as defense-in-depth (J3-extra round
     ///      2 item 3): `initialize`/`setPolicy` validation in the account
     ///      remains the primary gate, but a bad policy must never reach a
-    ///      clone. Reverts if this (owner, salt, policy) was already created.
+    ///      clone — including a bad cooldown (`cooldownBlocks` outside
+    ///      1..10_000), which `_validatePolicy` now rejects up front instead
+    ///      of letting the clone deploy and revert in `initialize`.
+    ///      Reverts if this (owner, salt, policy) was already created.
     function createAccount(address owner, bytes32 salt, Policy calldata p) public returns (address account) {
         if (owner == address(0)) revert ZeroOwner();
         _validatePolicy(p);
@@ -154,12 +158,15 @@ contract TroveAccountFactory {
     /// @notice Policy validation, duplicated from TroveAccount (defense in
     ///         depth, J3-extra round 2 item 3): production ordering
     ///         `1.15e18 <= shieldICR < targetICR <= 10e18`,
-    ///         `shieldICR < floorICR`, `bounty <= 5e18`.
+    ///         `shieldICR < floorICR`, `bounty <= 5e18`,
+    ///         `1 <= cooldownBlocks <= 10_000` (same bounds and same
+    ///         `BadCooldown(uint32)` error as TroveAccount._validatePolicy).
     function _validatePolicy(Policy calldata p) internal pure {
         if (
             p.shieldICR < 1.15e18 || p.shieldICR >= p.targetICR || p.targetICR > 10e18 || p.shieldICR >= p.floorICR
         ) revert BadPolicy();
         if (p.bounty > 5e18) revert BountyTooHigh();
+        if (p.cooldownBlocks < 1 || p.cooldownBlocks > 10_000) revert BadCooldown(p.cooldownBlocks);
     }
 
     /// @notice ERC-1167 minimal-proxy init code for `implementation_`.

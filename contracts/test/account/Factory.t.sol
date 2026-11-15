@@ -197,6 +197,36 @@ contract FactoryTest is Test {
         factory.createAccount(owner, SALT, p);
     }
 
+    // --- J3 round 2 re-check: factory must reject a bad cooldown up front ---
+    // Before the fix only TroveAccount._validatePolicy checked cooldownBlocks,
+    // so createAccount deployed the clone and reverted in initialize instead
+    // of never letting the bad policy reach a clone.
+
+    function test_createAccountRejectsCooldownZero() public {
+        Policy memory p = _policy();
+        p.cooldownBlocks = 0; // 0 would disable the anti-farming guard (F3)
+        vm.expectRevert(abi.encodeWithSelector(TroveAccountFactory.BadCooldown.selector, uint32(0)));
+        factory.createAccount(owner, SALT, p);
+    }
+
+    function test_createAccountRejectsCooldownAboveCap() public {
+        Policy memory p = _policy();
+        p.cooldownBlocks = 10_001; // a huge cooldown would brick shield() (F3)
+        vm.expectRevert(abi.encodeWithSelector(TroveAccountFactory.BadCooldown.selector, uint32(10_001)));
+        factory.createAccount(owner, SALT, p);
+    }
+
+    function test_createAccountAcceptsCooldownBounds() public {
+        Policy memory p = _policy();
+        p.cooldownBlocks = 1;
+        address a1 = factory.createAccount(owner, SALT, p);
+        assertTrue(factory.isAccount(a1));
+        p = _policy();
+        p.cooldownBlocks = 10_000;
+        address a2 = factory.createAccount(owner, bytes32(uint256(0xC001)), p);
+        assertTrue(factory.isAccount(a2));
+    }
+
     function test_constructorRevertsOnZeroFeeRecipient() public {
         vm.expectRevert(
             abi.encodeWithSelector(TroveAccountFactory.InvalidFeeRecipient.selector, address(0))
