@@ -1,5 +1,52 @@
 # Live testnet run (Mezo testnet, chain 31611)
 
+## 0.9 Classic redeploy (2026-11-15) — CURRENT deployment
+
+Redeploy bundling gov-chain fixes 0.1–0.7 + 0.5 slippage cap. All receipts
+status 1. Deployer `0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3` (balance
+0.013561434219294365 BTC before, 0.013361428281097685 BTC after — the 0.0002 BTC
+delta is the gas funding for the outside `defend()` EOA; total gas across all
+0.9 txs was ~0.0000000059 BTC). Gas price 146 wei. Source-verified on
+Blockscout (`is_verified: true` for all four) and bytecode-matched — see
+[VERIFY.md](VERIFY.md). Addresses in `shared/deployments/testnet.json`
+(`sternpost.classicRedeploy`).
+
+- Factory `0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8` (fee 10 bps, interim fee recipient = deployer)
+- Governor `0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38` (borrower `0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3`, floor 2.5, defend 1.6)
+- SpendWallet `0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a` (agent `0x62a4773191747994c0368664cA68BC476897c1d9`, expiry 1797330675)
+- Router `0xd6833f811e987f06a1e55a435d4be38c6d4188d4`
+
+| # | Step | Result | Tx |
+|---|------|--------|----|
+| 1 | Deploy SternpostFactory | success, block 16794393, gas 4,773,613 | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
+| 2 | createGovernor(floor 2.5, defend 1.6) | success, block 16794411, gas 3,290,708 | [`0x3d7ea01d…`](https://explorer.test.mezo.org/tx/0x3d7ea01d4016f3eded413568f2859934d8efde0268c78a22f51701b4b51d1e22) |
+| 3 | createSpendWallet(agent, 30d) | success, block 16794411, gas 477,767 | [`0x448c58f3…`](https://explorer.test.mezo.org/tx/0x448c58f3f5d856fb6e636f9c5545eaf55e58b0dd525647711fc92dbdb252112e) |
+| 4 | Deploy SternpostRouter (new factory) | success, block 16794452, gas 2,130,492 | [`0x7c425bc1…`](https://explorer.test.mezo.org/tx/0x7c425bc1be3bd8993d2e8caec32571e312ab09a7e1cc4d7a2e44996a96e81d43) |
+| 5 | MUSD.approve(governor, 30) | success, block 16794518 | [`0x33315ec6…`](https://explorer.test.mezo.org/tx/0x33315ec652f221cb69ba8d6117b57cad3b4ddaf85da6c11c34eeb680a33a2ab3) |
+| 6 | fund(30 MUSD buffer) | success, block 16794520 | [`0xae767aea…`](https://explorer.test.mezo.org/tx/0xae767aea1b2686bb4d3cec71115421771cdb16ee389196cf09fa79631d0217f0) |
+| 7 | rearm(30 MUSD, deadline 1797331170, Mezo nonce 44) | success, block 16794526 | [`0x11d67685…`](https://explorer.test.mezo.org/tx/0x11d67685628ed56919926c8fff70ff6a18c868eb3e2b089b1ac02716cd0eb856) |
+| 8 | setPolicy(2.5, 2.4) to trigger (ICR was 2.377) | success, block 16794530 | [`0x928ac8ca…`](https://explorer.test.mezo.org/tx/0x928ac8ca47df643a111e055447055f679ef5c186a939fa6cf8e39426069f3dc2) |
+| 9 | Fund outside EOA 0.0002 BTC | success, block 16794536 | [`0xdc437afc…`](https://explorer.test.mezo.org/tx/0xdc437afc5e606fda00eb4b48a2737f3c4e447be72fd7ee62b41dd1f6c9f0c8e0) |
+| 10 | **defend() from outside EOA** `0x27aeBa9c609b21Ea4112d8bd0a21E779901D62A6` — repaid 30 MUSD, ICR 2.3791 → 2.4081, `frozen = true`, buffer 30 → 0, Mezo nonce 44 → 45 | success, block 16794538 | [`0x3e57c0b2…`](https://explorer.test.mezo.org/tx/0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2) |
+| 11 | unfreeze() | success, block 16794548 | [`0x0097174d…`](https://explorer.test.mezo.org/tx/0x0097174d37796ab802b199e9aaca6afb6692c137e87f4a2456fcaa5f9412471e) |
+| 12 | setPolicy(2.5, 1.6) restore | success, block 16794550 | [`0xfaf5c4c0…`](https://explorer.test.mezo.org/tx/0xfaf5c4c081210ddd75a7660fe8638437539e6502dc76d86ecde72547eb68cec2) |
+| 13 | MUSD.approve(governor, 30) | success, block 16794552 | [`0x6dec4c68…`](https://explorer.test.mezo.org/tx/0x6dec4c6882b1fba1c8c653b154a03d5f7d08d7bca10351f99a0af750d6dcf54d) |
+| 14 | fund(30 MUSD buffer) restore | success, block 16794553 | [`0xe3c2029f…`](https://explorer.test.mezo.org/tx/0xe3c2029fe799f33b173bc7fc6128498bdf94b53cb45a8fc870be94c4bfae5fed) |
+| 15 | rearm(30 MUSD, deadline 1797331299, Mezo nonce 45) | success, block 16794555 | [`0xe4f15449…`](https://explorer.test.mezo.org/tx/0xe4f15449c17228a484d31de5f59ae398949865141fde92d351b337c095fded81) |
+
+Final state after step 15: `frozen = false`, floor 2.5, defend 1.6, buffer 30
+MUSD, standby live (30 MUSD, nonce 45, deadline 1797331299). Disclosure: the
+defend was triggered by raising the policy line, not by a price move — same
+disclosure as the Wave 1 run. No new trove was opened: the deployer's existing
+testnet trove (coll 0.09038 BTC, debt ~2,500.6 MUSD, ICR 2.376 at the time) was
+used, and the deployer's own MUSD balance (4,182 MUSD) funded the buffer.
+Notes: step 3's broadcast hit the known RPC "method handler crashed" flake on
+the receipt poll — the tx had landed (status 1), so it was verified by receipt
+instead of retried; step 11's receipt likewise came back via the explorer
+after an RPC null response.
+
+## Wave 1 hardened run (2026-10-23, SUPERSEDED deployment)
+
 Real Mezo contracts, no mocks. Produced by `cd sdk && MEZO_TESTNET_PK=... npm run e2e` against the **hardened** deployment of 2026-10-23. The live code is byte-identical to this repo's build; see [VERIFY.md](VERIFY.md).
 
 - Factory `0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980` (deploy tx [`0xfc32c758…`](https://explorer.test.mezo.org/tx/0xfc32c7584b4c14b12f2d171d787b5bc6a5098d79535bd3c967923ef37c53c50c))

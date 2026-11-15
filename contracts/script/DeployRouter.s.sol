@@ -12,7 +12,7 @@ contract DeployRouter is Script {
         require(block.chainid == 31611, "testnet only");
         vm.startBroadcast(vm.envUint("MEZO_TESTNET_PK"));
         r = new SternpostRouter(
-            IFactoryView(0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980),
+            IFactoryView(0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8),
             IBorrowerOperationsSignatures(0xD757e3646AF370b15f32EB557F0F8380Df7D639e),
             IERC20Min(0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503),
             IMUSDSavingsRate(0x6f461c68B2c5492C0F5CCEc5a264d692aA7A8e16),

@@ -51,6 +51,19 @@
   },
   {
     "type": "function",
+    "name": "DEFAULT_MAX_SLIPPAGE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_LEGS",
     "inputs": [],
     "outputs": [
@@ -58,6 +71,19 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_SLIPPAGE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -351,6 +377,25 @@
   },
   {
     "type": "function",
+    "name": "maxSlippageBps",
+    "inputs": [
+      {
+        "name": "borrower",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "musd",
     "inputs": [],
     "outputs": [
@@ -412,6 +457,19 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setMaxSlippageBps",
+    "inputs": [
+      {
+        "name": "bps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -552,6 +610,25 @@
   },
   {
     "type": "event",
+    "name": "MaxSlippageSet",
+    "inputs": [
+      {
+        "name": "borrower",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "bps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OperatorSet",
     "inputs": [
       {
@@ -662,6 +739,17 @@
     "inputs": [
       {
         "name": "legs",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadSlippage",
+    "inputs": [
+      {
+        "name": "bps",
         "type": "uint256",
         "internalType": "uint256"
       }

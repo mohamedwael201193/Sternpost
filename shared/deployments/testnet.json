@@ -4,23 +4,32 @@
   "explorer": "https://explorer.test.mezo.org",
   "sternpost": {
     "SternpostFactory": {
-      "address": "0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980",
-      "tx": "0xfc32c7584b4c14b12f2d171d787b5bc6a5098d79535bd3c967923ef37c53c50c",
-      "block": 16310187,
-      "hardened": true
+      "address": "0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8",
+      "tx": "0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1",
+      "block": 16794393,
+      "hardened": true,
+      "feeBps": 10,
+      "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
     },
-    "governor": "0x9eEa9762ED3c1dE2308c800687558064DFf0B832",
-    "spendWallet": "0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA",
+    "governor": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+    "spendWallet": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
     "previous": {
-      "SternpostFactory": "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
-      "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
-      "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
-      "note": "pre-hardening deployment, superseded"
+      "SternpostFactory": "0x0632A9FeA303c0dB4544BF642a8aD0467C6c6980",
+      "governor": "0x9eEa9762ED3c1dE2308c800687558064DFf0B832",
+      "spendWallet": "0x6330d69EbcA4ea00969a3f8085FE8BD5FC6D41FA",
+      "SternpostRouter": "0xEC30280134f06668f35753D640c6760984179674",
+      "note": "Wave 1 hardened deployment (2026-10-23), superseded by the 0.9 Classic redeploy (gov-chain fixes 0.1-0.7 + 0.5 slippage cap) on 2026-11-15",
+      "preHardening": {
+        "SternpostFactory": "0x29bf11Cd948CE845687A21819b2844d5321432Cf",
+        "governor": "0x48C880DA27b91229d2FcB5992DdC00c9EaCA7fa6",
+        "spendWallet": "0x5433bc33e192d1675807306ef63a92fcD6ac2D87",
+        "note": "pre-hardening deployment, superseded"
+      }
     },
     "SternpostRouter": {
-      "address": "0xEC30280134f06668f35753D640c6760984179674",
-      "tx": "0x846a7d75e4ca4925b58c1cafedbe40a11d61280b30d9ea03721c696e7ffcf61c",
-      "block": 16311860,
+      "address": "0xd6833f811e987f06a1e55a435d4be38c6d4188d4",
+      "tx": "0x7c425bc1be3bd8993d2e8caec32571e312ab09a7e1cc4d7a2e44996a96e81d43",
+      "block": 16794452,
       "routesEnabledMask": 7,
       "maxLegs": 2
     },
@@ -30,6 +39,130 @@
       "block": 16311651,
       "routesEnabledMask": 7,
       "note": "superseded: fetched the price per leg, which fails on Mezo for 2+ legs"
+    },
+    "classicRedeploy": {
+      "date": "2026-11-15",
+      "task": "0.9 Classic redeploy (gov-chain fixes 0.1-0.7 + 0.5 slippage cap)",
+      "deployer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "factory": {
+        "address": "0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8",
+        "tx": "0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1",
+        "block": 16794393,
+        "gasUsed": 4773613
+      },
+      "governor": {
+        "address": "0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38",
+        "tx": "0x3d7ea01d4016f3eded413568f2859934d8efde0268c78a22f51701b4b51d1e22",
+        "block": 16794411,
+        "gasUsed": 3290708,
+        "floorICR": "2.5e18",
+        "defendICR": "1.6e18",
+        "feeBps": 10,
+        "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+      },
+      "spendWallet": {
+        "address": "0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a",
+        "tx": "0x448c58f3f5d856fb6e636f9c5545eaf55e58b0dd525647711fc92dbdb252112e",
+        "block": 16794411,
+        "gasUsed": 477767,
+        "agent": "0x62a4773191747994c0368664cA68BC476897c1d9",
+        "expiry": 1797330675
+      },
+      "router": {
+        "address": "0xd6833f811e987f06a1e55a435d4be38c6d4188d4",
+        "tx": "0x7c425bc1be3bd8993d2e8caec32571e312ab09a7e1cc4d7a2e44996a96e81d43",
+        "block": 16794452,
+        "gasUsed": 2130492
+      },
+      "verified": true,
+      "defendTx": "0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2",
+      "defend": {
+        "tx": "0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2",
+        "block": 16794538,
+        "caller": "0x27aeBa9c609b21Ea4112d8bd0a21E779901D62A6",
+        "callerNote": "fresh single-use outside EOA (not the borrower); funded 0.0002 BTC for gas only",
+        "repaidMUSD": "30000000000000000000",
+        "icrBefore": "2379108551208365491",
+        "icrAfter": "2408120979536199641",
+        "trigger": "policy line raised: setPolicy(2.5e18, 2.4e18) while ICR was 2.377e18 (NOT a price move); restored to (2.5e18, 1.6e18) after",
+        "flow": [
+          {
+            "step": "MUSD.approve(governor, 30)",
+            "hash": "0x33315ec652f221cb69ba8d6117b57cad3b4ddaf85da6c11c34eeb680a33a2ab3",
+            "block": 16794518,
+            "status": "success"
+          },
+          {
+            "step": "fund(30 MUSD buffer)",
+            "hash": "0xae767aea1b2686bb4d3cec71115421771cdb16ee389196cf09fa79631d0217f0",
+            "block": 16794520,
+            "status": "success"
+          },
+          {
+            "step": "rearm(30 MUSD, deadline 1797331170, Mezo nonce 44)",
+            "hash": "0x11d67685628ed56919926c8fff70ff6a18c868eb3e2b089b1ac02716cd0eb856",
+            "block": 16794526,
+            "status": "success"
+          },
+          {
+            "step": "setPolicy(2.5e18, 2.4e18) to trigger",
+            "hash": "0x928ac8ca47df643a111e055447055f679ef5c186a939fa6cf8e39426069f3dc2",
+            "block": 16794530,
+            "status": "success"
+          },
+          {
+            "step": "fund outside EOA 0.0002 BTC",
+            "hash": "0xdc437afc5e606fda00eb4b48a2737f3c4e447be72fd7ee62b41dd1f6c9f0c8e0",
+            "block": 16794536,
+            "status": "success"
+          },
+          {
+            "step": "defend() from outside EOA",
+            "hash": "0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2",
+            "block": 16794538,
+            "status": "success"
+          },
+          {
+            "step": "unfreeze()",
+            "hash": "0x0097174d37796ab802b199e9aaca6afb6692c137e87f4a2456fcaa5f9412471e",
+            "block": 16794548,
+            "status": "success"
+          },
+          {
+            "step": "setPolicy(2.5e18, 1.6e18) restore",
+            "hash": "0xfaf5c4c081210ddd75a7660fe8638437539e6502dc76d86ecde72547eb68cec2",
+            "block": 16794550,
+            "status": "success"
+          },
+          {
+            "step": "MUSD.approve(governor, 30)",
+            "hash": "0x6dec4c6882b1fba1c8c653b154a03d5f7d08d7bca10351f99a0af750d6dcf54d",
+            "block": 16794552,
+            "status": "success"
+          },
+          {
+            "step": "fund(30 MUSD buffer) restore",
+            "hash": "0xe3c2029fe799f33b173bc7fc6128498bdf94b53cb45a8fc870be94c4bfae5fed",
+            "block": 16794553,
+            "status": "success"
+          },
+          {
+            "step": "rearm(30 MUSD, deadline 1797331299, Mezo nonce 45)",
+            "hash": "0xe4f15449c17228a484d31de5f59ae398949865141fde92d351b337c095fded81",
+            "block": 16794555,
+            "status": "success"
+          }
+        ],
+        "finalState": {
+          "frozen": false,
+          "floorICR": "2.5e18",
+          "defendICR": "1.6e18",
+          "bufferMUSD": "30e18",
+          "standbyLive": true,
+          "standbyNonce": 45,
+          "mezoNonce": 45
+        }
+      }
     }
   },
   "mezo": {

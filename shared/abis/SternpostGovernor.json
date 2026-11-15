@@ -51,6 +51,16 @@
         "name": "defendICR_",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "feeBps_",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "feeRecipient_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -61,6 +71,19 @@
   },
   {
     "type": "function",
+    "name": "BURN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DOMAIN_SEPARATOR",
     "inputs": [],
     "outputs": [
@@ -68,6 +91,32 @@
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "GAS_COMPENSATION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_FEE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -237,6 +286,13 @@
   },
   {
     "type": "function",
+    "name": "checkpoint",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "defend",
     "inputs": [],
     "outputs": [],
@@ -302,6 +358,32 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeRecipient",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -840,6 +922,25 @@
   },
   {
     "type": "event",
+    "name": "FeeTaken",
+    "inputs": [
+      {
+        "name": "app",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Funded",
     "inputs": [
       {
@@ -878,6 +979,37 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "HealthChecked",
+    "inputs": [
+      {
+        "name": "icr",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tcr",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "recoveryMode",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "troveStatus",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
       }
     ],
     "anonymous": false
@@ -965,6 +1097,11 @@
   {
     "type": "error",
     "name": "AppNotAuthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadFee",
     "inputs": []
   },
   {
@@ -1074,13 +1211,51 @@
   },
   {
     "type": "error",
+    "name": "RecoveryMode",
+    "inputs": [
+      {
+        "name": "tcr",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "Reentrancy",
     "inputs": []
   },
   {
     "type": "error",
+    "name": "StandbyShortfall",
+    "inputs": [
+      {
+        "name": "repayable",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "signed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "TransferFailed",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TroveNotActive",
+    "inputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
   },
   {
     "type": "error",
