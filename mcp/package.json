@@ -1,0 +1,41 @@
+{
+  "bin": {
+    "sternpost-mcp": "dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "viem": "^2.38.0",
+    "zod": "^4.6.7"
+  },
+  "description": "Sternpost MCP server: read-only tools over the live 0.9 deployment on Mezo testnet (chain 31611). No sends, no mainnet, no keys in any response.",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "eslint": "^9.39.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^5.0.5",
+    "typescript-eslint": "^8.46.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "@sternpost/mcp",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "smoke": "node scripts/mcp-smoke.mjs",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:live": "STERNPOST_LIVE_TESTS=1 vitest run test/live.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "version": "0.1.0"
+}
