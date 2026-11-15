@@ -652,6 +652,7 @@ function main() {
         : "TESTS.json is fresh: no source under contracts/backend/sdk/app/mcp/keeper/scripts changed since the TESTS.json commit and there are no uncommitted changes there; testsStale=false.",
       "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
       `total.passed is a NON-FORK subtotal (${totalPassed}). Passed incl. fork is ${passedInclFork}; distinct declared tests are ${distinctDeclared}. Never quote ${totalPassed} as the whole table total.`,
+      "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), MCP existence, previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic.",
     ],
     // F3 disclosure: nothing reads this file yet. Wiring Proof.tsx /
     // sync-proof to it is a separate pending task — until then this
@@ -779,6 +780,21 @@ function main() {
         "The 0.8 refresh (task/0.8-refresh) must reconcile the two counts; until then both are reported with their sources.",
       staticCheck:
         "Declared counts re-checked against contracts/test/account/*.sol on every generation (164 declared = 161 passed + 3 skipped).",
+      // J2-F1 scope (P3 docs): 161 is the six on-main suites; the
+      // independent re-execution log also ran the unmerged Shield
+      // suite's 14 tests (full run 175/0/3). The artifact is committed
+      // at judges/forge-account.json.
+      scopeNote:
+        "161 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 23, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent re-execution log also ran the unmerged Shield suite's 14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
+      artifact:
+        "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped.",
+      fullRunWithUnmergedShield: {
+        passed: 175,
+        failed: 0,
+        skipped: 3,
+        shieldSuitePassed: 14,
+        log: "~/workspace/mezo-wave2/work/acct-suite-1.4.log (outside the repo)",
+      },
     },
     forks: {
       testnet: forkTestnetStr,
@@ -833,6 +849,14 @@ function main() {
       txCount: 16,
       source: "shared/deployments/testnet.json liveFlow + judges/TESTNET_TXS.md",
       keyRows: {
+        directBypassBlocked: {
+          tx: "0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2",
+          txUrl: txUrl("0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2"),
+          block: 16310268,
+          blockUrl: blockUrl(16310268),
+          revertReason: "Mezo: Sending BTC failed (ActivePool callback rejected by governor.receive gate)",
+          what: "direct submission bypass reverts: app submits the borrower signature straight to Mezo (threat-model threat 1)",
+        },
         draw: {
           tx: "0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523",
           txUrl: txUrl("0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523"),
@@ -868,6 +892,33 @@ function main() {
           blockUrl: blockUrl(16310278),
           what: "rearm() after burn (threat-model threat-9 evidence)",
         },
+      },
+    },
+    // P3-only lab txs with no §7.4 row (f627): pinned from the lab tx log.
+    // Every status/block below was re-checked live via the Blockscout v2
+    // API on 2026-11-15. defendLab is also cited in
+    // docs/proof/accounts-2026-11-15.md ask 1; v3Open is cited nowhere in
+    // the docs — it lives only here. Do not add lab txs that already have
+    // a proofTable row.
+    labExtras: {
+      defendLab: {
+        tx: "0xa876bf24ff8430d0f4099a9b00cd78808db2b5eebf2c70c36417a848be66e791",
+        txUrl: txUrl("0xa876bf24ff8430d0f4099a9b00cd78808db2b5eebf2c70c36417a848be66e791"),
+        block: 16790797,
+        blockUrl: blockUrl(16790797),
+        status: "ok",
+        icrBefore: "2.2929",
+        icrAfter: "2.3392",
+        trigger: "policy line raised, NOT a price move",
+        what: "lab Classic defend(): policy-line triggered repay, ICR 2.2929 → 2.3392 (lab contract; the 0.9 deployment defend is deployments.defend)",
+      },
+      v3Open: {
+        tx: "0x4577b127e9e85d08916948d6c434b8600be1687f9392c9a507bbfdaf5327208b",
+        txUrl: txUrl("0x4577b127e9e85d08916948d6c434b8600be1687f9392c9a507bbfdaf5327208b"),
+        block: 16791561,
+        blockUrl: blockUrl(16791561),
+        status: "ok",
+        what: "lab TroveAccountV3 open (lab contract, not the production account)",
       },
     },
   };

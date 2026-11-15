@@ -1,18 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-15T19:34:03Z",
-  "sourceCommit": "f627cfa0490013826d3111a55c7e5bd2f1668187",
+  "generatedAt": "2026-11-15T19:39:53.963Z",
+  "sourceCommit": "448d96c12b854377887274424e61b1f96eb81a26",
   "network": "Mezo testnet",
   "chainId": 31611,
   "explorer": "https://explorer.test.mezo.org",
   "notes": [
     "Testnet only (chain 31611). Sternpost is NOT deployed on mainnet; mainnet rows below are fork-tested, never broadcast.",
     "TESTS.json is stale: it predates the 1.3/closeAccount/1.6 merges. testsStale=true until task/0.8-refresh re-runs FORK=1 make test-all.",
-    "Every \u00a77.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
+    "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
     "total.passed is a NON-FORK subtotal (256). Passed incl. fork is 273; distinct declared tests are 270. Never quote 256 as the whole table total.",
-    "Canonical schema is the generator schema (schemaVersion 1) from the proof-json branch at 780c179 (scripts/generate-proof.mjs). This file is hand-assembled in that schema until that branch merges and the generator can regenerate it; the old _meta + flat-sections shape is retired - do not reintroduce it.",
-    "This revision: file introduced in f627cfa; schema conformed and metadata corrected in the J3/J2 fix commit on task/p3-docs (see git log). generatedAt is the real write time of this revision.",
-    "Never hand-edit a number without updating its source here."
+    "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), MCP existence, previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic."
   ],
   "consumers": {
     "count": 0,
@@ -114,7 +112,7 @@
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b",
     "stale": true,
     "testsStale": true,
-    "staleReason": "TESTS.json commit 7b1ffcd is not in this repo's history (work-clone run) \u2014 freshness cannot be verified; re-run `make test-all`",
+    "staleReason": "TESTS.json commit 7b1ffcd is not in this repo's history (work-clone run) — freshness cannot be verified; re-run `make test-all`",
     "refreshPending": "task/0.8-refresh",
     "total": {
       "passed": 256,
@@ -235,7 +233,7 @@
     "reconciliationNote": "total.passed is a NON-FORK subtotal; fork suites are listed separately and never added twice (TESTS.json forkNote)."
   },
   "accountSuite": {
-    "source": "forge test --match-path \"test/account/*\" on current main, lead-verified at the closeAccount merge (2026-11-15). Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH \u2014 the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked against the tree on every run (count of `function test*` per file).",
+    "source": "forge test --match-path \"test/account/*\" on current main, lead-verified at the closeAccount merge (2026-11-15). Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH — the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked against the tree on every run (count of `function test*` per file).",
     "passed": 161,
     "failed": 0,
     "skipped": 3,
@@ -281,7 +279,7 @@
     "reconciliationNote": "NOT a subset of TESTS.json: TESTS.json contracts-account (32 passed / 2 skipped) is the older 0.8 suite slice. The 0.8 refresh (task/0.8-refresh) must reconcile the two counts; until then both are reported with their sources.",
     "staticCheck": "Declared counts re-checked against contracts/test/account/*.sol on every generation (164 declared = 161 passed + 3 skipped).",
     "scopeNote": "161 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 23, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent re-execution log also ran the unmerged Shield suite's 14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
-    "artifact": "judges/forge-account.json - forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae (\"fix(readme): disclose lost 7b1ffcd in TESTS.json; commit 161/0/3 forge artifact\"); totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped.",
+    "artifact": "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped.",
     "fullRunWithUnmergedShield": {
       "passed": 175,
       "failed": 0,
@@ -311,25 +309,25 @@
   },
   "contracts": {
     "troveAccountFactory": {
-      "status": "code+tests only \u2014 NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
       "source": "contracts/src/account/TroveAccountFactory.sol",
       "deployedAddress": null,
       "deployTx": null
     },
     "troveAccount": {
-      "status": "code+tests only \u2014 NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
       "source": "contracts/src/account/TroveAccount.sol",
       "deployedAddress": null,
       "deployTx": null
     },
     "batcher": {
-      "status": "code+tests only \u2014 NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
       "source": "contracts/src/account/Batcher.sol",
       "deployedAddress": null,
       "deployTx": null
     },
     "radar": {
-      "status": "code+tests only \u2014 NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
       "source": "contracts/src/account/Radar.sol",
       "deployedAddress": null,
       "deployTx": null
@@ -350,7 +348,7 @@
         "what": "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD debt, ICR 1.9255; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)"
       },
       "note": "Production createAndOpen needs task 1.9 (deploy + demo account).",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.1"
+      "source": "WAVE2_WIN_PLAN.md §4.1"
     },
     {
       "id": "session-opened",
@@ -365,7 +363,7 @@
         "batchTxUrl": "https://explorer.test.mezo.org/tx/0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31"
       },
       "note": "Production session-open needs task 1.9.",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.3 step 1"
+      "source": "WAVE2_WIN_PLAN.md §4.3 step 1"
     },
     {
       "id": "two-agents-draw",
@@ -391,8 +389,8 @@
           }
         ]
       },
-      "note": "Do NOT claim two independent txs in one block \u2014 the lab tried 8 times and the node always put them in consecutive blocks.",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.2"
+      "note": "Do NOT claim two independent txs in one block — the lab tried 8 times and the node always put them in consecutive blocks.",
+      "source": "WAVE2_WIN_PLAN.md §4.2"
     },
     {
       "id": "drawbysig-batch",
@@ -409,7 +407,7 @@
         "what": "One tx, two Drawn events (60 + 40 MUSD), no owner signature; intentNonce of each agent = 1; sessions spent 60/40"
       },
       "note": "Batch limit is 2 draws per tx on testnet (block gas limit 10M; a 6M-limit attempt ran out of gas).",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.3"
+      "source": "WAVE2_WIN_PLAN.md §4.3"
     },
     {
       "id": "x402-pay-by-borrow",
@@ -437,7 +435,7 @@
         }
       },
       "note": "Borrow happens BEFORE signing (the facilitator settles on its own after funds are held). Mainnet settle NOT exercised.",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.4"
+      "source": "WAVE2_WIN_PLAN.md §4.4"
     },
     {
       "id": "shield-by-stranger",
@@ -450,10 +448,10 @@
         "txUrl": "https://explorer.test.mezo.org/tx/0xf6de87bcbc0b745cb62d283d8f696d7c5f6c90b107faca1b6d451d7b8d095f4b",
         "block": 16790917,
         "blockUrl": "https://explorer.test.mezo.org/block/16790917",
-        "what": "Random EOA called shield(): unparked 187.4 sMUSD, repaid 185.9 MUSD, ICR 1.4649 \u2192 1.59999, 1 MUSD bounty paid. No signature, no nonce."
+        "what": "Random EOA called shield(): unparked 187.4 sMUSD, repaid 185.9 MUSD, ICR 1.4649 → 1.59999, 1 MUSD bounty paid. No signature, no nonce."
       },
-      "note": "Policy-line triggered (the oracle precompile cannot be pushed on testnet), disclosed \u2014 same disclosure as the Classic defend.",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.5"
+      "note": "Policy-line triggered (the oracle precompile cannot be pushed on testnet), disclosed — same disclosure as the Classic defend.",
+      "source": "WAVE2_WIN_PLAN.md §4.5"
     },
     {
       "id": "unsafe-draw-revert",
@@ -471,10 +469,10 @@
         "block": 16310267,
         "blockUrl": "https://explorer.test.mezo.org/block/16310267",
         "what": "Classic (Wave 1, superseded): draw(900 MUSD) reverted, Unsafe(icrAfter=2.183e18, floor=2.5e18)",
-        "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy \u2014 precedent only, not the production account"
+        "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account"
       },
       "note": "Production unsafe-draw simulation needs task 1.9 (eth_call revert BELOW_FLOOR).",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.5; shared/deployments/testnet.json liveFlow"
+      "source": "WAVE2_WIN_PLAN.md §4.5; shared/deployments/testnet.json liveFlow"
     },
     {
       "id": "recovery-mode-fork-test",
@@ -486,9 +484,9 @@
         "tx": null,
         "what": "test_recovery_mode_semantics in lab/test/Lab.t.sol (fork); no named production fork test is mapped in TESTS.json"
       },
-      "forkSuites": "TESTS.json fork suites exist (testnet 10/10, mainnet 7/1) but do not name a Recovery Mode test \u2014 the 0.8 refresh must map test names",
+      "forkSuites": "TESTS.json fork suites exist (testnet 10/10, mainnet 7/1) but do not name a Recovery Mode test — the 0.8 refresh must map test names",
       "note": "Production Recovery Mode fork test needs the 1.x fork suite on current main.",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.5, \u00a77.4"
+      "source": "WAVE2_WIN_PLAN.md §4.5, §7.4"
     },
     {
       "id": "revoke",
@@ -510,10 +508,10 @@
         "drawAfterRevokeBlock": 16310277,
         "drawAfterRevokeBlockUrl": "https://explorer.test.mezo.org/block/16310277",
         "what": "Classic (Wave 1, superseded): revoke() + nonce burn, then a draw with the pre-revoke signature reverts BadHeal (nonce burned)",
-        "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy \u2014 precedent only, not the production account"
+        "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account"
       },
       "note": "Production revoke-then-draw revert needs task 1.9.",
-      "source": "WAVE2_WIN_PLAN.md \u00a77.4; shared/deployments/testnet.json liveFlow"
+      "source": "WAVE2_WIN_PLAN.md §7.4; shared/deployments/testnet.json liveFlow"
     },
     {
       "id": "claim-collateral",
@@ -522,14 +520,14 @@
       "evidenceScope": "lab, not Wave 2 production",
       "production": null,
       "lab": {
-        "txTruncated": "0xff2ca3c4\u2026d95c",
+        "txTruncated": "0xff2ca3c4…d95c",
         "fullHashAvailable": false,
         "block": 16791587,
         "blockUrl": "https://explorer.test.mezo.org/block/16791587",
         "what": "Redemption incident: a bot fully redeemed the V3 minimum trove (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral()"
       },
-      "note": "The redemption tx hash is cited TRUNCATED in the plan \u2014 never expand it. Production claimCollateral needs task 1.9 (or a fork test only, labelled, if no bot cooperates).",
-      "source": "WAVE2_WIN_PLAN.md \u00a74.6"
+      "note": "The redemption tx hash is cited TRUNCATED in the plan — never expand it. Production claimCollateral needs task 1.9 (or a fork test only, labelled, if no bot cooperates).",
+      "source": "WAVE2_WIN_PLAN.md §4.6"
     },
     {
       "id": "close",
@@ -542,7 +540,7 @@
         "what": "Fork rehearsal only (lab/mainnet/rehearsal_output2.txt, nothing broadcast): close() 324,307 gas then sweepBtc 29,233 gas returned all collateral"
       },
       "note": "Production closeAccount (status 2, BTC/MUSD returned) needs task 1.9.",
-      "source": "WAVE2_WIN_PLAN.md \u00a73.6"
+      "source": "WAVE2_WIN_PLAN.md §3.6"
     },
     {
       "id": "smusd-yield",
@@ -555,10 +553,10 @@
         "distributeTxUrl": "https://explorer.test.mezo.org/tx/0xe52099be84a5a5e1f565199e7c47d1f746355dbd1cd320ec80634629ee78a34a",
         "unparkTx": "0x3d11f63b2ee44aa89faac16d60d3be93361128c35f1bda4e7ecbf19f224e8ac4",
         "unparkTxUrl": "https://explorer.test.mezo.org/tx/0x3d11f63b2ee44aa89faac16d60d3be93361128c35f1bda4e7ecbf19f224e8ac4",
-        "what": "PCV.distributeMUSD() moved yieldIndex 163.15398 \u2192 163.17529; unpark(1) returned 1 MUSD + 1.333 MUSD yield"
+        "what": "PCV.distributeMUSD() moved yieldIndex 163.15398 → 163.17529; unpark(1) returned 1 MUSD + 1.333 MUSD yield"
       },
       "note": "Testnet yield is manual (anyone can trigger distributeMUSD); never quote a testnet APY. Mainnet rate is read-only.",
-      "source": "WAVE2_WIN_PLAN.md \u00a73.10"
+      "source": "WAVE2_WIN_PLAN.md §3.10"
     },
     {
       "id": "btc-key-owner",
@@ -572,7 +570,7 @@
         "what": "TroveAccountV3 owned by an OrangeKit Safe of a test BTC key"
       },
       "note": "Production Bitcoin-wallet owner path needs task 1.9 + the OrangeKit flow.",
-      "source": "WAVE2_WIN_PLAN.md \u00a77.3"
+      "source": "WAVE2_WIN_PLAN.md §7.3"
     }
   ],
   "threatModel": {
@@ -591,6 +589,14 @@
     "txCount": 16,
     "source": "shared/deployments/testnet.json liveFlow + judges/TESTNET_TXS.md",
     "keyRows": {
+      "directBypassBlocked": {
+        "tx": "0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2",
+        "txUrl": "https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2",
+        "block": 16310268,
+        "blockUrl": "https://explorer.test.mezo.org/block/16310268",
+        "revertReason": "Mezo: Sending BTC failed (ActivePool callback rejected by governor.receive gate)",
+        "what": "direct submission bypass reverts: app submits the borrower signature straight to Mezo (threat-model threat 1)"
+      },
       "draw": {
         "tx": "0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523",
         "txUrl": "https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523",
@@ -625,141 +631,28 @@
         "block": 16310278,
         "blockUrl": "https://explorer.test.mezo.org/block/16310278",
         "what": "rearm() after burn (threat-model threat-9 evidence)"
-      },
-      "drawAfterRevokeReverts": {
-        "tx": "0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f",
-        "txUrl": "https://explorer.test.mezo.org/tx/0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f",
-        "block": 16310277,
-        "blockUrl": "https://explorer.test.mezo.org/block/16310277",
-        "revertReason": "BadHeal(): nonce burned by revoke",
-        "what": "pre-revoke draw reverts: BadHeal() - nonce burned by revoke"
       }
     }
   },
-  "extensions": {
-    "note": "P3-only sections the generator schema (v1) does not yet model. Kept here so docs/proof/* keep a single source; they are NOT canonical keys - fold them into the schema (or drop them) when the generator lands, do not invent competing top-level sections. `productionAccount` from the old shape is dropped: the same fact lives in canonical `contracts` (all four: code+tests only, not deployed) and in `proofTable` statuses.",
-    "lab": {
-      "batchTwoAgents": {
-        "batcher": "0x306CD9a34EE7a7f40080296A47373373367f895c",
-        "block": 16791585,
-        "status": "ok",
-        "tx": "0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31"
-      },
-      "btcKeySetSession": {
-        "block": 16791668,
-        "note": "headless only; a real wallet popup is untested",
-        "safe": "0xF80d208dE67b2E551ffE1d6c3d13E877D86Eb270",
-        "status": "ok",
-        "tx": "0x325e0e96cf6225d331891a0e7b1598b8d0ec6b4235fcfd64caf59dc4ffbe13a8"
-      },
-      "defendLab": {
-        "block": 16790797,
-        "icrAfter": "2.3392",
-        "icrBefore": "2.2929",
-        "status": "ok",
-        "trigger": "policy line raised, NOT a price move",
-        "tx": "0xa876bf24ff8430d0f4099a9b00cd78808db2b5eebf2c70c36417a848be66e791"
-      },
-      "drawAgent1": {
-        "block": 16790745,
-        "status": "ok",
-        "tx": "0xae193088ece52b71170c4821f7ab09737040b516917b91d7748e6f11a238701d"
-      },
-      "drawAgent2": {
-        "block": 16790746,
-        "status": "ok",
-        "tx": "0x690b7e088ca95555cb048c6f06e874656c481549f246daeb73b7b2754862f2e6"
-      },
-      "note": "Lab contracts (TroveAccountV3 lab deployments), NOT the production contracts. Full hashes from the lab tx log; every status/block below was re-checked live via the Blockscout v2 API on 2026-11-15.",
-      "open": {
-        "account": "0xABeb9514f5e4c0E116b679d03aabFdc6fd523F6E",
-        "block": 16790703,
-        "collateralBTC": "0.06",
-        "debtMUSD": "1800",
-        "status": "ok",
-        "tx": "0x0a3f4c0de6132f9abb030a8a1a07238ce6e5169cf699e796d9e028906db50545"
-      },
-      "redemptionIncident": {
-        "block": 16791587,
-        "note": "Full hash is not in this repo or the lab tx log, so no explorer link is claimed. Proof is the fork test testFork_claimCollateralAfterSimulatedRedemption.",
-        "tx": null,
-        "txTruncatedInRecord": "0xff2ca3c4\u2026d95c"
-      },
-      "shield": {
-        "block": 16790917,
-        "status": "ok",
-        "trigger": "policy line raised, NOT a price move",
-        "tx": "0xf6de87bcbc0b745cb62d283d8f696d7c5f6c90b107faca1b6d451d7b8d095f4b"
-      },
-      "v3Open": {
-        "block": 16791561,
-        "status": "ok",
-        "tx": "0x4577b127e9e85d08916948d6c434b8600be1687f9392c9a507bbfdaf5327208b"
-      },
-      "x402OutsideBorrow": {
-        "block": 16791504,
-        "status": "ok",
-        "tx": "0xc74eb3cf1e24d2963f03fa958c553643791c0a8094b837764b55591b2596154f"
-      },
-      "x402OutsideSettle": {
-        "amountMUSD": "0.001",
-        "block": 16791507,
-        "service": "https://demo.vativ.io/",
-        "status": "ok",
-        "tx": "0x0b202fa0103e02847758e2bfdb7d429b95958068b75a3b3e57a2c19221946e5f"
-      },
-      "x402OwnBorrow": {
-        "block": 16790934,
-        "status": "ok",
-        "tx": "0xaa087a2ce640e30cce75f96d6c816e60d2ecf3c31598e0e0af814a6b5be1495f"
-      },
-      "x402OwnSettle": {
-        "block": 16790941,
-        "status": "ok",
-        "tx": "0x7876c7b74708877c4537ae3652210b36b328146ba28939ed5231dd4dbc47e342"
-      },
-      "yieldDistribute": {
-        "block": 16791429,
-        "note": "manual PCV.distributeMUSD() call, not automatic yield",
-        "status": "ok",
-        "tx": "0xe52099be84a5a5e1f565199e7c47d1f746355dbd1cd320ec80634629ee78a34a"
-      },
-      "yieldUnparkClaims": {
-        "block": 16791432,
-        "status": "ok",
-        "tx": "0x3d11f63b2ee44aa89faac16d60d3be93361128c35f1bda4e7ecbf19f224e8ac4"
-      }
+  "labExtras": {
+    "defendLab": {
+      "tx": "0xa876bf24ff8430d0f4099a9b00cd78808db2b5eebf2c70c36417a848be66e791",
+      "txUrl": "https://explorer.test.mezo.org/tx/0xa876bf24ff8430d0f4099a9b00cd78808db2b5eebf2c70c36417a848be66e791",
+      "block": 16790797,
+      "blockUrl": "https://explorer.test.mezo.org/block/16790797",
+      "status": "ok",
+      "icrBefore": "2.2929",
+      "icrAfter": "2.3392",
+      "trigger": "policy line raised, NOT a price move",
+      "what": "lab Classic defend(): policy-line triggered repay, ICR 2.2929 → 2.3392 (lab contract; the 0.9 deployment defend is deployments.defend)"
     },
-    "fees": {
-      "agentDrawBps": 10,
-      "feeBpsCap": 50,
-      "feeRecipient0_9": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
-      "feeRecipientNote": "interim (deployer); immutable at deployment",
-      "liveFeeBearingDrawTx": null,
-      "liveFeeNote": "No production fee-bearing draw transaction exists yet; the fee rule is proven by tests (test_constructorRevertsWhenFeeBpsAboveCap, test_I10_feeRecipientImmutable, test_fee_goesToRecipient_budgetAndIcrOnGross)."
-    },
-    "mcp": {
-      "exists": false,
-      "installCount": null,
-      "note": "No MCP package in this repo; no install count is claimed."
-    },
-    "outsideUsers": {
-      "count": 0,
-      "note": "No outside trove holder, no outside agent session. Muster roll is a placeholder (app route /muster, task 3.10 not built). Zero is reported as zero."
-    },
-    "previewDrawFix": {
-      "commit": "511f18b84aefc11c5c034d8609de6c85a79d28da",
-      "item": "0.1 previewDraw double count",
-      "tests": [
-        "testFuzz_projectedMatchesIcrWithPending",
-        "test_preview_matches_icr_with_pending",
-        "test_previewDrawMatchesRealDrawIcr",
-        "test_preview_matchesOutcome"
-      ]
-    },
-    "mainnetPilot": {
-      "note": "No mainnet transaction exists. See docs/proof/mainnet-2026-11-15.md. Never render a MAINNET PILOT badge.",
-      "status": "not started"
+    "v3Open": {
+      "tx": "0x4577b127e9e85d08916948d6c434b8600be1687f9392c9a507bbfdaf5327208b",
+      "txUrl": "https://explorer.test.mezo.org/tx/0x4577b127e9e85d08916948d6c434b8600be1687f9392c9a507bbfdaf5327208b",
+      "block": 16791561,
+      "blockUrl": "https://explorer.test.mezo.org/block/16791561",
+      "status": "ok",
+      "what": "lab TroveAccountV3 open (lab contract, not the production account)"
     }
   }
 }
