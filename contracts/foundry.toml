@@ -11,14 +11,14 @@ evm_version = "paris"
 fs_permissions = [{ access = "read-write", path = "./deployments" }]
 
 [fuzz]
-runs = 256
+runs = 1000
 
 [invariant]
 runs = 64
 depth = 32
 
 [profile.ci.fuzz]
-runs = 512
+runs = 1000
 
 [rpc_endpoints]
 mezo_testnet = "https://rpc.test.mezo.org"

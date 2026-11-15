@@ -34,7 +34,8 @@ interface ICollSurplusPool {
 ///      `shieldICR < targetICR`. The lab enforced the opposite ordering
 ///      (`floor < shield < target`); do NOT mix lab numbers with production
 ///      policy values. Production defaults: floor 2.50e18, shield 1.60e18,
-///      target 2.00e18, bounty 1e18, cooldown 20.
+///      target 2.00e18, bounty 1e18, cooldown 20 blocks (validated:
+///      1..10_000 blocks, `_validatePolicy`).
 ///      Fee parity (adversarial review of task 1.1, finding F2): the Factory
 ///      passes its own feeRecipient/feeBps into `initialize`, which reverts
 ///      `FeeMismatch` unless they equal the implementation immutables. The
@@ -51,7 +52,20 @@ interface ICollSurplusPool {
 ///      bounded repay (G1/I6), reserve-BTC addColl, bounty anti-farming
 ///      + cooldown (I7), `TroveNotActive` for non-active troves (I8),
 ///      continues in Recovery Mode (I9). `needed()` below reports the
-///      ICR view shield uses, with reason 2 RANK wired by 1.4/1.5.
+///      ICR view shield uses, with reason 2 RANK wired by 1.4/1.5 and
+///      reason 3 TCR reported too (1.4 fix round: `needed()` used to
+///      omit the TCR trigger).
+///      Shield bounty policy (1.4 fix round, findings F1/F2/F8): a bounty
+///      is paid only when the shield moves at least `MIN_BOUNTY_VALUE_MOVED`
+///      (10 MUSD) of value AND (the ICR improves by >= 0.5pp OR the value
+///      moved is >= 10x the bounty); the per-call bounty is further capped
+///      by the remaining lifetime aggregate cap `MAX_TOTAL_BOUNTY` (50 MUSD
+///      per trove — the cap binds the bounty only, never the shield itself).
+///      The cooldown does NOT bind the owner (an owner shielding their own
+///      trove pays the bounty out of their own funds, so there is nothing
+///      to farm); and an owner about to close arms the exit (`armExit()`),
+///      which makes `shield()` revert `ExitArmed` so no keeper can
+///      front-run the close to extract a bounty.
 contract TroveAccount is ITroveAccount {
     // ---- Immutables (implementation bytecode; shared by all clones) ----
     IBO public immutable bo;
@@ -73,6 +87,10 @@ contract TroveAccount is ITroveAccount {
     uint256 public constant MAX_RANK_STEPS = 25;
     uint256 public constant MCR = 1.1e18;
     uint256 public constant MIN_ICR_IMPROVEMENT = 0.5e18 / 100; // 0.5 pp: bounty gate (I7)
+    uint256 public constant MIN_BOUNTY_VALUE_MOVED = 10e18; // min value a shield must move to earn ANY bounty (F1)
+    uint256 public constant MAX_TOTAL_BOUNTY = 50e18; // lifetime aggregate bounty cap per trove, 10x the per-call cap (F8)
+    uint32 public constant MIN_COOLDOWN_BLOCKS = 1; // cooldown 0 would disable the anti-farming guard (F3)
+    uint32 public constant MAX_COOLDOWN_BLOCKS = 10_000; // a huge cooldown would brick shield() (F3)
     uint256 public constant TCR_SHIELD_THRESHOLD = 1.55e18; // Recovery Mode approaching: TCR trigger
     uint256 public constant NICR_SCALE = 1e20; // canonical on-chain NICR scale: coll * 1e20 / debt
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
@@ -97,6 +115,8 @@ contract TroveAccount is ITroveAccount {
     mapping(address => uint32) public genCounter;
     mapping(address => uint256) public intentNonce;
     uint64 public lastShieldBlock;
+    uint256 public totalBountyPaid; // lifetime MUSD bounties paid from this trove (F8 aggregate cap)
+    bool public exitArmed; // owner-armed exit: shield() reverts while set (F2 front-run guard)
     uint256 private _lock;
 
     struct Session {
@@ -127,6 +147,9 @@ contract TroveAccount is ITroveAccount {
     error NotStressed(uint256 icr);
     error NothingToDo();
     error Cooldown(uint256 blocksLeft);
+    error BadCooldown(uint32 cooldownBlocks);
+    error ZeroPrice();
+    error ExitArmed();
     error Expired();
     error BadSig();
     error BadNonce();
@@ -162,6 +185,7 @@ contract TroveAccount is ITroveAccount {
     event Shielded(
         address indexed keeper, uint256 repaid, uint256 collAdded, uint256 icrBefore, uint256 icrAfter, uint8 reason, uint256 bountyPaid
     );
+    event ExitArmedSet(bool armed);
     event Parked(uint256 amount);
     event Unparked(uint256 amount);
     event YieldClaimed(uint256 amount);
@@ -313,6 +337,10 @@ contract TroveAccount is ITroveAccount {
     ///         trove in Recovery Mode (Mezo blocks closing in RM).
     function closeAccount() external onlyOwner nonReentrant {
         _revokeAll();
+        if (exitArmed) {
+            exitArmed = false;
+            emit ExitArmedSet(false);
+        }
         uint8 st = status();
         if (st == 1) {
             uint256 price = pf.fetchPrice();
@@ -342,7 +370,9 @@ contract TroveAccount is ITroveAccount {
 
     /// @notice Replace the policy. Validates production ordering:
     ///         `1.15e18 <= shieldICR < targetICR <= 10e18`,
-    ///         `shieldICR < floorICR`, `bounty <= 5e18`.
+    ///         `shieldICR < floorICR`, `bounty <= 5e18`, and
+    ///         `1 <= cooldownBlocks <= 10_000` (F3: 0 would disable the
+    ///         cooldown, a huge value would brick `shield()`).
     function setPolicy(Policy calldata p) external onlyOwner {
         _validatePolicy(p);
         policy = p;
@@ -416,6 +446,29 @@ contract TroveAccount is ITroveAccount {
     ///         live only when `s.epoch == sessionEpoch`.
     function revokeAll() external onlyOwner {
         _revokeAll();
+    }
+
+    /// @notice Arm the exit: while armed, `shield()` reverts `ExitArmed`,
+    ///         so no keeper can front-run the owner's `closeAccount()` to
+    ///         extract a bounty from a trove the owner is about to close
+    ///         (F2). Arm at least one block before closing: an arm and a
+    ///         close in the same block still leave room for a shield tx
+    ///         ordered between them. Disarm with `disarmExit()` if the
+    ///         owner changes their mind; `closeAccount()` clears the flag.
+    ///         CHOSEN POLICY: the guard is owner-armed, not automatic —
+    ///         the contract cannot know the owner is about to close until
+    ///         they say so, and an unarmed close stays raceable the way any
+    ///         pre-close keeper action is (the shield still improves the
+    ///         trove; it just may pay a bounty).
+    function armExit() external onlyOwner {
+        exitArmed = true;
+        emit ExitArmedSet(true);
+    }
+
+    /// @notice Disarm the exit (owner changed their mind; shields work again).
+    function disarmExit() external onlyOwner {
+        exitArmed = false;
+        emit ExitArmedSet(false);
     }
 
     function _revokeAll() internal {
@@ -514,17 +567,35 @@ contract TroveAccount is ITroveAccount {
     ///         taking MUSD from the balance first then unparking from sMUSD,
     ///         and closes the remaining gap with `addColl` from reserve BTC
     ///         (`address(this).balance`). Never draws. Continues in Recovery
-    ///         Mode (I9). Bounty (I7): paid only when the ICR improves by at
-    ///         least 0.5 pp OR `valueAdded` (repaid MUSD + reserve-BTC value)
-    ///         is at least 10x the bounty, and at most once per
-    ///         `cooldownBlocks`; `lastShieldBlock` advances only on success.
+    ///         Mode (I9). The price is read ONCE and reused for the ICR,
+    ///         TCR, rank walk, repay and collateral legs (F6); a zero price
+    ///         reverts `ZeroPrice` instead of shielding blind (F4). The
+    ///         collateral leg re-reads the neighbour hints AFTER the repay,
+    ///         because the repay moved NICR (F7). Bounty (I7): paid only
+    ///         when the shield moves at least `MIN_BOUNTY_VALUE_MOVED`
+    ///         (10 MUSD) of value AND the ICR improves by at least 0.5 pp
+    ///         OR `valueAdded` (repaid MUSD + reserve-BTC value) is at
+    ///         least 10x the bounty — a micro-shield that barely moves the
+    ///         trove earns nothing (F1) — and at most the remaining
+    ///         lifetime aggregate cap `MAX_TOTAL_BOUNTY` (F8). The cooldown
+    ///         binds keepers only: the owner may shield their own trove
+    ///         inside the window (F1 rescue lockout — the bounty would come
+    ///         out of their own funds, so there is nothing to farm).
+    ///         While the owner has armed the exit (`armExit()`), shield()
+    ///         reverts `ExitArmed` (F2). `lastShieldBlock` advances only
+    ///         on success.
     function shield() external nonReentrant returns (uint256 repaid, uint256 collAdded) {
         uint8 st = status();
         if (st != 1) revert TroveNotActive(st);
-        if (lastShieldBlock != 0 && block.number < uint256(lastShieldBlock) + policy.cooldownBlocks) {
+        if (exitArmed) revert ExitArmed();
+        if (
+            msg.sender != owner && lastShieldBlock != 0
+                && block.number < uint256(lastShieldBlock) + policy.cooldownBlocks
+        ) {
             revert Cooldown(uint256(lastShieldBlock) + policy.cooldownBlocks - block.number);
         }
         uint256 price = pf.fetchPrice();
+        if (price == 0) revert ZeroPrice();
         (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(address(this));
         uint256 debt = principal + interest;
         uint256 icrBefore = debt == 0 ? type(uint256).max : coll * price / debt;
@@ -533,7 +604,7 @@ contract TroveAccount is ITroveAccount {
         uint8 reason;
         if (icrBefore < policy.shieldICR) {
             reason = 1;
-        } else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt)) {
+        } else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt, price)) {
             reason = 2;
         } else if (tcr < TCR_SHIELD_THRESHOLD) {
             reason = 3;
@@ -566,12 +637,15 @@ contract TroveAccount is ITroveAccount {
         }
 
         // Collateral leg: recompute the gap after the repay (debt moved),
-        // then addColl from reserve BTC, capped by the reserve.
+        // then addColl from reserve BTC, capped by the reserve. The repay
+        // moved NICR, so the hints are refreshed here (F7): the neighbours
+        // for the new position can differ from the ones the repay used.
         (uint256 collNow, uint256 principal2, uint256 interest2,,,) = tm.getEntireDebtAndColl(address(this));
         uint256 debtNow = principal2 + interest2;
         uint256 collWanted2 = _collWanted(collNow, debtNow, 0, price);
         uint256 reserve = address(this).balance;
         if (collWanted2 > 0 && reserve > 0) {
+            (up, lo) = _hints();
             collAdded = collWanted2 > reserve ? reserve : collWanted2;
             bo.addColl{value: collAdded}(up, lo);
         }
@@ -582,15 +656,21 @@ contract TroveAccount is ITroveAccount {
         uint256 valueAdded = repaid + collAdded * price / 1e18;
         uint256 bountyPaid;
         if (
-            policy.bounty > 0
+            policy.bounty > 0 && valueAdded >= MIN_BOUNTY_VALUE_MOVED
                 && (
                     (icrAfter > icrBefore && icrAfter - icrBefore >= MIN_ICR_IMPROVEMENT)
                         || valueAdded >= 10 * uint256(policy.bounty)
                 )
         ) {
+            // Aggregate cap (F8): the per-call bounty is capped by what the
+            // lifetime cap has left. A capped-out trove still shields — it
+            // just pays no bounty.
+            uint256 remainingCap = MAX_TOTAL_BOUNTY > totalBountyPaid ? MAX_TOTAL_BOUNTY - totalBountyPaid : 0;
+            uint256 bountyDue = policy.bounty < remainingCap ? policy.bounty : remainingCap;
             uint256 balAfter = musd.balanceOf(address(this));
-            if (balAfter >= policy.bounty) {
-                bountyPaid = policy.bounty;
+            if (bountyDue > 0 && balAfter >= bountyDue) {
+                bountyPaid = bountyDue;
+                totalBountyPaid += bountyDue;
                 _safeTransfer(msg.sender, bountyPaid);
             }
         }
@@ -671,19 +751,23 @@ contract TroveAccount is ITroveAccount {
     ///         `reason`: 0 none, 1 ICR, 2 RANK (rank is wired by 1.4/1.5:
     ///         `minDebtAhead > 0` and the bounded walk proves debt ahead
     ///         `< minDebtAhead` while ICR is below target but at/above the
-    ///         shield line). TCR (reason 3) is a shield-only trigger and is
-    ///         not reported here. Repay is bounded by the minimum net debt
-    ///         + gas comp (G1).
+    ///         shield line), 3 TCR (`TCR < 155%`, Recovery Mode approaching
+    ///         — reported here since the 1.4 fix round, mirroring `shield()`;
+    ///         a TCR trigger with zero repay/coll wanted means the shield
+    ///         would revert `NothingToDo`). Repay is bounded by the minimum
+    ///         net debt + gas comp (G1). The trigger chain is the same as
+    ///         `shield()`'s, in the same order.
     function needed() external view returns (uint256 icr, uint256 repayWanted, uint256 collWanted, uint8 reason) {
         uint256 price = pf.fetchPrice();
         (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(address(this));
         uint256 debt = principal + interest;
         icr = debt == 0 ? type(uint256).max : coll * price / debt;
-        if (icr >= policy.targetICR) return (icr, 0, 0, 0);
+        uint256 tcr = tm.getTCR(price);
         repayWanted = _repayWanted(coll, debt, price);
         collWanted = _collWanted(coll, debt, repayWanted, price);
         if (icr < policy.shieldICR) reason = 1;
-        else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt)) reason = 2;
+        else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt, price)) reason = 2;
+        else if (tcr < TCR_SHIELD_THRESHOLD) reason = 3;
     }
 
     /// @notice Dry-run a draw without state changes. `reasonCode`: 0 OK,
@@ -772,6 +856,9 @@ contract TroveAccount is ITroveAccount {
                 || p.shieldICR >= p.floorICR
         ) revert BadPolicy();
         if (p.bounty > MAX_BOUNTY) revert BountyTooHigh();
+        if (p.cooldownBlocks < MIN_COOLDOWN_BLOCKS || p.cooldownBlocks > MAX_COOLDOWN_BLOCKS) {
+            revert BadCooldown(p.cooldownBlocks);
+        }
     }
 
     function _open(uint256 debt, address upHint, address loHint, uint256 minDebtAhead) internal {
@@ -779,10 +866,13 @@ contract TroveAccount is ITroveAccount {
         if (minDebtAhead > type(uint128).max) revert BadPolicy();
         uint256 minNet = bo.minNetDebt();
         if (debt < minNet) revert BelowMinDebt(debt, minNet);
+        // The price is read ONCE here (F6): the rank walk and the opening
+        // ICR below share it, so `open` never reads the feed twice.
+        uint256 price = pf.fetchPrice();
         if (minDebtAhead > 0) {
             // Nominal ICR of the trove about to open, canonical 1e20 scale.
             uint256 nicr = debt == 0 ? type(uint256).max : msg.value * NICR_SCALE / debt;
-            (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, minDebtAhead);
+            (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, minDebtAhead, price);
             // Plan 3.7(c): step exhaustion is treated as safe (exposure was
             // never proven), so revert only on a COMPLETED walk that proves
             // debtAhead < minDebtAhead.
@@ -791,16 +881,18 @@ contract TroveAccount is ITroveAccount {
         bo.openTrove{value: msg.value}(debt, upHint, loHint);
         opened = true;
         policy.minDebtAhead = uint128(minDebtAhead);
-        uint256 icr = tm.getCurrentICR(address(this), pf.fetchPrice());
+        uint256 icr = tm.getCurrentICR(address(this), price);
         emit TroveOpened(owner, msg.value, debt, icr);
     }
 
     /// @notice Repay wanted to restore ICR to `targetICR`: `x = debt -
     ///         coll*price/target`, bounded by `debt - 200 - minNetDebt`
     ///         (G1/I6): a shield repay can never leave net debt below
-    ///         `minNetDebt` + gas compensation.
+    ///         `minNetDebt` + gas compensation. A zero price makes the
+    ///         repay undefined: nothing is wanted (F4 — `shield()` reverts
+    ///         `ZeroPrice` outright; this guard keeps the view honest).
     function _repayWanted(uint256 coll, uint256 debt, uint256 price) internal view returns (uint256) {
-        if (debt == 0) return 0;
+        if (debt == 0 || price == 0) return 0;
         uint256 minNet = bo.minNetDebt();
         uint256 cap = debt > GAS_COMP + minNet ? debt - GAS_COMP - minNet : 0;
         uint256 targetDebt = coll * price / policy.targetICR;
@@ -826,10 +918,11 @@ contract TroveAccount is ITroveAccount {
     /// @notice Rank stress (plan 3.7): the bounded walk proves redeemable
     ///         debt ahead of this trove's NICR is `< minDebtAhead`. Step
     ///         exhaustion is treated as safe (exposure unproven), exactly as
-    ///         in `_open` / plan 3.7(c).
-    function _rankStressed(uint256 coll, uint256 debt) internal view returns (bool) {
+    ///         in `_open` / plan 3.7(c). The price is passed in by the
+    ///         caller (read once per call path, F6), never re-read here.
+    function _rankStressed(uint256 coll, uint256 debt, uint256 price) internal view returns (bool) {
         uint256 nicr = debt == 0 ? type(uint256).max : coll * NICR_SCALE / debt;
-        (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, policy.minDebtAhead);
+        (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, policy.minDebtAhead, price);
         return complete && debtAhead < policy.minDebtAhead;
     }
 
@@ -838,18 +931,19 @@ contract TroveAccount is ITroveAccount {
     ///         redeemable troves (ICR >= 110%) with a NICR below ours, stop
     ///         when the accumulated debt reaches `minDebtAhead`, when a trove
     ///         with NICR >= ours is reached, or after MAX_RANK_STEPS.
+    ///         The price is a parameter (F6): callers read it once and pass
+    ///         it in, so the walk never re-reads the feed.
     /// @return debtAhead Redeemable debt ahead of the hypothetical trove.
     /// @return complete True only when the walk PROVED the total: it stopped
     ///         because a trove with NICR >= ours was reached, the list ended,
     ///         or a zero-debt entry was hit. False when MAX_RANK_STEPS was
     ///         exhausted (plan 3.7(c): treat as safe, exposure unproven) or
     ///         when the accumulated debt already reached `minDebtAhead`.
-    function _debtAheadForNICR(uint256 nicr, uint256 minDebtAhead)
+    function _debtAheadForNICR(uint256 nicr, uint256 minDebtAhead, uint256 price)
         internal
         view
         returns (uint256 debtAhead, bool complete)
     {
-        uint256 price = pf.fetchPrice();
         address cur = sortedTroves.getLast();
         uint256 steps;
         while (cur != address(0) && steps < MAX_RANK_STEPS) {

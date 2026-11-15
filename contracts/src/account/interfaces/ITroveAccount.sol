@@ -5,18 +5,22 @@ pragma solidity 0.8.24;
 /// @dev Production defaults: floorICR 2.50e18, shieldICR 1.60e18,
 ///      targetICR 2.00e18, bounty 1e18 (1 MUSD), minDebtAhead 10_000e18 on
 ///      mainnet and 0 on testnet, cooldownBlocks 20. Validation lives in
-///      TroveAccount.initialize / setPolicy (task 1.2):
+///      TroveAccount.initialize / setPolicy (task 1.2, 1.4 fix round):
 ///      1.15e18 <= shieldICR < targetICR <= 10e18, shieldICR < floorICR,
-///      bounty <= 5e18.
+///      bounty <= 5e18, 1 <= cooldownBlocks <= 10_000. Shield bounty
+///      policy (1.4 fix round): a bounty is paid only when the shield
+///      moves >= 10e18 of value AND (ICR improves >= 0.5pp OR value moved
+///      >= 10x the bounty); lifetime aggregate bounty cap is 50e18 per
+///      trove, and the cap binds the bounty only, never the shield.
 ///      WARNING: the lab enforced the opposite ordering (floor < shield <
 ///      target). Do not mix lab numbers with production policy values.
 struct Policy {
     uint64 floorICR; // agent draws may not leave ICR below this (1e18 scale)
     uint64 shieldICR; // keeper may act when ICR is below this
     uint64 targetICR; // keeper restores ICR to this
-    uint128 bounty; // MUSD paid to the keeper per effective shield, hard cap 5e18
+    uint128 bounty; // MUSD paid to the keeper per effective shield, hard cap 5e18; lifetime aggregate cap 50e18 per trove; no bounty unless the shield moves >= 10e18 of value
     uint128 minDebtAhead; // MUSD of debt that must sit ahead of us in redemption order; 0 = rank trigger off
-    uint32 cooldownBlocks; // min blocks between shields (default 20)
+    uint32 cooldownBlocks; // min blocks between shields (default 20; validated 1..10_000); the owner is exempt
 }
 
 /// @notice Minimal surface the Factory needs from a TroveAccount clone.
