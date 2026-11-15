@@ -69,9 +69,13 @@ export default function ProveIt() {
         <p className="text-sm leading-relaxed mt-3">
           Since this snapshot the suites have grown. On main (3271231), the merged Shield work
           (task/1.4-shield, 3271231) adds 18 declared tests to the account suite — 219 declared
-          there, up from 201 on 5e4f924 (Shield 14 → 29, Factory 23 → 26), plus 10 invariant
-          functions — and its pass counts will land with the <span className="mono">TESTS.json</span>{' '}
-          refresh, which is pending. The backend declares 80 tests, and the sdk declares 12.
+          there, up from 201 on 5e4f924 (Shield 14 → 29, Factory 23 → 26); the suite also declares
+          10 invariant functions. At <span className="mono">6c69ab2</span> — before the Shield merge,
+          when the account suite was those five files (164 declared) — the suite ran 161 passed ·
+          0 failed · 3 skipped (<span className="mono">judges/forge-account.json</span>); the 3 skipped
+          are the env-gated fork tests. Pass counts for the current 219-declared suite will land with
+          the <span className="mono">TESTS.json</span>{' '} refresh, which is pending. The backend
+          declares 80 tests, and the sdk declares 12.
         </p>
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">
