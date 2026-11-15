@@ -2,3 +2,4 @@
 > @sternpost/mcp@0.1.0 lint
 > eslint src test
 
+exit=0

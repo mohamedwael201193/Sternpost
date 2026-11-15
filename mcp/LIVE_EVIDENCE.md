@@ -1,18 +1,25 @@
 # MCP live evidence (plan §5.1)
 
 Recorded 2026-11-15 ~22:15 EET by the fix-round builder (commit d101fcc).
+Fork section rewritten and counts corrected 2026-11-16 ~01:05 EET by the
+fix-round-4 builder (this commit): the fork values below are re-quoted
+from the committed 16804623 run (`fork-run.log` + `fork-addresses.json`),
+and the test counts now match the committed logs.
 RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 Classic deployment.
 Fork: anvil fork of testnet (see "Fork evidence" below).
 
 ## Test runs
 
-- `npm test` (offline): **36/36 pass** — schemas, real 402 fixture,
+- `npm test` (offline): **45 passed / 19 skipped (64 total)** — schemas, real 402 fixture,
   snapshots, refusal reasons, key-not-in-output, stdio transport,
   the Radar-rank fallback (stubbed Radar rank() throws → direct walk,
   `rankSource: "walk"`), the pay refill branch (partial-balance
   full-amount draw, reverted receipt → `REFILL_FAILED`, refill-leg
-  preview), the mainnet gate on pay/request_session/helpers, and the
-  agent-key output guard. (32/32 before this fix round; +4 new tests.)
+  preview, receipt-wait throw → sent hash kept, draw-send throw →
+  send-outcome-unknown wording), the mainnet gate on pay/request_session/helpers, and the
+  agent-key output guard (content-hash cache: a same-mtime in-place
+  replacement is detected; `fail()` redacts keyed RPC URLs).
+  (41 passed / 19 skipped before this fix round; +4 new tests.)
 - `npm run test:live`: **13/13 pass** — every tool returns a real
   on-chain read, plus the honest refusal shapes where no TroveAccount
   exists yet (see below), plus the deployed Wave 2 Radar's on-chain
@@ -20,7 +27,7 @@ Fork: anvil fork of testnet (see "Fork evidence" below).
   failed part-way: the radar rank walk's 50-wide read batches throttled
   the public RPC (`eth_chainId` timeouts in the following tests). Fixed
   by 10-wide batches + 100 ms pauses + a 30 s viem timeout; the final
-  run is 13/13 (vitest-live.log, Duration 59.82 s) including the Radar
+  run is 13/13 (vitest-live.log, Duration 59.32 s) including the Radar
   test. No 7/12 or 12/12 intermediate log is committed — the attempt
   counts above are not logged, only the fix and the final 13/13 run are.
 - `npm run smoke` (live): **PASSED** — initialize ok, `tools/list`
@@ -158,54 +165,71 @@ Spend wallet (bonus read, not a tool) — `0x4F87…9Ee4a`:
 
 ## Fork evidence
 
-`npm run fork` (final run 2026-11-15 ~21:51 UTC): anvil fork of
-testnet at **block 16804167**, live BTC price stubbed per plan G3
-(**$65,140.95225**), TroveAccount impl
-`0x9084ba1feb86b1b1d30c0619383be90b0ae52aae`, Factory
-`0x4e8b6c2f669173b6be365285cbe906804309a4e4`, Radar
-`0xe558159617b0199bb328f1a4d4baaa23e6fcc7c7`, account
-`0x07d7525dF8a377D40b96A827bE99b3b795Ca7b61` (owner
-`0x4BE9978EbFDB79566295fBCEf06b9C19BBF50F69`, agent
-`0x08746589c1105719e257cB1D42f4DCC560A1E9F1` — fresh throwaway keys,
+`npm run fork` (final run 2026-11-15 22:18–22:23 UTC): anvil fork of
+testnet at **block 16804623**, live BTC price stubbed per plan G3
+(**$65,178.10013** — `65178100130000000000000` wei, `fork-run.log`:
+"[fork-setup] live BTC price: 65178100130000000000000"), TroveAccount impl
+`0xba8569cdf2d0934b48e8c5d83a86745ba69afacc`, Factory
+`0x7fa48d09d1d34b8709209edd8d24cec13d705683`, Radar
+`0xc7b7a7d7434bdca4f9d9bbbbd625e475af242370`, account
+`0x8d21b3530a5Dc3eC540222c68D449A7A4ad3E504` (owner
+`0x5925aA83a3305762Eb6Cd723318850cF80D094B1` — per
+`fork-addresses.json`; the log itself never prints the owner address —
+agent `0x4978A27e68870c8861650a62b17d3ce5B25B29dC` — fresh throwaway keys,
 fork-only, key file at `/tmp/sternpost-fork-agent.json`, never in the
 repo). `createAndOpen` tx
-`0x1de393942ba89e4056c1ac365c730e2ace1f6d107100a779a7733cc1ab77ac11`
+`0x47d37a5763aeed876ec37c065640608b5d4bdaa97b446e95beab87ac6435acaf`
 (0.095 BTC collateral, 2100 MUSD debt, policy floor 2.5 / shield 1.6 /
-target 2.0, bounty 1, minDebtAhead 1000, cooldown 20); session tx
-`0x9e39fc320883d85e70b275ed774c94f6741bd1806f531b3485d6ce41aae77ed5`
+target 2.0, bounty 1, minDebtAhead 1000, cooldown 20); `setSession` tx
+`0x8d3f3cb87fa11c1bf69fe3a6321b15bf9e1564ce32a2850455fd607fe57f8038`
 (agent, budget 10, perTx 5, daily 5, 7 days, canSignX402); borrowed
-MUSD swept to 0 so `pay` must refill. **Fork tests 6/6 pass, fork
-smoke PASSED.**
+MUSD swept to 0 so `pay` must refill (2100 MUSD before the sweep, 0
+after). **Fork tests 6/6 pass, fork smoke PASSED** (Duration 274.16 s).
 
 - `balance` (full §5.1 shape): session `active: true`, budget `10`,
   spent `0`, remaining `10`, perTx `5`, dailyRemaining `5`, expiry
-  `2026-11-22T21:47:25.000Z`, `canSignX402: true`; health
-  `icr: 2.688150150640275`, floor `2.5`, `recoveryMode: false`,
+  `2026-11-22T22:19:09.000Z`, `canSignX402: true`; health
+  `icr: 2.6896831199286995`, floor `2.5`, `recoveryMode: false`,
   `troveStatus: "active"`; `accountMusd: "0"` (before the pay test).
   After the pay test the smoke's `balance` shows `spent: "0.001001"`,
-  `remaining: "9.998999"`, `accountMusd: "0.001"` — the refill draw's
-  0.001 MUSD + 0.000001 fee, on-chain.
+  `remaining: "9.998999"`, `dailyRemaining: "4.998999"`,
+  `accountMusd: "0.001"` — the refill draw's 0.001 MUSD + 0.000001 fee,
+  on-chain.
 - `radar`: **rank 260 / 280, `rankSource: "radar"`, `complete: true`,
-  `steps: 260`**, `tcr: 2.3395435563399802`,
-  `icr: 2.688148810241433`, `frontierIcr: 1.2718587034831528`,
-  `debtAheadMusd: 427781912.189685191074008317`, shield `armed: true`,
-  triggers `ICR<1.6` + `RANK`. The deployed (fork) Radar's on-chain
-  `rank()` completed here — it needed the 300 s RPC timeout (see below).
+  `steps: 260`**, test-run `tcr: 2.340876465821719`,
+  `icr: 2.6896831199286995`; smoke-run `tcr: 2.3408762645370538`,
+  `frontierIcr: 1.2725832108018411`,
+  `debtAheadMusd: 427782179.273366131827571246`, frontier trove
+  `0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d` (the whale — same
+  frontier as the lab run), frontier debt `426004410.300547270144956706`
+  MUSD, shield `armed: true`, triggers `ICR<1.6` + `RANK`. The deployed
+  (fork) Radar's on-chain `rank()` completed here — it needed the 300 s
+  RPC timeout (see below).
 - `pay` dryRun: real demo.vativ.io 402, `status: "dry_run"`,
   amount `0.001`, preview `allowed: true`, reason `""`,
-  `icrAfter: "2.688147640211773472"`, fee `0.000001`, `refillTx: null`.
+  `refillTx: null`. The smoke's dryRun prints the preview values:
+  `icrAfter: "2.689680546701174919"`, fee `0.000001`.
 - `pay` full flow: **refill draw tx
-  `0x954477a03e19b6f3f0750d771074a374050d5ad03d77ac2da2051a35ce62c0df`
-  (real tx on the fork, agent → account, 0.001 MUSD)**; then the live
-  facilitator's verdict: **`status: "refused"`, `reason:
-  "VERIFY_FAILED"`, `settleTx: null`, `responseStatus: 402`** — the
-  fork-only account has no code on live testnet, so its EIP-1271
-  Permit2 signature cannot verify there. This is the expected honest
-  outcome; `paid` needs a live TroveAccount.
-- `request_session`: `requestId: req_fbe82180f739506c`, agent
-  `0x08746589c1105719e257cB1D42f4DCC560A1E9F1`, `status: "pending"`,
+  `0x5741e14a5009ae4c412582b458b3c16b2beb3f97a861f3712540f7ecfd14763b`
+  (real tx on the fork, agent → account, 0.001 MUSD, block 16804634,
+  22:23:35 UTC)**; then the live facilitator's verdict: **`status:
+  "refused"`, `reason: "VERIFY_FAILED"`, `settleTx: null`,
+  `responseStatus: 402`** — the fork-only account has no code on live
+  testnet, so its EIP-1271 Permit2 signature cannot verify there. This
+  is the expected honest outcome; `paid` needs a live TroveAccount.
+- `request_session`: smoke request `requestId: req_410cf557aaaba9c1`,
+  agent `0x4978A27e68870c8861650a62b17d3ce5B25B29dC`, `status: "pending"`,
   `backend: "unavailable"`, `keyFileCreated: false` (reused the fork
-  key).
+  key). (The fork test's own request id is not printed in the log —
+  no `console.log` for it — so no fork-test request id is quoted here.)
+
+Test-name coverage (fork): the fork log's verbose list names only 5 of
+the 6 fork tests — `env is a prepared fork (account + agent key + fork
+RPC)` never appears by name in `fork-run.log` (grep: 0 hits). The 6th
+test exists in `test/fork.test.ts` and the log's summary line records
+`Tests 6 passed (6)`; the 6/6 rests on that summary line plus the 5
+named passes, not on 6 named lines. No fork re-run was done in this
+round, so the log was not re-captured to name it.
 
 Two fork failures on the way here, both fixed (not hidden):
 
@@ -239,17 +263,22 @@ with Claude Code installed.
 
 ## Full raw outputs
 
-See `mcp/evidence/` in this repo: `vitest-offline.log` (36/36),
-`vitest-live.log` (13/13), `smoke-live.log` (live smoke),
+See `mcp/evidence/` in this repo: `vitest-offline.log` (45 passed /
+19 skipped, 64 total, Duration 4.14 s),
+`vitest-live.log` (13/13, Duration 59.32 s), `smoke-live.log` (live smoke),
 `live-values.json` (governor / preview_draw / x402_quote / radar-walk /
 spend-wallet values above), `live-radar.json` (deployed Radar rank()
 through the tool + `getBytecode` on all four Wave 2 contracts),
 `fork-run.log` + `fork-addresses.json` (final fork run: 6/6 + fork
-smoke), `typecheck.log`, `lint.log`, `build.log` (verification runs).
+smoke), `typecheck.log`, `lint.log`, `build.log` (verification runs,
+each with an `exit=0` trailer — re-run against the fixed HEAD code in
+this round; the previous logs predated the 88f57f6 code change).
 Test-name coverage: the committed vitest logs were run with
-`--reporter=verbose`, so every test is named (offline 36, live 13,
-fork 6); the counts rest on the logs' summary lines, which agree with
-the `it(` counts in the test files. No `/tmp` pointers: the logs live in the repo. Note:
+`--reporter=verbose`, so every test is named (offline 45 passed + 19
+skipped, live 13; fork 6 — with the one exception noted in the Fork
+section: the fork log names only 5 of its 6 tests by name, and the 6th
+rests on the summary line); the counts rest on the logs' summary lines,
+which agree with the `it(` counts in the test files. No `/tmp` pointers: the logs live in the repo. Note:
 `fork-run.log` contains anvil's startup banner with the 10 well-known
 anvil default test private keys and the default test mnemonic — those are public Foundry test values,
 not secrets, and both are redacted in the committed log (see the

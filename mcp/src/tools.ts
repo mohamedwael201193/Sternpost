@@ -1,4 +1,5 @@
-import { readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -91,12 +92,15 @@ export function rejectCredentialFields(args: unknown): void {
  * The key is read lazily and cached per path (a missing file is re-checked
  * on every call, so a key created later — e.g. by request_session — is
  * picked up); only the 0x + 64-hex value is ever compared, never logged.
- * The cache is keyed on the file's mtime + size, so an in-place key
- * replacement (new key written over the same path) invalidates it: the
- * guard then scans for the NEW key, not the stale one. A server restart
- * is not needed for rotation — replacing the file is enough.
+ * The cache is keyed on a sha256 of the file BYTES, so an in-place key
+ * replacement is detected even when the file's mtime and size are
+ * unchanged (a fixed-format JSON key file keeps the same size on
+ * rotation, and mtime alone can be preserved or coarse) — the guard
+ * then scans for the NEW key, not the stale one. A server restart is
+ * not needed for rotation — replacing the file is enough. (Round 4:
+ * the old mtimeMs+size key only invalidated on an mtime change.)
  */
-let cachedAgentKey: { path: string; key: string; mtimeMs: number; size: number } | null = null;
+let cachedAgentKey: { path: string; key: string; hash: string } | null = null;
 function agentPrivateKeyValue(): string | null {
   let path: string;
   try {
@@ -104,28 +108,32 @@ function agentPrivateKeyValue(): string | null {
   } catch {
     path = join(homedir(), ".sternpost", "agent.json");
   }
-  let stat: { mtimeMs: number; size: number };
+  // One read: the bytes are hashed AND parsed from the same buffer, so
+  // there is no stat→read window for a swap to slip through between the
+  // check and the read.
+  let bytes: Buffer;
   try {
-    stat = statSync(path);
+    bytes = readFileSync(path);
   } catch {
-    // File gone (or unreadable metadata): drop any cached key — a deleted
-    // key must not keep being scanned for, and a missing file is
-    // re-checked on every call so a key created later is picked up.
+    // File gone (or unreadable): drop any cached key — a deleted key
+    // must not keep being scanned for — and re-check on every call so a
+    // key created later is picked up.
     cachedAgentKey = null;
     return null;
   }
-  if (cachedAgentKey && cachedAgentKey.path === path && cachedAgentKey.mtimeMs === stat.mtimeMs && cachedAgentKey.size === stat.size) {
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  if (cachedAgentKey && cachedAgentKey.path === path && cachedAgentKey.hash === hash) {
     return cachedAgentKey.key;
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as { privateKey?: unknown };
+    const parsed = JSON.parse(bytes.toString("utf8")) as { privateKey?: unknown };
     if (typeof parsed.privateKey === "string" && /^0x[0-9a-fA-F]{64}$/.test(parsed.privateKey)) {
-      cachedAgentKey = { path, key: parsed.privateKey, mtimeMs: stat.mtimeMs, size: stat.size };
+      cachedAgentKey = { path, key: parsed.privateKey, hash };
       return parsed.privateKey;
     }
   } catch {
-    // No key file (yet), malformed, or unreadable — nothing to scan for.
-    // Never throw from the guard: a missing key must not break responses.
+    // Malformed or unreadable — nothing to scan for. Never throw from
+    // the guard: a missing key must not break responses.
   }
   cachedAgentKey = null;
   return null;
@@ -150,9 +158,13 @@ export function ok(result: unknown): {
   return { content: [{ type: "text", text }] };
 }
 
-/** Error path: the same output scan applies to thrown errors (J3 F2). */
+/** Error path: the same output scan applies to thrown errors (J3 F2).
+ * The message is redacted first (round 4, J3 F3): a thrown viem error
+ * can carry the configured RPC URL, and a keyed RPC URL (path-key or
+ * ?api_key= style) would otherwise leak to the MCP client — fail() is
+ * the one error path redactCredentials was never applied to. */
 export function fail(err: unknown): { content: { type: "text"; text: string }[] } {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = redactCredentials(err instanceof Error ? err.message : String(err));
   guardOutput(message);
   return ok({ ok: false, error: message });
 }
@@ -257,13 +269,15 @@ function truncate(text: string, max = 8192): string {
  * Strip credential-looking substrings from a message before it is logged
  * (or echoed in a rankNote): userinfo in a URL (`https://user:pass@host`,
  * or a bare token as the userinfo), and api-key/token/secret/password
- * query params. The rest of the message is kept intact so the log stays
- * useful for debugging; only the credential-shaped part is replaced.
+ * query params — including bare `?key=`, `?access_token=` and `?auth=`
+ * params (round 4, J3 F3: a keyed RPC URL carries the key exactly that
+ * way). The rest of the message is kept intact so the log stays useful
+ * for debugging; only the credential-shaped part is replaced.
  */
 function redactCredentials(text: string): string {
   return text
     .replace(/(https?:\/\/)[^\s/@]+@/g, "$1[redacted-credentials]@")
-    .replace(/([?&](?:api[_-]?key|token|secret|password)=)[^\s&]*/gi, "$1[redacted]");
+    .replace(/([?&](?:api[_-]?key|key|token|secret|password|access_token|auth)=)[^\s&]*/gi, "$1[redacted]");
 }
 
 const TROVE_STATUS = ["none", "active", "closedByOwner", "closedByLiquidation", "closedByRedemption"] as const;
@@ -645,7 +659,11 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
     // try: if the receipt WAIT throws after the draw was sent, the
     // REFILL_FAILED response still carries the sent hash — the draw may
     // confirm on-chain later, so "nothing was paid" is not guaranteed
-    // in that case and the hash is needed to check.
+    // in that case and the hash is needed to check. If the SEND itself
+    // throws (RPC timeout between broadcast and hash return), no hash
+    // exists: the response says so plainly — send-outcome-unknown, the
+    // draw may still confirm — and never claims it "failed before it
+    // could settle" (round 4, J3 F2).
     let refillHash: string | null = null;
     try {
       const wallet = ctx.agentWallet ?? createAgentWallet(ctx.env, agentKey.privateKey, ctx.network);
@@ -693,7 +711,7 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
         detail:
           refillHash !== null
             ? `refill draw tx ${refillHash} was sent but its receipt could not be confirmed: ${truncate(err instanceof Error ? err.message : String(err), 500)} — the draw may still confirm on-chain; check the hash before retrying`
-            : `refill draw failed before it could settle: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
+            : `refill draw could not be confirmed as sent (no hash returned) — the draw may still confirm on-chain; check the account nonce/balance before retrying: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
         preview,
       });
     }
@@ -1073,6 +1091,12 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
       return { rank: wRank, debtAhead: wDebtAhead, icr: wIcr, complete: wComplete, steps: wSteps };
     };
     if (ctx.env.STERNPOST_RADAR) {
+      // rank() and the post-rank getCurrentICR read are separate steps
+      // with separate catches (round 4, J3 O2): the old shared catch
+      // labelled a getCurrentICR failure "deployed Radar rank() …" even
+      // though rank() had already succeeded. Each failure is now named
+      // for the read that actually threw; both fall back to the walk.
+      let radarRankOk = false;
       try {
         const [r, d, s, c] = (await client.readContract({
           address: ctx.env.STERNPOST_RADAR as Address,
@@ -1084,14 +1108,7 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
         debtAhead = d;
         steps = Number(s);
         complete = c;
-        const icrRaw = (await client.readContract({
-          address: sys.troveManager as Address,
-          abi: troveManagerAbi,
-          functionName: "getCurrentICR",
-          args: [account, price],
-        })) as bigint;
-        icr = Number.parseFloat(formatUnits(icrRaw, 18));
-        rankSource = "radar";
+        radarRankOk = true;
       } catch (err) {
         // The deployed Radar's rank() is one heavy eth_call: on an anvil
         // fork (remote state fetched per slot through the public RPC) or
@@ -1110,6 +1127,34 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
         steps = w.steps;
         rankSource = "walk";
         rankNote = `deployed Radar rank() ${kind}; fell back to the direct SortedTroves walk`;
+      }
+      if (radarRankOk) {
+        try {
+          const icrRaw = (await client.readContract({
+            address: sys.troveManager as Address,
+            abi: troveManagerAbi,
+            functionName: "getCurrentICR",
+            args: [account, price],
+          })) as bigint;
+          icr = Number.parseFloat(formatUnits(icrRaw, 18));
+          rankSource = "radar";
+        } catch (err) {
+          // rank() SUCCEEDED — only the ICR read after it failed. The
+          // walk re-derives rank/debtAhead/icr from the same ground
+          // truth; the note names the ICR read, not rank().
+          const kind = classifyRankError(err);
+          console.error(
+            `[sternpost radar] post-rank getCurrentICR read ${kind}: ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 300)}`,
+          );
+          const w = await walkRank();
+          rank = w.rank;
+          debtAhead = w.debtAhead;
+          icr = w.icr;
+          complete = w.complete;
+          steps = w.steps;
+          rankSource = "walk";
+          rankNote = `deployed Radar rank() succeeded but the post-rank getCurrentICR read ${kind}; fell back to the direct SortedTroves walk`;
+        }
       }
     } else {
       const w = await walkRank();

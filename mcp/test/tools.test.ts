@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { HttpRequestError } from "viem";
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { tmpdir } from "node:os";
@@ -456,6 +457,54 @@ describe("snapshots (stub chain, offline)", () => {
     expect(logged[0]).toContain("[redacted-credentials]@");
     expect(logged[0]).toContain("timed out");
   });
+
+  it("radar fallback names the post-rank getCurrentICR read when rank() succeeded but the ICR read throws (J3 O2 round 4)", async () => {
+    // Only the FIRST getCurrentICR call throws (the post-rank read);
+    // the walk's own reads after the fallback succeed, as they would
+    // for a transient failure of that one read.
+    let icrCalls = 0;
+    const ctx = stubContext(
+      {
+        readContract: ({ functionName }) => {
+          switch (functionName) {
+            case "fetchPrice":
+              return 64_451_357_300_000_000_000_000n;
+            case "systemHealth":
+              return [0n, 2_300_000_000_000_000_000n, false, 279n];
+            case "frontier":
+              return ["0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d", 1_263_664_234_481_925_800n, 426_003_387_454_256_128_793_338_096n];
+            case "rank":
+              // rank() SUCCEEDS here — only the ICR read after it fails.
+              return [1n, 100n, 1n, true];
+            case "getPrev":
+              return "0x0000000000000000000000000000000000000000";
+            case "getCurrentICR":
+              icrCalls += 1;
+              if (icrCalls === 1) throw new Error("simulated getCurrentICR timeout");
+              return 2_500_000_000_000_000_000n;
+            case "getEntireDebtAndColl":
+              return [0n, 100n, 0n, 0n, 0n, 0n];
+            case "policy":
+              return [2_500_000_000_000_000_000n, 1_600_000_000_000_000_000n, 2_000_000_000_000_000_000n, 1_000_000_000_000_000_000n, 0n, 20];
+            case "status":
+              return 1;
+            default:
+              throw new Error(`unexpected call ${functionName}`);
+          }
+        },
+      },
+      { STERNPOST_RADAR: "0x9Cd95A420e014da798dbFB74833b9D4DEe868be2" },
+    );
+    const res = await handleRadar(ctx, { account: ADDRESSES.governor });
+    const p = JSON.parse(res.content[0].text);
+    expect(p.ok).toBe(true);
+    expect(p.rankSource).toBe("walk");
+    // The note must name the read that actually threw — never "deployed
+    // Radar rank() …" when rank() succeeded.
+    expect(p.rankNote).toBe(
+      "deployed Radar rank() succeeded but the post-rank getCurrentICR read timed out; fell back to the direct SortedTroves walk",
+    );
+  });
 });
 
 describe("refusal reasons", () => {
@@ -623,6 +672,8 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       receiptStatus: "success" | "reverted";
       /** When true, waitForTransactionReceipt throws instead of returning a receipt (J3 F5). */
       receiptThrows?: boolean;
+      /** When true, writeContract (the draw send) throws before returning a hash (J3 F2 round 4). */
+      writeThrows?: boolean;
     },
     run: (
       url: string,
@@ -666,6 +717,7 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       const stubWallet = {
         chain: { id: 31611 },
         writeContract: async (args: unknown) => {
+          if (opts.writeThrows) throw new Error("RPC timeout waiting for the draw hash — no hash returned");
           draws.push(args);
           return "0x1111111111111111111111111111111111111111111111111111111111111111";
         },
@@ -745,6 +797,30 @@ describe("pay (offline, local 402 server + stub chain)", () => {
         expect(p.settleTx).toBeNull();
         expect(p.detail).toMatch(/may still confirm on-chain/);
         expect(draws).toHaveLength(1);
+      },
+    );
+  });
+
+  it("pay reports REFILL_FAILED with send-outcome-unknown wording when the draw send throws before returning a hash (J3 F2 round 4)", async () => {
+    await withFullPayHarness(
+      { balanceOf: 0n, refillPreview: null, receiptStatus: "success", writeThrows: true },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        // No hash was ever returned, so there is nothing to trace with.
+        expect(p.refillTx).toBeNull();
+        expect(p.settleTx).toBeNull();
+        // The send may still have broadcast: never claim it "failed
+        // before it could settle" — say the outcome is unknown and what
+        // to check before retrying.
+        expect(p.detail).toMatch(/could not be confirmed as sent/);
+        expect(p.detail).toMatch(/no hash returned/);
+        expect(p.detail).toMatch(/may still confirm on-chain/);
+        expect(p.detail).toMatch(/nonce\/balance/);
+        expect(p.detail).not.toMatch(/before it could settle/);
+        expect(draws).toHaveLength(0);
       },
     );
   });
@@ -878,9 +954,48 @@ describe("key never returned", () => {
           keyPath,
           JSON.stringify({ address: privateKeyToAccount(key2).address, privateKey: key2 }, null, 2) + "\n",
         );
+        // The utimes below is now belt-and-braces only: the content hash
+        // (round 4, J3 F1) detects the replacement with or without it.
         // Force a distinct mtime so the change is visible even on a coarse filesystem.
         const later = new Date(Date.now() + 2000);
         await utimes(keyPath, later, later);
+        // The stale key is no longer scanned for; the new key is.
+        expect(() => guardOutput(JSON.stringify({ agent: key1.privateKey }))).not.toThrow();
+        expect(() => guardOutput(JSON.stringify({ agent: key2 }))).toThrow(/agent private key/);
+        expect(() => guardOutput(JSON.stringify({ ok: true }))).not.toThrow();
+      } finally {
+        if (prev === undefined) delete process.env.STERNPOST_AGENT_KEY_FILE;
+        else process.env.STERNPOST_AGENT_KEY_FILE = prev;
+      }
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("guardOutput detects a same-mtime in-place key replacement (content hash, J3 F1 round 4)", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "sternpost-mcp-test-"));
+    try {
+      const keyPath = join(tmp, "agent.json");
+      const env = loadEnv({ ...process.env, STERNPOST_AGENT_KEY_FILE: keyPath });
+      const { key: key1 } = await loadOrCreateAgentKey(env);
+      const prev = process.env.STERNPOST_AGENT_KEY_FILE;
+      process.env.STERNPOST_AGENT_KEY_FILE = keyPath;
+      try {
+        // Prime the cache: the first key is scanned for.
+        expect(() => guardOutput(JSON.stringify({ agent: key1.privateKey }))).toThrow(/agent private key/);
+        // Same size AND same mtime: record the mtime, replace the file
+        // in place with a fresh key, then restore the ORIGINAL mtime.
+        // No mtime is forged to make detection work — the point is that
+        // detection must not need one (the old mtime+size cache served
+        // the stale key here; the content hash must not).
+        const { mtime } = await stat(keyPath);
+        const key2 = generatePrivateKey();
+        await writeFile(
+          keyPath,
+          JSON.stringify({ address: privateKeyToAccount(key2).address, privateKey: key2 }, null, 2) + "\n",
+        );
+        await utimes(keyPath, mtime, mtime);
+        expect((await stat(keyPath)).mtimeMs).toBe(mtime.getTime());
         // The stale key is no longer scanned for; the new key is.
         expect(() => guardOutput(JSON.stringify({ agent: key1.privateKey }))).not.toThrow();
         expect(() => guardOutput(JSON.stringify({ agent: key2 }))).toThrow(/agent private key/);
@@ -905,6 +1020,26 @@ describe("key never returned", () => {
       if (prev === undefined) delete process.env.STERNPOST_API_KEY;
       else process.env.STERNPOST_API_KEY = prev;
     }
+  });
+
+  it("fail() redacts a keyed RPC URL from a thrown HttpRequestError instead of echoing it (J3 F3 round 4)", () => {
+    const err = new HttpRequestError({
+      url: "https://rpc.test.mezo.org/v2?key=sk-live-9f27secret&access_token=tok-abc123&auth=bearer-xyz",
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.ok).toBe(false);
+    expect(p.error).toContain("?key=[redacted]");
+    expect(p.error).toContain("access_token=[redacted]");
+    expect(p.error).toContain("auth=[redacted]");
+    expect(p.error).not.toContain("sk-live-9f27secret");
+    expect(p.error).not.toContain("tok-abc123");
+    expect(p.error).not.toContain("bearer-xyz");
+    // The URL itself (minus credentials) and the status survive.
+    expect(p.error).toContain("https://rpc.test.mezo.org/v2");
+    expect(p.error).toContain("500");
   });
 
   it("snapshot: no tool output contains the configured key (x402_quote, offline path)", async () => {

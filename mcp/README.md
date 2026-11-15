@@ -110,7 +110,13 @@ which has no §5.1 equivalent), `NO_402` (the resource did not answer
 402), `SCHEME_MISMATCH` (only `exact` is supported), `VERIFY_FAILED`
 (the facilitator rejected the payment signature), `SETTLE_FAILED`
 (the resource still answers 402 after payment), `REFILL_FAILED`
-(the refill draw reverted on-chain or could not be sent — a reverted draw's hash is still returned in `refillTx` for traceability; if the receipt wait itself failed, `refillTx` carries the sent hash, which may still confirm on-chain, so "nothing was paid" is not guaranteed in that case).
+(the refill draw reverted on-chain, or the draw send could not be
+confirmed — a reverted draw's hash is still returned in `refillTx` for
+traceability; if the receipt wait itself failed, `refillTx` carries the
+sent hash, which may still confirm on-chain, so "nothing was paid" is
+not guaranteed in that case; if the send returned no hash at all,
+`refillTx` is null and the response says the outcome is unknown — the
+draw may still confirm — so check nonce/balance before retrying).
 
 Preview→execution gap: `previewDraw` is checked before the draw is sent, but Recovery Mode, the price, or concurrent budget use can change in between — the receipt check after the draw catches a revert, which is then reported as `REFILL_FAILED` with its hash rather than as a success.
 
@@ -146,7 +152,20 @@ input. Two layers:
 
 Every serialized response — success or error — is scanned for the value
 of `STERNPOST_API_KEY` (if set) and for the local agent private key (if
-a key file exists) before it leaves the server.
+a key file exists) before it leaves the server. The key file is re-read
+on every guarded call and cached on a sha256 of the file bytes, so an
+in-place rotation is picked up even at the same mtime and size.
+
+Key-file read window: the guard reads the file with a single
+synchronous `readFileSync` and hashes and parses the same buffer, so
+there is no `stat`→`read` gap for a swap to slip through between the
+check and the read (the old code did `statSync`→`readFileSync`, also
+synchronous with no `await` between; the new code removes even that).
+The only remaining window is an external writer replacing the file in
+the microsecond gap between two guarded calls — the next call then
+scans for the new key, so a swap self-heals on the next call, and
+under the content-hash cache even an mtime-preserving swap is
+detected. A swapped-in key is only ever *scanned for*, never returned.
 
 Permit2 pulls whatever amount the session key signs, to whatever `payTo` it signs — the payee allowlist and `perTx` do NOT apply to a signed Permit2 transfer (plan §3.9); `canSignX402` is off by default and the owner caps the Permit2 allowance at approval.
 
