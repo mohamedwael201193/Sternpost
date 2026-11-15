@@ -40,6 +40,16 @@ pragma solidity 0.8.24;
 ///      The Batcher never checks trove status itself: each TroveAccount
 ///      enforces its own rules (`TroveNotActive`, `RecoveryMode`, session
 ///      checks); the Batcher only orders and reports the calls.
+///      BATCH SIZE (J3 F2): every batch function enforces `MAX_BATCH`
+///      (100 entries). Gas derivation: a per-account claim costs
+///      ~50-100k gas (external BorrowerOperations / CollSurplusPool
+///      calls plus the event), and Mezo's block gas limit is 10M, so
+///      10M / 100k = 100 accounts fills a block at worst-case gas.
+///      The hard cap keeps any full batch inside one block; keepers
+///      SHOULD target <= 50 accounts (~5M gas, half a block) so the
+///      batch fits alongside other block traffic. An oversized batch
+///      reverts whole-transaction with `BatchTooLarge` (no partial
+///      state, no fund risk); the keeper retries smaller.
 interface IBatcherAccount {
     function claimCollateral() external;
     function claimYield() external returns (uint256);
@@ -63,6 +73,19 @@ contract Batcher {
     /// @notice `multiDraw` / `multi` inputs of different lengths.
     error LengthMismatch(uint256 accounts, uint256 intents);
 
+    /// @notice Maximum entries in any batch call (J3 F2). Derivation:
+    ///         Mezo block gas limit 10M / ~100k worst-case gas per
+    ///         account claim = 100; a full batch can never exceed one
+    ///         block even at worst-case gas. Keepers should target
+    ///         <= 50 accounts per batch for headroom (see the
+    ///         contract-level NatSpec).
+    uint256 public constant MAX_BATCH = 100;
+
+    /// @notice A batch call exceeded `MAX_BATCH` (`length` entries
+    ///         against a cap of `maxBatch`). Whole-transaction revert,
+    ///         no partial state; the keeper retries smaller.
+    error BatchTooLarge(uint256 length, uint256 maxBatch);
+
     /// @notice One `multiDraw` transaction executed.
     event DrawsBatched(uint256 count);
     /// @notice One account's `claimCollateral` attempt inside a batch.
@@ -81,8 +104,11 @@ contract Batcher {
     ///         transaction (hence one block). Reverts the whole transaction
     ///         if any sub-call fails, bubbling its revert data.
     /// @dev No value is ever forwarded: `targets[i].call(data[i])` carries
-    ///      no `msg.value`, and this function is not payable.
+    ///      no `msg.value`, and this function is not payable. A `MAX_BATCH`
+    ///      length guard (J3 F2) bounds the call count; the semantics are
+    ///      otherwise the lab's verbatim.
     function multi(address[] calldata targets, bytes[] calldata data) external returns (bytes[] memory out) {
+        if (targets.length > MAX_BATCH) revert BatchTooLarge(targets.length, MAX_BATCH);
         out = new bytes[](targets.length);
         for (uint256 i; i < targets.length; i++) {
             (bool ok, bytes memory r) = targets[i].call(data[i]);
@@ -105,6 +131,7 @@ contract Batcher {
     /// @param accounts The TroveAccount of each intent, in order.
     /// @param intents One signed intent per account, in the same order.
     function multiDraw(address[] calldata accounts, DrawIntent[] calldata intents) external {
+        if (accounts.length > MAX_BATCH) revert BatchTooLarge(accounts.length, MAX_BATCH);
         if (accounts.length != intents.length) revert LengthMismatch(accounts.length, intents.length);
         for (uint256 i; i < accounts.length; i++) {
             DrawIntent calldata intent = intents[i];
@@ -122,7 +149,12 @@ contract Batcher {
     ///         `claimCollateral` reverts does NOT brick the batch.
     /// @dev The surplus BTC lands in the ACCOUNT, never in the Batcher:
     ///      `claimed` is measured as the account's own balance delta, so
-    ///      the Batcher balance stays 0 by construction.
+    ///      the Batcher balance stays 0 by construction. The delta is
+    ///      SATURATING (J3 F1): if an account's balance DECREASES during
+    ///      its claim — possible for any non-clone address the keeper
+    ///      passes, which can send ETH out mid-call — the account
+    ///      reports `claimed == 0` instead of panicking (0x11) and
+    ///      rolling back every good claim in the batch.
     /// @param accounts TroveAccounts to claim surplus BTC for.
     /// @return ok Per-account success of the `claimCollateral()` call.
     /// @return claimed Per-account BTC that landed in the account (0 when
@@ -131,6 +163,7 @@ contract Batcher {
         external
         returns (bool[] memory ok, uint256[] memory claimed)
     {
+        if (accounts.length > MAX_BATCH) revert BatchTooLarge(accounts.length, MAX_BATCH);
         ok = new bool[](accounts.length);
         claimed = new uint256[](accounts.length);
         for (uint256 i; i < accounts.length; i++) {
@@ -138,7 +171,8 @@ contract Batcher {
             uint256 before = account.balance;
             (bool success,) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector));
             ok[i] = success;
-            claimed[i] = success ? account.balance - before : 0;
+            uint256 afterBal = account.balance;
+            claimed[i] = success && afterBal >= before ? afterBal - before : 0;
             emit CollateralClaimBatched(account, ok[i], claimed[i]);
         }
     }
@@ -155,6 +189,7 @@ contract Batcher {
         external
         returns (bool[] memory ok, uint256[] memory yields)
     {
+        if (accounts.length > MAX_BATCH) revert BatchTooLarge(accounts.length, MAX_BATCH);
         ok = new bool[](accounts.length);
         yields = new uint256[](accounts.length);
         for (uint256 i; i < accounts.length; i++) {
@@ -173,6 +208,7 @@ contract Batcher {
     /// @param accounts TroveAccounts to checkpoint.
     /// @return ok Per-account success of the `checkpoint()` call.
     function checkpointBatch(address[] calldata accounts) external returns (bool[] memory ok) {
+        if (accounts.length > MAX_BATCH) revert BatchTooLarge(accounts.length, MAX_BATCH);
         ok = new bool[](accounts.length);
         for (uint256 i; i < accounts.length; i++) {
             address account = accounts[i];

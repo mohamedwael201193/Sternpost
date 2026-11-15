@@ -201,6 +201,27 @@ contract BatcherMockSorted {
     }
 }
 
+/// @notice J3 probe, kept as a regression mock: an account whose
+///         `claimCollateral()` DECREASES its own balance (sends 0.01 ETH
+///         to a sink). A genuine TroveAccount clone cannot do this (its
+///         claim only receives), but the Batcher is best-effort for ANY
+///         address the keeper passes, so a balance drop mid-claim must
+///         report `claimed == 0`, never panic the whole batch.
+contract BalanceDropper {
+    address public sink;
+
+    constructor(address _sink) {
+        sink = _sink;
+    }
+
+    function claimCollateral() external {
+        (bool ok,) = sink.call{value: 0.01 ether}("");
+        require(ok);
+    }
+
+    receive() external payable {}
+}
+
 /// @notice Live Mezo TroveManager redemption entry point. In Mezo's musd
 ///         repo the redemption lives on TroveManager (NOT on
 ///         BorrowerOperations as in Liquity v1): `redeemCollateral(amount,
@@ -538,6 +559,89 @@ contract BatcherTest is Test {
         assertEq(claimed[1], surplusB, "claimed == surplus exactly (B)");
         assertEq(address(accountA).balance - balABefore, surplusA);
         assertEq(address(accountB).balance - balBBefore, surplusB);
+        _assertBatcherEmpty();
+    }
+
+    /// @notice J3 F1 REGRESSION: a balance-dropping account in the middle
+    ///         of a batch must NOT panic (0x11) the whole batch. A and B
+    ///         hold real surplus; the dropper holds 1 ETH and its claim
+    ///         sends 0.01 ETH to a sink, so its balance DECREASES during
+    ///         the call. The batch succeeds, A/B claim exactly, the
+    ///         dropper reports `ok == true, claimed == 0` (saturating
+    ///         delta), and no good claim rolls back.
+    function test_claimCollateralBatchToleratesBalanceDropMidBatch() public {
+        address sink = makeAddr("sink");
+        BalanceDropper dropper = new BalanceDropper(sink);
+        vm.deal(address(dropper), 1 ether);
+        bo.setSurplus(address(accountA), 0.02 ether);
+        bo.setSurplus(address(accountB), 0.005 ether);
+
+        address[] memory accts = new address[](3);
+        accts[0] = address(accountA);
+        accts[1] = address(dropper);
+        accts[2] = address(accountB);
+
+        (bool[] memory ok, uint256[] memory claimed) = batcher.claimCollateralBatch(accts);
+
+        assertTrue(ok[0], "A claimed");
+        assertTrue(ok[1], "dropper call itself succeeded");
+        assertTrue(ok[2], "B claimed");
+        assertEq(claimed[0], 0.02 ether, "A surplus exact despite the dropper");
+        assertEq(claimed[1], 0, "saturating delta: a balance drop reports 0, never underflows");
+        assertEq(claimed[2], 0.005 ether, "B surplus exact despite the dropper");
+        assertEq(address(dropper).balance, 0.99 ether, "dropper really did lose 0.01 ETH mid-claim");
+        assertEq(sink.balance, 0.01 ether, "the dropped ETH reached the sink");
+        _assertBatcherEmpty();
+    }
+
+    // ============ MAX_BATCH: keeper-side cap (J3 F2) ============
+
+    function _nAccounts(uint256 n) internal view returns (address[] memory accts) {
+        accts = new address[](n);
+        for (uint256 i; i < n; i++) {
+            accts[i] = address(accountA);
+        }
+    }
+
+    function test_claimCollateralBatchAtMaxBatchSucceeds() public {
+        (bool[] memory ok, uint256[] memory claimed) = batcher.claimCollateralBatch(_nAccounts(100));
+        assertEq(ok.length, 100, "exactly MAX_BATCH entries accepted");
+        assertTrue(ok[0], "first entry ok");
+        assertTrue(ok[99], "last entry ok");
+        assertEq(claimed[0], 0, "zero surplus on the repeated account");
+        _assertBatcherEmpty();
+    }
+
+    function test_claimCollateralBatchOverMaxBatchReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(Batcher.BatchTooLarge.selector, uint256(101), uint256(100)));
+        batcher.claimCollateralBatch(_nAccounts(101));
+        _assertBatcherEmpty();
+    }
+
+    function test_claimYieldBatchOverMaxBatchReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(Batcher.BatchTooLarge.selector, uint256(101), uint256(100)));
+        batcher.claimYieldBatch(_nAccounts(101));
+        _assertBatcherEmpty();
+    }
+
+    function test_checkpointBatchOverMaxBatchReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(Batcher.BatchTooLarge.selector, uint256(101), uint256(100)));
+        batcher.checkpointBatch(_nAccounts(101));
+        _assertBatcherEmpty();
+    }
+
+    function test_multiOverMaxBatchReverts() public {
+        address[] memory targets = _nAccounts(101);
+        bytes[] memory data = new bytes[](101);
+        vm.expectRevert(abi.encodeWithSelector(Batcher.BatchTooLarge.selector, uint256(101), uint256(100)));
+        batcher.multi(targets, data);
+        _assertBatcherEmpty();
+    }
+
+    function test_multiDrawOverMaxBatchReverts() public {
+        Batcher.DrawIntent[] memory intents = new Batcher.DrawIntent[](101);
+        vm.expectRevert(abi.encodeWithSelector(Batcher.BatchTooLarge.selector, uint256(101), uint256(100)));
+        batcher.multiDraw(_nAccounts(101), intents);
         _assertBatcherEmpty();
     }
 
