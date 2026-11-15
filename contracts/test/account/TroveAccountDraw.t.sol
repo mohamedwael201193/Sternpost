@@ -344,8 +344,11 @@ contract TroveAccountDrawTest is Test {
     function test_S17_priceZeroImpliesRecoveryMode() public {
         _setSession(agent, 1000e18, 500e18, 0, true, false);
         // On real Mezo price 0 implies TCR 0, i.e. Recovery Mode (reason
-        // 7), not BELOW_FLOOR: the mock models that (getTCR returns 0 at
-        // price 0, checkRecoveryMode is true), so the live reason is 7.
+        // 7), not BELOW_FLOOR: the mock models only that price-0 endpoint
+        // exactly (getTCR returns 0 at price 0, checkRecoveryMode is true),
+        // so the live reason is 7. `tcr` is a fixed field set via setTCR,
+        // not computed from system-wide collateral/debt x price, so
+        // intermediate nonzero prices do not move the mock TCR.
         pf.set(0);
         (bool ok, uint8 reason,,) = account.previewDraw(agent, payee, 10e18);
         assertFalse(ok);

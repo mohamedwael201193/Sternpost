@@ -14,9 +14,13 @@ import {Policy} from "../../src/account/interfaces/ITroveAccount.sol";
 ///         checkRecoveryMode / getTCR). Behaviour follows the plan: borrowing
 ///         fee 0.1%, min net debt 1800 MUSD, gas comp 200 MUSD, MCR 110%.
 ///         Recovery Mode is GLOBAL and price-derived exactly as on real Mezo:
-///         RM ⟺ TCR < 1.5e18. TCR is proportional to price, so price 0
-///         implies TCR 0 and therefore Recovery Mode; the mock models that
-///         directly (getTCR returns 0 at price 0). There is deliberately NO
+///         RM ⟺ TCR < 1.5e18. On real Mezo TCR is price-derived (holding
+///         system collateral/debt fixed), so price 0 implies TCR 0 and
+///         therefore Recovery Mode; the mock models only that price-0
+///         endpoint exactly (getTCR returns 0 at price 0). `tcr` is a fixed
+///         field set via setTCR, not computed from system-wide
+///         collateral/debt x price, so intermediate nonzero prices do not
+///         move the mock TCR. There is deliberately NO
 ///         per-borrower recovery flag: a state with TCR 3e18 while in
 ///         Recovery Mode is unreachable on mainnet and must not be
 ///         assertable here.
@@ -51,8 +55,12 @@ contract TestTroveManager {
         return status[b];
     }
     function checkRecoveryMode(uint256 price) external view returns (bool) {
-        // Real Mezo: RM ⟺ TCR < 1.5e18, and TCR scales with price, so a
-        // zero price implies TCR 0 and therefore Recovery Mode.
+        // Real Mezo: RM ⟺ TCR < 1.5e18, and TCR is price-derived (holding
+        // system collateral/debt fixed), so a zero price implies TCR 0 and
+        // therefore Recovery Mode. The mock models only that price-0
+        // endpoint exactly: `tcr` is a fixed field set via setTCR, not
+        // computed from system-wide collateral/debt x price, so
+        // intermediate nonzero prices do not move the mock TCR.
         return price == 0 || tcr < 1.5e18;
     }
     function getTCR(uint256 price) external view returns (uint256) {
