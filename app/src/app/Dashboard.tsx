@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
 import { wagmiConfig } from './wagmi'
 import { ConnectButton } from './kit'
 import { Token } from '../ui/Token'
+import { Empty } from '../ui/Empty'
+import { NetBadge } from '../ui/NetBadge'
 import Home from './pages/Home'
-import Apps from './pages/Apps'
 import Draw from './pages/Draw'
 import Pay from './pages/Pay'
 import Activity from './pages/Activity'
@@ -14,17 +15,126 @@ import Revoke from './pages/Revoke'
 
 const qc = new QueryClient()
 const I = (d: string) => <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><path d={d} /></svg>
-const NAV = [
-  ['', 'Home', 'M3 11l9-7 9 7v9h-6v-6H9v6H3z'],
-  ['draw', 'Draw', 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3'],
+
+/**
+ * Shell navigation (plan §6.2). Pages owned by later tasks (3.4 Open, 3.6 Crew,
+ * 3.8 Watch, 3.10 Muster, 3.11 Close, 3.12 Break) route to an honest placeholder
+ * until their worker lands them — never to a dead end or a wrong page.
+ */
+const NAV_MAIN = [
+  ['', 'Bridge', 'M3 11l9-7 9 7v9h-6v-6H9v6H3z'],
+  ['open', 'Open account', 'M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5'],
+  ['crew', 'Crew', 'M4 6h16M4 12h16M4 18h10'],
   ['pay', 'Pay', 'M3 7h16v12H3zM3 7l3-3h12v3M15 13h4'],
-  ['apps', 'Apps', 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'],
-  ['activity', 'Activity', 'M3 12h4l2-5 4 10 2-5h6'],
-  ['revoke', 'Revoke', 'M12 3a9 9 0 100 18 9 9 0 000-18zM7 12h10'],
+  ['watch', 'Watch', 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 3'],
+  ['logbook', 'Logbook', 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5'],
+  ['muster', 'Muster roll', 'M4 6h16M4 12h16M4 18h10'],
 ] as const
 
+const NAV_CLASSIC = [
+  ['classic', 'Classic', 'M3 11l9-7 9 7v9h-6v-6H9v6H3z'],
+] as const
+
+/** Video chapter order: "Try to sink it" comes before Revoke. */
+const NAV_PROOF = [
+  ['break', 'Try to break it', 'M12 3l9 16H3zM12 10v4M12 17v1'],
+] as const
+
+const NAV_EXIT = [
+  ['close', 'Close / Revoke', 'M12 3a9 9 0 100 18 9 9 0 000-18zM7 12h10'],
+] as const
+
+const ALL_NAV = [...NAV_MAIN, ...NAV_CLASSIC, ...NAV_PROOF, ...NAV_EXIT] as const
+
+const PAGE_META: Record<string, { eyebrow: string; title: string; sub: string }> = {
+  '': { eyebrow: 'Chartroom', title: 'Bridge', sub: 'Credit your agents can use. Your Bitcoin stays yours. Your crew spends. The ship defends itself.' },
+  open: { eyebrow: 'Open account', title: 'Open a credit account', sub: 'One transaction deploys your TroveAccount and opens your trove.' },
+  crew: { eyebrow: 'Crew', title: 'Crew', sub: 'Agent session keys, signed on by you, spendable up to the budget you set.' },
+  pay: { eyebrow: 'Pay', title: 'Pay', sub: 'Your agent pays x402 services by borrowing exactly the price, the moment it pays.' },
+  watch: { eyebrow: 'Watch', title: 'Watch', sub: 'Sonar, shield rules, buffer, and Recovery Mode — armed around the clock.' },
+  logbook: { eyebrow: 'Logbook', title: 'Logbook', sub: 'Every on-chain event of this account, and the proof behind every claim.' },
+  muster: { eyebrow: 'Muster roll', title: 'Muster roll', sub: 'Counted from on-chain events only. Outside addresses first.' },
+  classic: { eyebrow: 'Classic', title: 'Classic', sub: 'The trove you already have. Every draw needs your signature, because Mezo allows one signature at a time.' },
+  draw: { eyebrow: 'Classic', title: 'Draw', sub: 'Draw MUSD against the trove you already have.' },
+  revoke: { eyebrow: 'Classic', title: 'Revoke', sub: 'Revoke an app or freeze the Governor.' },
+  close: { eyebrow: 'Close / Revoke', title: 'Close / Revoke', sub: 'Revoke agents, or close the account and take everything back.' },
+  break: { eyebrow: 'Try to break it', title: 'Try to break it', sub: 'These attacks run as simulations against the live testnet account. Nothing is sent.' },
+}
+
+/** Footer chain switcher (plan §6.2). Testnet is live; mainnet is a capped pilot and read-only — no mainnet deployment exists yet, so selecting it shows that plainly and switches nothing. */
+function ChainSwitcher() {
+  const [view, setView] = useState<'testnet' | 'mainnet'>('testnet')
+  return (
+    <div>
+      <div className="flex border border-ink/25" role="group" aria-label="Chain">
+        <button
+          type="button"
+          onClick={() => setView('testnet')}
+          aria-pressed={view === 'testnet'}
+          className={`caps flex-1 px-2 py-2 text-[10px] transition ${view === 'testnet' ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}
+        >
+          Testnet 31611
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('mainnet')}
+          aria-pressed={view === 'mainnet'}
+          className={`caps flex-1 px-2 py-2 text-[10px] transition ${view === 'mainnet' ? 'bg-magenta text-paper' : 'text-muted hover:text-ink'}`}
+        >
+          Mainnet 31612
+        </button>
+      </div>
+      {view === 'mainnet' ? (
+        <p role="note" className="mt-2 text-[11px] leading-relaxed text-muted">
+          Mainnet is a capped pilot and read-only. No mainnet deployment exists yet, so there is no pilot data to show.
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">Live on Mezo testnet. Every number is labelled with its network.</p>
+      )}
+    </div>
+  )
+}
+
+/** Honest placeholder for a page whose owning task has not landed it yet. */
+function PageSoon({ task, name }: { task: string; name: string }) {
+  return (
+    <Empty
+      title={`${name} is being charted`}
+      action={<Link className="pill" to="/app">Back to Bridge</Link>}
+    >
+      This page is being built in task {task}. Nothing here is faked in the meantime — come back when it lands.
+    </Empty>
+  )
+}
+
+function SidebarNav({ section, items }: { section?: string; items: readonly (readonly [string, string, string])[] }) {
+  return (
+    <>
+      {section ? <div className="caps px-9 pt-4 text-[9px] text-muted">{section}</div> : null}
+      <nav className="flex flex-col gap-1 py-2 px-5" aria-label={section ?? 'Dashboard'}>
+        {items.map(([to, label, d]) => (
+          <NavLink
+            key={label}
+            to={'/app' + (to ? '/' + to : '')}
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-4 px-4 py-3 text-[15px] transition ${isActive ? 'bg-ink text-paper' : 'hover:text-magenta hover:bg-paper2/70'}`
+            }
+          >
+            {I(d)}
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </>
+  )
+}
+
 export default function Dashboard() {
-  const home = /^\/app\/?$/.test(useLocation().pathname)
+  const location = useLocation()
+  const seg = location.pathname.replace(/^\/app\/?/, '').split('/')[0]
+  const meta = PAGE_META[seg] ?? { eyebrow: 'Chartroom', title: 'Sternpost', sub: '' }
+  const home = seg === ''
   // The contour background lives in index.html (painted before JS); use its soft dashboard variant while mounted.
   useEffect(() => {
     const bg = document.getElementById('hero-bg')
@@ -40,22 +150,23 @@ export default function Dashboard() {
             <Link to="/" className="flex items-center gap-3 px-6 py-6">
               <svg viewBox="0 0 32 32" className="w-9 h-9 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="16" cy="6" r="2.6" /><path d="M16 8.6V28M10 13h12M5 19c0 5 5 9 11 9s11-4 11-9M5 19l-2 2M5 19l3 1M27 19l2 2M27 19l-3 1" /></svg>
               <span><span className="display text-[30px] leading-none block">Sternpost</span>
-                <span className="caps text-[9px] tracking-[.12em] whitespace-nowrap text-magenta block mt-1">Borrow. Spend. Govern.</span>
-                <span className="caps text-[8px] text-muted block">on Mezo</span></span>
+                <span className="caps text-[9px] tracking-[.12em] whitespace-nowrap text-magenta block mt-1">Borrow. Spend. Govern. on Mezo</span></span>
             </Link>
-            <nav className="flex flex-col gap-1 py-3 px-5" aria-label="Dashboard">
-              {NAV.map(([to, label, d]) => (
-                <NavLink key={label} to={'/app' + (to ? '/' + to : '')} end className={({ isActive }) => `flex items-center gap-4 px-4 py-3 rounded-xl text-[15px] transition ${isActive ? 'bg-ink text-paper shadow-[0_8px_20px_-10px_rgba(23,19,15,.7)]' : 'hover:text-magenta hover:bg-paper2/70'}`}>
-                  {I(d)}{label}
-                </NavLink>
-              ))}
-            </nav>
+            <SidebarNav items={NAV_MAIN} />
+            <SidebarNav section="Classic" items={NAV_CLASSIC} />
+            <SidebarNav section="Proof" items={NAV_PROOF} />
+            <SidebarNav section="Exit" items={NAV_EXIT} />
             <div className="mt-auto p-5">
-              <a href="https://mezo.org" target="_blank" rel="noreferrer" className="plate rounded-xl p-4 flex flex-col gap-2 hover:border-magenta transition">
+              <a href="https://t.me/sternpost_bot" target="_blank" rel="noreferrer" className="mb-3 block border border-ink/25 bg-paper/70 px-4 py-3 text-xs leading-relaxed transition hover:border-magenta">
+                <span className="caps block text-[10px] text-magenta">@sternpost_bot</span>
+                <span className="text-muted">Approvals and shield alerts on Telegram.</span>
+              </a>
+              <a href="https://mezo.org" target="_blank" rel="noreferrer" className="plate p-4 flex flex-col gap-2 hover:border-magenta transition">
                 <span className="flex items-center gap-3"><Token sym="MEZO" size={30} /><span className="text-xs leading-tight">Powered by<br /><b className="caps text-[12px]">Mezo</b></span></span>
                 <span className="text-[11px] text-muted">Bitcoin-backed. Mezo-secured.</span>
               </a>
-              <div className="text-[11px] text-muted mt-4">Sternpost v0.1.0 · <span className="text-magenta">Testnet</span> · chain 31611</div>
+              <div className="mt-4"><ChainSwitcher /></div>
+              <div className="text-[11px] text-muted mt-4">Sternpost v0.2.0 · <span className="text-magenta">Testnet</span> · chain 31611</div>
             </div>
           </aside>
           <main className="min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-10 lg:py-8 max-w-[1440px] w-full">
@@ -64,14 +175,18 @@ export default function Dashboard() {
                 <svg viewBox="0 0 32 32" className="w-7 h-7 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="16" cy="6" r="2.6" /><path d="M16 8.6V28M10 13h12M5 19c0 5 5 9 11 9s11-4 11-9" /></svg>
                 <span className="display text-2xl leading-none">Sternpost</span>
               </Link>
-              <span className="flex items-center gap-2 text-xs text-magenta"><span className="w-2 h-2 rounded-full bg-signal" />Testnet</span>
+              <NetBadge network="testnet" />
             </div>
             <header className="flex flex-wrap items-start justify-between gap-4 lg:gap-6 mb-4">
               {home ? <div>
                 <div className="caps text-[11px] tracking-[.24em] text-magenta">Chartroom</div>
-                <h1 className="display text-4xl sm:text-5xl lg:text-6xl leading-none mt-1">Dashboard</h1>
-                <p className="text-muted mt-2">Borrow MUSD against BTC. Spend. Govern. All on Mezo.</p>
-              </div> : <div className="caps text-[11px] tracking-[.24em] text-magenta pt-2">Chartroom</div>}
+                <h1 className="display text-4xl sm:text-5xl lg:text-6xl leading-none mt-1">Bridge</h1>
+                <p className="text-muted mt-2">Credit your agents can use. Your Bitcoin stays yours. Your crew spends. The ship defends itself.</p>
+              </div> : <div>
+                <div className="caps text-[11px] tracking-[.24em] text-magenta pt-2">{meta.eyebrow}</div>
+                <h1 className="display text-4xl sm:text-5xl leading-none mt-1">{meta.title}</h1>
+                {meta.sub ? <p className="text-muted mt-2 max-w-2xl">{meta.sub}</p> : null}
+              </div>}
               <div className="flex items-start gap-6 ml-auto">
                 <div className="text-sm hidden lg:block"><div>Sternpost · Chartroom</div><div className="flex items-center gap-2 text-magenta"><span className="w-2 h-2 rounded-full bg-signal" />Testnet live</div></div>
                 <ConnectButton />
@@ -79,18 +194,26 @@ export default function Dashboard() {
             </header>
             <Routes>
               <Route index element={<Home />} />
-              <Route path="apps" element={<Apps />} />
-              <Route path="draw" element={<Draw />} />
+              <Route path="open" element={<PageSoon task="3.4" name="Open account" />} />
+              <Route path="crew" element={<PageSoon task="3.6" name="Crew" />} />
               <Route path="pay" element={<Pay />} />
-              <Route path="activity" element={<Activity />} />
+              <Route path="watch" element={<PageSoon task="3.8" name="Watch" />} />
+              <Route path="logbook" element={<Activity />} />
+              <Route path="muster" element={<PageSoon task="3.10" name="Muster roll" />} />
+              <Route path="classic" element={<Draw />} />
+              <Route path="draw" element={<Draw />} />
               <Route path="revoke" element={<Revoke />} />
-              <Route path="*" element={<div className="border border-dashed border-ink/25 p-10 text-center"><div className="caps text-[11px] text-magenta">404</div><h1 className="display text-4xl mt-1">No such dashboard page</h1><Link className="pill mt-6 inline-flex" to="/app">Back to Home</Link></div>} />
+              <Route path="apps" element={<Navigate replace to="/app/crew" />} />
+              <Route path="activity" element={<Navigate replace to="/app/logbook" />} />
+              <Route path="close" element={<PageSoon task="3.11" name="Close / Revoke" />} />
+              <Route path="break" element={<PageSoon task="3.12" name="Try to break it" />} />
+              <Route path="*" element={<div className="border border-dashed border-ink/25 p-10 text-center"><div className="caps text-[11px] text-magenta">404</div><h1 className="display text-4xl mt-1">No such dashboard page</h1><Link className="pill mt-6 inline-flex" to="/app">Back to Bridge</Link></div>} />
             </Routes>
           </main>
-          <nav aria-label="Dashboard (mobile)" data-testid="bottom-nav" className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-6 border-t border-ink/15 bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-            {NAV.map(([to, label, d]) => (
-              <NavLink key={label} to={'/app' + (to ? '/' + to : '')} end className={({ isActive }) => `flex flex-col items-center gap-1 py-2.5 text-[10px] ${isActive ? 'text-magenta' : 'text-ink/70'}`}>
-                {I(d)}<span>{label}</span>
+          <nav aria-label="Dashboard (mobile)" data-testid="bottom-nav" className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex overflow-x-auto border-t border-ink/15 bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+            {ALL_NAV.map(([to, label, d]) => (
+              <NavLink key={label} to={'/app' + (to ? '/' + to : '')} end className={({ isActive }) => `flex shrink-0 flex-col items-center gap-1 px-3 py-2.5 text-[10px] ${isActive ? 'text-magenta' : 'text-ink/70'}`}>
+                {I(d)}<span className="whitespace-nowrap">{label}</span>
               </NavLink>
             ))}
           </nav>
