@@ -696,6 +696,29 @@ contract TroveAccountTest is Test {
         TroveAccount(payable(fresh2)).open{value: 0.1 ether}(DEBT, address(0), address(0), 5000e18);
     }
 
+    function test_openRankWalkExhaustionTreatsAsSafe() public {
+        // J3 probe (plan 3.7(c)): 30 redeemable troves (NICR 2e15, debt
+        // 2000e18 each, ICR 200%) all below the new trove's NICR (5e15);
+        // minDebtAhead 60000e18. The walk examines only MAX_RANK_STEPS
+        // (25) troves = 50000e18 and runs out of steps; the 5 unexamined
+        // troves hold the remaining 10000e18, so total debt ahead is
+        // exactly 60000e18 and the trove is NOT exposed. Step exhaustion
+        // is treated as safe (cannot prove stress).
+        address[] memory chain = new address[](30);
+        for (uint256 i; i < 30; i++) {
+            address t = makeAddr(string.concat("probeTrove", vm.toString(i)));
+            tm.setTrove(t, 0.04 ether, 2000e18);
+            chain[i] = t;
+        }
+        sorted.setChain(chain);
+        address freshOwner = makeAddr("freshOwner");
+        vm.deal(freshOwner, 10 ether);
+        address fresh = factory.createAccount(freshOwner, bytes32(uint256(0xF12E7)), _policy());
+        vm.prank(freshOwner);
+        TroveAccount(payable(fresh)).open{value: 0.1 ether}(DEBT, address(0), address(0), 60000e18);
+        assertEq(TroveAccount(payable(fresh)).status(), 1);
+    }
+
     // ============ buffer, allowance, views ============
 
     function test_parkUnparkAndClaimYield() public {

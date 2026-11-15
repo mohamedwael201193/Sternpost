@@ -237,9 +237,10 @@ contract TroveAccount is ITroveAccount {
 
     /// @notice Open the trove (owner path; `openFor` is the factory path).
     ///         Requires `debt >= bo.minNetDebt()` else `BelowMinDebt`; when
-    ///         `minDebtAhead > 0` the bounded rank walk must prove at least
-    ///         that much redeemable debt sits ahead of the new trove, else
-    ///         `RedemptionExposed`.
+    ///         `minDebtAhead > 0` a COMPLETED bounded rank walk proving less
+    ///         redeemable debt ahead than `minDebtAhead` reverts
+    ///         `RedemptionExposed` (plan 3.7(c): step exhaustion is treated
+    ///         as safe, exposure unproven).
     function open(uint256 debt, address upHint, address loHint, uint256 minDebtAhead)
         external
         payable
@@ -637,8 +638,11 @@ contract TroveAccount is ITroveAccount {
         if (minDebtAhead > 0) {
             // Nominal ICR of the trove about to open, canonical 1e20 scale.
             uint256 nicr = debt == 0 ? type(uint256).max : msg.value * NICR_SCALE / debt;
-            uint256 debtAhead = _debtAheadForNICR(nicr, minDebtAhead);
-            if (debtAhead < minDebtAhead) revert RedemptionExposed(debtAhead, minDebtAhead);
+            (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, minDebtAhead);
+            // Plan 3.7(c): step exhaustion is treated as safe (exposure was
+            // never proven), so revert only on a COMPLETED walk that proves
+            // debtAhead < minDebtAhead.
+            if (complete && debtAhead < minDebtAhead) revert RedemptionExposed(debtAhead, minDebtAhead);
         }
         bo.openTrove{value: msg.value}(debt, upHint, loHint);
         opened = true;
@@ -652,21 +656,41 @@ contract TroveAccount is ITroveAccount {
     ///         redeemable troves (ICR >= 110%) with a NICR below ours, stop
     ///         when the accumulated debt reaches `minDebtAhead`, when a trove
     ///         with NICR >= ours is reached, or after MAX_RANK_STEPS.
-    function _debtAheadForNICR(uint256 nicr, uint256 minDebtAhead) internal view returns (uint256 debtAhead) {
+    /// @return debtAhead Redeemable debt ahead of the hypothetical trove.
+    /// @return complete True only when the walk PROVED the total: it stopped
+    ///         because a trove with NICR >= ours was reached, the list ended,
+    ///         or a zero-debt entry was hit. False when MAX_RANK_STEPS was
+    ///         exhausted (plan 3.7(c): treat as safe, exposure unproven) or
+    ///         when the accumulated debt already reached `minDebtAhead`.
+    function _debtAheadForNICR(uint256 nicr, uint256 minDebtAhead)
+        internal
+        view
+        returns (uint256 debtAhead, bool complete)
+    {
         uint256 price = pf.fetchPrice();
         address cur = sortedTroves.getLast();
         uint256 steps;
         while (cur != address(0) && steps < MAX_RANK_STEPS) {
             (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(cur);
             uint256 troveDebt = principal + interest;
-            if (troveDebt == 0) break;
+            if (troveDebt == 0) {
+                complete = true;
+                break;
+            }
             uint256 troveNicr = coll * NICR_SCALE / troveDebt;
-            if (troveNicr >= nicr) break;
+            if (troveNicr >= nicr) {
+                complete = true;
+                break;
+            }
             if (troveNicr * price / NICR_SCALE >= MCR) debtAhead += troveDebt;
             if (debtAhead >= minDebtAhead) break;
             cur = sortedTroves.getPrev(cur);
             steps++;
         }
+        // The list ended: every trove ahead was examined, so the total is
+        // proved. (If steps ran out exactly as the list ended, cur is
+        // address(0) too and the walk is likewise complete.)
+        if (cur == address(0)) complete = true;
     }
 
     /// @notice Shared borrow path for `_draw` and `borrowTo`: status and
