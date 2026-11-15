@@ -4,7 +4,7 @@
 to mainnet; everything ran against a local anvil fork. No mainnet keys were
 used (anvil dev keys only).**
 
-- Date: 2026-11-15 (run 2, clean; run 1 failed on the draw step — see note)
+- Date: 2026-11-15 (run 2, clean except the expected shield() probe failure; run 1 failed on the draw step — see note)
 - Fork: Mezo mainnet chain 31612, fork block **13250363**
   (`anvil --fork-url https://rpc-http.mezo.boar.network --fork-block-number 13250363 --port 8546 --hardfork shanghai`)
   — `--hardfork shanghai` is required on this VM: anvil 1.8.6 with the

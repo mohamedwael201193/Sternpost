@@ -63,8 +63,8 @@ const TEAM = new Set(
 const args = process.argv.slice(2);
 const rpcIdx = args.indexOf("--rpc");
 const outIdx = args.indexOf("--out");
-const rpcArg = rpcIdx === -1 ? undefined : args[rpcIdx + 1];
-const outArg = outIdx === -1 ? undefined : args[outIdx + 1];
+const rpcArg = rpcIdx === -1 || args[rpcIdx + 1]?.startsWith("--") ? undefined : args[rpcIdx + 1];
+const outArg = outIdx === -1 || args[outIdx + 1]?.startsWith("--") ? undefined : args[outIdx + 1];
 const RPC = rpcArg || DEPLOYMENTS.rpc;
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
