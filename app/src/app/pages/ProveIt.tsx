@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
 import { addrUrl, txUrl } from '../../lib/proofs'
+import deployments from '../../../../shared/deployments/testnet.json'
 
-const FACTORY = '0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8'
-const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38'
-const ROUTER = '0xd6833f811e987f06a1e55a435d4be38c6d4188d4'
-const SPEND_WALLET = '0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a'
+const FACTORY = deployments.sternpost.SternpostFactory.address
+const GOVERNOR = deployments.sternpost.governor
+const ROUTER = deployments.sternpost.SternpostRouter.address
+const SPEND_WALLET = deployments.sternpost.spendWallet
 
 const SUITES: [string, number, number, number][] = [
   ['contracts-unit', 87, 0, 0],
@@ -13,6 +14,7 @@ const SUITES: [string, number, number, number][] = [
   ['contracts-account', 32, 0, 2],
   ['contracts-fuzz-account', 1, 0, 0],
   ['contracts-routes', 8, 0, 0],
+  ['contracts-fork-offline', 0, 0, 2],
   ['contracts-fork-testnet', 10, 0, 0],
   ['contracts-fork-mainnet', 7, 0, 1],
   ['sdk', 10, 0, 0],
@@ -49,8 +51,16 @@ export default function ProveIt() {
 
         <h2 className="display text-3xl mt-12 mb-4">Tests</h2>
         <p className="text-sm leading-relaxed">
-          <b>273 passed · 0 failed · 5 skipped</b> — <span className="mono">TESTS.json</span> @{' '}
-          <span className="mono">7b1ffcd</span> (generated 2026-11-15T11:39:26Z). The mcp and keeper suites are absent from
+          <b>273 passed · 0 failed · 5 skipped</b> — the all-suite sum including fork suites, from{' '}
+          <span className="mono">TESTS.json</span> (generated 2026-11-15T11:39:26Z). The file&apos;s own top-level
+          total is <b>256 passed · 0 failed · 2 skipped</b> (non-fork suites only — fork suites are listed
+          separately and never added twice). The table below sums to 273 / 0 / 5, including the{' '}
+          <span className="mono">contracts-fork-offline</span> row (0 / 0 / 2): the two fork contracts skipped
+          offline, which the previous version of this page omitted. The snapshot id recorded inside{' '}
+          <span className="mono">TESTS.json</span> (<span className="mono">7b1ffcde…</span>) does not resolve to any
+          commit in this repo&apos;s history, so the counts are anchored to the file&apos;s{' '}
+          <span className="mono">generatedAt</span> above and to main HEAD{' '}
+          <span className="mono">3374eee</span>. The mcp and keeper suites are absent from
           that snapshot; a refresh is pending. No test count here is a claim about the future.
         </p>
         <div className="overflow-x-auto mt-4">
@@ -91,7 +101,7 @@ export default function ProveIt() {
         </div>
 
         <p className="text-sm text-muted mt-12">
-          Testnet only. Mainnet is a capped pilot and read-only — no mainnet deployment exists yet.
+          Testnet only. Mainnet: capped pilot, not started — read-only and fork-tested; no mainnet deployment exists yet.
           Source: <span className="mono">shared/deployments/testnet.json</span>,{' '}
           <span className="mono">TESTS.json</span>, <span className="mono">judges/TESTNET_TXS.md</span>.
         </p>

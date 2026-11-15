@@ -3,10 +3,11 @@ import { Card } from '../kit'
 import { useTrove } from '../useTrove'
 import { fmt, pct, WAD } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
+import deployments from '../../../../shared/deployments/testnet.json'
 
-const DEFEND_TX = '0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2'
-const DEFEND_CALLER = '0x27aeBa9c609b21Ea4112d8bd0a21E779901D62A6'
-const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38'
+const DEFEND_TX = deployments.sternpost.classicRedeploy.defendTx
+const DEFEND_CALLER = deployments.sternpost.classicRedeploy.defend.caller
+const GOVERNOR = deployments.sternpost.governor
 
 const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
@@ -14,6 +15,10 @@ export default function Watch() {
   const t = useTrove()
   const tcrPct = toPct(t.tcr)
   const icrPct = toPct(t.icr)
+  // Standby state is UNKNOWN until a wallet is connected, a Governor exists, and the read returns —
+  // unknown must never render as "Disarmed".
+  const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
+  const standbyArmed = standbyKnown && !!t.standby?.[3]
   return (
     <div className="space-y-8">
       {t.recoveryMode === true && (
@@ -37,8 +42,8 @@ export default function Watch() {
           <p className="text-xs text-muted mt-1">Recovery Mode below 150%</p>
         </Card>
         <Card title="Standby heal">
-          <div className="display text-3xl">{t.standby?.[3] ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-          <p className="text-xs text-muted mt-1">{t.standby?.[3] ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+          <div className="display text-3xl">{!standbyKnown ? '—' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+          <p className="text-xs text-muted mt-1">{!standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
         </Card>
       </div>
 
@@ -50,16 +55,16 @@ export default function Watch() {
         </p>
         <p className="text-sm leading-relaxed mt-3">
           When it lands, anyone — a keeper, a stranger EOA — may call <span className="mono">shield()</span> with no
-          signature and no nonce. It fires on any of three triggers: ICR below the shield line, redeemable debt ahead
-          of the trove (rank), or TCR below 155% (Recovery Mode approaching). It repays toward the target ICR from the
-          MUSD balance, then from sMUSD, and closes the remaining gap by adding collateral from reserve BTC. It never
-          draws. It keeps working in Recovery Mode. The bounty is paid only when the ICR improves by at least 0.5
+          signature and no nonce. It would fire on any of three triggers: ICR below the shield line, redeemable debt ahead
+          of the trove (rank), or TCR below 155% (Recovery Mode approaching). It would repay toward the target ICR from the
+          MUSD balance, then from sMUSD, and close the remaining gap by adding collateral from reserve BTC. It would never
+          draw. It is designed to keep working in Recovery Mode. The bounty would be paid only when the ICR improves by at least 0.5
           percentage points or the value added is at least 10× the bounty, and at most once per cooldown.
         </p>
         <p className="text-sm leading-relaxed mt-3">
           Policy on the live 0.9 Governor:{' '}
           <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(GOVERNOR)} target="_blank" rel="noreferrer">{GOVERNOR}</a>
-          {' '}— floor {t.floor ? pct(t.floor) : '250%'} · defend line {t.defend ? pct(t.defend) : '160%'}.
+          {' '}— floor {t.floor ? pct(t.floor) : '250% (policy)'} · defend line {t.defend ? pct(t.defend) : '160% (policy)'}.
         </p>
       </Card>
 
@@ -86,7 +91,7 @@ export default function Watch() {
       <Card title="Recovery Mode — what it does">
         <p className="text-sm leading-relaxed">
           When Mezo&apos;s total collateral ratio (TCR) falls below 150%, the system enters Recovery Mode: draws are
-          paused on-chain until health recovers. Repay or add collateral to continue. The shield keeps working in
+          paused on-chain until health recovers. Repay or add collateral to continue. The shield is designed to keep working in
           Recovery Mode; closing an account does not — <span className="mono">closeAccount()</span> reverts while
           Recovery Mode is on. See <Link className="ink-link text-magenta" to="/app/close">Close / Revoke</Link>.
         </p>

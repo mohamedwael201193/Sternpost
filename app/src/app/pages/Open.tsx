@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom'
 import { Card } from '../kit'
 import { addrUrl, txUrl } from '../../lib/proofs'
+import deployments from '../../../../shared/deployments/testnet.json'
 
-const FACTORY = '0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8'
-const FACTORY_TX = '0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1'
-const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38'
-const ROUTER = '0xd6833f811e987f06a1e55a435d4be38c6d4188d4'
-const SPEND_WALLET = '0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a'
+const FACTORY = deployments.sternpost.SternpostFactory.address
+const FACTORY_TX = deployments.sternpost.SternpostFactory.tx
+const GOVERNOR = deployments.sternpost.governor
+const ROUTER = deployments.sternpost.SternpostRouter.address
+const SPEND_WALLET = deployments.sternpost.spendWallet
 
 function Addr({ a }: { a: string }) {
   return <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(a)} target="_blank" rel="noreferrer">{a} ↗</a>
@@ -25,7 +26,8 @@ export default function Open() {
           <li>
             <b>Create a Governor on Bridge.</b> <Link className="ink-link text-magenta" to="/app">Back on Bridge →</Link>{' '}
             set your floor (draws stop below it) and your defend line (a stranger may repay from your buffer below it).
-            One transaction deploys your Governor from the Factory below.
+            One transaction deploys your Governor from the Factory below. This step only appears on Bridge once you
+            already have a trove and no Governor yet — open the trove first (step 1), then come back.
           </li>
           <li>
             <b>Give your crew budgets.</b> <Link className="ink-link text-magenta" to="/app/crew">Crew →</Link>{' '}

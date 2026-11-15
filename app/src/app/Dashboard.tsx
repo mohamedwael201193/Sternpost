@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NavLink, Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
@@ -47,10 +47,10 @@ const ALL_NAV = [...NAV_MAIN, ...NAV_CLASSIC, ...NAV_EXIT] as const
 
 const PAGE_META: Record<string, { eyebrow: string; title: string; sub: string }> = {
   '': { eyebrow: 'Chartroom', title: 'Bridge', sub: 'Credit your agents can use. Your Bitcoin stays yours. Your crew spends. The ship defends itself.' },
-  open: { eyebrow: 'Open account', title: 'Open a credit account', sub: 'One transaction deploys your TroveAccount and opens your trove.' },
+  open: { eyebrow: 'Open account', title: 'Open a credit account', sub: 'Open a trove on Mezo, create your Governor on Bridge, then give your crew budgets — the live path today.' },
   crew: { eyebrow: 'Crew', title: 'Crew', sub: 'Agent session keys, signed on by you, spendable up to the budget you set.' },
   pay: { eyebrow: 'Pay', title: 'Pay', sub: 'Your agent pays x402 services by borrowing exactly the price, the moment it pays.' },
-  watch: { eyebrow: 'Watch', title: 'Watch', sub: 'Sonar, shield rules, buffer, and Recovery Mode — armed around the clock.' },
+  watch: { eyebrow: 'Watch', title: 'Watch', sub: 'Sonar, buffer, and Recovery Mode — live on testnet. Shield is in progress.' },
   logbook: { eyebrow: 'Logbook', title: 'Logbook', sub: 'Every on-chain event of this account, and the proof behind every claim.' },
   classic: { eyebrow: 'Classic', title: 'Classic', sub: 'The trove you already have. Every draw needs your signature, because Mezo allows one signature at a time.' },
   draw: { eyebrow: 'Classic', title: 'Draw', sub: 'Draw MUSD against the trove you already have.' },
@@ -58,40 +58,36 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; sub: string }>
   close: { eyebrow: 'Close / Revoke', title: 'Close / Revoke', sub: 'Revoke agents, or close the account and take everything back.' },
 }
 
-/** Scroll reset on in-app navigation (shell-owned, QA quick-win 1): the shell mounts
- * once for /app/*, so every inner route change scrolls the window back to the top —
- * headings must never arrive cut off. Mounted inside Dashboard, never in main.tsx. */
-function ScrollToTop() {
-  const { pathname } = useLocation()
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior })
-  }, [pathname])
-  return null
-}
-
-/** Chain indicator (plan §6.2). Testnet only: mainnet is read-only and fork-tested —
- * no mainnet deployment exists yet, so the Mainnet control is disabled, never a live
- * switch that implies mainnet is live. */
+/** Footer chain switcher (plan §6.2). Testnet is live; mainnet is a capped pilot, not started, and read-only — no mainnet deployment exists yet, so selecting it shows that plainly and switches nothing. */
 function ChainSwitcher() {
+  const [view, setView] = useState<'testnet' | 'mainnet'>('testnet')
   return (
     <div>
       <div className="flex border border-ink/25" role="group" aria-label="Chain">
-        <span aria-current="true" className="caps flex-1 px-2 py-2 text-center text-[10px] bg-ink text-paper">
-          Testnet 31611
-        </span>
         <button
           type="button"
-          disabled
-          aria-disabled="true"
-          title="Testnet only — mainnet is read-only and fork-tested"
-          className="caps flex-1 px-2 py-2 text-center text-[10px] text-muted/60 cursor-not-allowed"
+          onClick={() => setView('testnet')}
+          aria-pressed={view === 'testnet'}
+          className={`caps flex-1 px-2 py-2 text-[10px] transition ${view === 'testnet' ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}
+        >
+          Testnet 31611
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('mainnet')}
+          aria-pressed={view === 'mainnet'}
+          className={`caps flex-1 px-2 py-2 text-[10px] transition ${view === 'mainnet' ? 'bg-magenta text-paper' : 'text-muted hover:text-ink'}`}
         >
           Mainnet 31612
         </button>
       </div>
-      <p className="mt-2 text-[11px] leading-relaxed text-muted">
-        Live on Mezo testnet — every number is labelled with its network. Mainnet is read-only and fork-tested; no mainnet deployment exists yet.
-      </p>
+      {view === 'mainnet' ? (
+        <p role="note" className="mt-2 text-[11px] leading-relaxed text-muted">
+          Mainnet: capped pilot, not started — read-only and fork-tested. No mainnet deployment exists yet, so there is no pilot data to show.
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">Live on Mezo testnet. Every number is labelled with its network.</p>
+      )}
     </div>
   )
 }
@@ -134,7 +130,6 @@ export default function Dashboard() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
-        <ScrollToTop />
         <div className="min-h-screen grain grid lg:grid-cols-[240px_1fr] overflow-x-clip">
           <aside className="hidden lg:flex flex-col border-r border-ink/15 bg-paper/60 backdrop-blur-[2px] sticky top-0 h-screen">
             <Link to="/" className="flex items-center gap-3 px-6 py-6">

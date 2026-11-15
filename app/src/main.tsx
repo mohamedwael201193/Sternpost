@@ -39,7 +39,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Landing />} />
         <Route path="/prove-it" element={<Suspense fallback={<div className="p-10 display text-2xl">Opening the proof…</div>}><ProveIt /></Suspense>} />
         <Route path="/app/*" element={<Suspense fallback={<div className="p-10 display text-2xl">Opening the chartroom…</div>}><Dashboard /></Suspense>} />
-        {['pay', 'apps', 'activity', 'revoke', 'draw', 'dashboard', 'open', 'crew', 'watch', 'logbook', 'classic', 'close'].map((p) => <Route key={p} path={`/${p}/*`} element={<ToApp />} />)}
+        {['pay', 'apps', 'activity', 'revoke', 'draw', 'dashboard', 'open', 'crew', 'watch', 'logbook', 'muster', 'classic', 'close', 'break'].map((p) => <Route key={p} path={`/${p}/*`} element={<ToApp />} />)}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
