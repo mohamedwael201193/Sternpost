@@ -1,13 +1,17 @@
 No files changed, compilation skipped
 
-Ran 7 tests for test/fork/Fork.t.sol:ForkTest
-[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 1386999)
-[PASS] test_fork_defend() (gas: 1457050)
-[PASS] test_fork_directBypassReverts() (gas: 524947)
-[PASS] test_fork_nonceRace() (gas: 783290)
-[PASS] test_fork_revokeBurnsNonce() (gas: 502588)
-[PASS] test_fork_safeDraw_previewMatches() (gas: 709286)
-[PASS] test_fork_unsafeDrawRefused() (gas: 588332)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 18.37s (18.59s CPU time)
+Ran 1 test for test/fork/RouterFork.t.sol:RouterForkTest
+[SKIP: skipped] setUp() (gas: 0)
+Suite result: ok. 0 passed; 0 failed; 1 skipped; finished in 6.17s (0.00ns CPU time)
 
-Ran 1 test suite in 18.37s (18.37s CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)
+Ran 7 tests for test/fork/Fork.t.sol:ForkTest
+[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 1446812)
+[PASS] test_fork_defend() (gas: 1510403)
+[PASS] test_fork_directBypassReverts() (gas: 540747)
+[PASS] test_fork_nonceRace() (gas: 876753)
+[PASS] test_fork_revokeBurnsNonce() (gas: 518784)
+[PASS] test_fork_safeDraw_previewMatches() (gas: 945678)
+[PASS] test_fork_unsafeDrawRefused() (gas: 615263)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 29.22s (17.05s CPU time)
+
+Ran 2 test suites in 29.23s (35.39s CPU time): 7 tests passed, 0 failed, 1 skipped (8 total tests)

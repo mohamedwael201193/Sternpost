@@ -1,15 +1,19 @@
-Compiling 1 files with Solc 0.8.24
-Solc 0.8.24 finished in 12.74s
-Compiler run successful!
+No files changed, compilation skipped
+
+Ran 3 tests for test/fork/RouterFork.t.sol:RouterForkTest
+[PASS] test_fork_save_depositsIntoLiveSmusd() (gas: 1127717)
+[PASS] test_fork_save_disabledRouteRefused() (gas: 107655)
+[PASS] test_fork_save_overPerDrawRefused() (gas: 103623)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 28.50s (3.01s CPU time)
 
 Ran 7 tests for test/fork/Fork.t.sol:ForkTest
-[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 2120800)
-[PASS] test_fork_defend() (gas: 1939634)
-[PASS] test_fork_directBypassReverts() (gas: 987450)
-[PASS] test_fork_nonceRace() (gas: 998849)
-[PASS] test_fork_revokeBurnsNonce() (gas: 718147)
-[PASS] test_fork_safeDraw_previewMatches() (gas: 924845)
-[PASS] test_fork_unsafeDrawRefused() (gas: 1050835)
-Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 12.43s (12.37s CPU time)
+[PASS] test_fork_callbackRemoved_failsClosed_healRecovers() (gas: 2471252)
+[PASS] test_fork_defend() (gas: 2163002)
+[PASS] test_fork_directBypassReverts() (gas: 1326177)
+[PASS] test_fork_nonceRace() (gas: 1158803)
+[PASS] test_fork_revokeBurnsNonce() (gas: 817958)
+[PASS] test_fork_safeDraw_previewMatches() (gas: 1227716)
+[PASS] test_fork_unsafeDrawRefused() (gas: 1400705)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 41.41s (34.71s CPU time)
 
-Ran 1 test suite in 12.43s (12.43s CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)
+Ran 2 test suites in 41.50s (69.91s CPU time): 10 tests passed, 0 failed, 0 skipped (10 total tests)
