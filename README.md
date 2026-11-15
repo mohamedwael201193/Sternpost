@@ -13,7 +13,7 @@
 [![tests](https://img.shields.io/badge/tests-256%20passing-2ea44f)](#tests)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[**Live app**](https://sternpost-pink.vercel.app) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
+[**Live app**](https://sternpost-pink.vercel.app) · [**Deck**](https://sternpost-deck.vercel.app) · [**Demo video**](https://youtu.be/EyLSaYiIX5M) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
 
 </div>
 
@@ -103,6 +103,25 @@ ABIs: [`shared/abis`](shared/abis). Every address and hash: [`shared/deployments
 
 The 0.9 Classic redeploy (2026-11-15): the Factory was deployed in [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) at [block 16794393](https://explorer.test.mezo.org/block/16794393) (gas 4,773,613). The governor, spend wallet and router deploys from the same redeploy are in [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
 
+### Wave 2 account contracts (1.9, 2026-11-15, Mezo testnet 31611)
+
+Deployer [`0xf76e…71a3`](https://explorer.test.mezo.org/address/0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3) (also the fee recipient, feeBps 10). Total deploy cost ~0.000000001 BTC (6,879,292 gas at 146 wei). Compiler 0.8.24, optimizer 200, via_ir, evm_version paris. Full proof: [`docs/proof/accounts-2026-11-15.md`](docs/proof/accounts-2026-11-15.md); record: [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
+
+| Contract | Address | Deploy tx | Block | Gas used | Verification |
+|---|---|---|---|---|---|
+| TroveAccount (implementation) | [`0xC4f0…470`](https://explorer.test.mezo.org/address/0xC4f080498a720887b6086f13fBad5627d8abc470) | [`0x0c21…b7a2`](https://explorer.test.mezo.org/tx/0x0c2128c6357dbbaa6ea669d4d741bbd054c98825b41447cf08580ef3fe09b7a2) | [16803284](https://explorer.test.mezo.org/block/16803284) | 4,773,582 | Blockscout source-verified (`forge verify-contract` Pass - Verified; v2 API `is_verified: true`) |
+| TroveAccountFactory | [`0xfb4E…85C3`](https://explorer.test.mezo.org/address/0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3) | [`0x9716…b6f4`](https://explorer.test.mezo.org/tx/0x9716cdf72b414bf8e99f5818d67d2c2da355a2cee1c915866d94ffe6ffbcb6f4) | [16803285](https://explorer.test.mezo.org/block/16803285) | 591,225 | See note below — **not** a flat "verified" |
+| Radar | [`0x9Cd9…be2`](https://explorer.test.mezo.org/address/0x9Cd95A420e014da798dbFB74833b9D4DEe868be2) | [`0x7a08…dc8d`](https://explorer.test.mezo.org/tx/0x7a084aae58be89f31849595980176da7670f2e7652c77f0583c5051e367fdc8d) | [16803285](https://explorer.test.mezo.org/block/16803285) | 859,898 | Blockscout source-verified |
+| Batcher | [`0xB094…b33`](https://explorer.test.mezo.org/address/0xB094e06559F7aF264e515F5363D9E89920b19b33) | [`0xa7b4…fec8`](https://explorer.test.mezo.org/tx/0xa7b4cf963933293b9c3141237940e8b957ddc831269618e5ea2f62e49f60fec8) | [16803285](https://explorer.test.mezo.org/block/16803285) | 654,587 | Blockscout source-verified |
+
+**Factory verification, stated honestly:** Blockscout classifies the factory as `proxy_type: basic_implementation` pointing at the verified TroveAccount implementation, so its own v2 record carries no `is_verified` field and `forge verify-contract` reports "already verified". The factory is NOT functionally a proxy — this is Blockscout's proxy-detector misfiring on the ERC-1167 clone bytecode. Independent proof: all four deployed bytecodes MATCH the local forge build artifacts (immutables masked) — Factory 2,414 B, Impl 21,857 B, Radar 3,726 B, Batcher 2,784 B.
+
+**Demo account: BLOCKED on funding.** The deployer holds 0.01336 BTC; a minimum trove needs ≥0.0340 BTC at 110% MCR. No demo account was created and none is claimed. The frontend is wired to the new addresses (`app/src/lib/chain.ts`, `app/src/lib/abi.ts`, [`shared/abis`](shared/abis)); a local vite build is green with the new addresses in the bundle.
+
+### Live site (Vercel)
+
+Deployment `dpl_FvNpvLatELYXPLvF8BM5oRcSr7Wj`, READY 22:46 EET 2026-11-15 — [sternpost-pink.vercel.app](https://sternpost-pink.vercel.app) (HTTP 200, bundle `index-fcnQEoGc.js`), version **v0.9 LIVE**. This deployment is main [`d9e584c`](https://github.com/mohamedwael201193/Sternpost/commit/d9e584c976dca1add3e8bcf9bd77d8baf8bb2cc3) and does **not** yet contain the new Wave 2 contract addresses above — the redeploy with the new addresses follows the merge. The live site does not yet call the new contracts.
+
 ## Live proof (Wave-1 run on the superseded deployment, plus the 0.9 `defend()` re-run)
 
 Every row marked **Wave 1** ran on the Wave-1 deployment, superseded by the 0.9 Classic redeploy on 2026-11-15 (see [Deployments](#deployments-mezo-testnet-chain-31611)). Those rows demonstrate the flows on the pre-0.9 contracts — the 0.9 redeploy changed the governor code, so they are not proof of the current deployment. The only flow re-run on the current 0.9 deployment is `defend()` (last row); the full 0.9 run is in [`judges/TESTNET_TXS.md`](judges/TESTNET_TXS.md).
@@ -133,6 +152,7 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 | 1.3/1.6 — `closeAccount` tolerates zero surplus on a redeemed trove; Batcher mock fix | `closeAccount` [`026d0c4`](https://github.com/mohamedwael201193/Sternpost/commit/026d0c4984e3922dc83c2d015fc933849ff742cf) + Batcher mock [`47eb2b0`](https://github.com/mohamedwael201193/Sternpost/commit/47eb2b0dc6f13ee614f5c0c97cb01e1e1f749845) |
 | 1.6 — Batcher `promote` / claims + saturating balance delta + `MAX_BATCH` docs (J3) | promote / claims [`1dd55ed`](https://github.com/mohamedwael201193/Sternpost/commit/1dd55edee934b7bf0db6b6dc98c70e30d9cd36bf) + saturating delta / `MAX_BATCH` docs [`ad48467`](https://github.com/mohamedwael201193/Sternpost/commit/ad48467bb7c66a6fa7b2d666a1ec5baf3295449c) |
 | 0.8 — test-all hardening + [`TESTS.json`](TESTS.json); fresh FORK=1 counts 256 / 270 / 273 / 137 | hardening [`47d5623`](https://github.com/mohamedwael201193/Sternpost/commit/47d562356c3eba03a2ecb48bd1582874be9abdf2) + counts [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) |
+| 1.9 — TroveAccount + Factory + Radar + Batcher deployed to testnet 31611, source-verified, wired into the frontend | deploy [`d3da23b`](https://github.com/mohamedwael201193/Sternpost/commit/d3da23bcd2696e54e93623cf83c46a86ec857c22) + proof [`docs/proof/accounts-2026-11-15.md`](docs/proof/accounts-2026-11-15.md) |
 
 ## Tests
 
