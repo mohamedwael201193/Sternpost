@@ -8,7 +8,8 @@ everything else is read-only. No keys in any response.
 ## Live vs fork status (honest)
 
 The Wave 2 system (task 1.9) **is deployed on live testnet**
-(2026-11-15 22:45 EET: TroveAccount impl
+(2026-11-15, `shared/deployments/testnet.json` `accounts`, blocks
+16803284–16803285: TroveAccount impl
 `0xC4f080498a720887b6086f13fBad5627d8abc470`, Factory
 `0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3`, Radar
 `0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`, Batcher
@@ -108,7 +109,8 @@ Extensions (documented here because the contract / transport needs them):
 which has no §5.1 equivalent), `NO_402` (the resource did not answer
 402), `SCHEME_MISMATCH` (only `exact` is supported), `VERIFY_FAILED`
 (the facilitator rejected the payment signature), `SETTLE_FAILED`
-(the resource still answers 402 after payment).
+(the resource still answers 402 after payment), `REFILL_FAILED`
+(the refill draw reverted on-chain or could not be sent — nothing was paid).
 
 ### Internal helpers (not tools)
 
@@ -141,7 +143,10 @@ input. Two layers:
    the test loop in `test/tools.test.ts` ("key never returned").
 
 Every serialized response — success or error — is scanned for the value
-of `STERNPOST_API_KEY` (if set) before it leaves the server.
+of `STERNPOST_API_KEY` (if set) and for the local agent private key (if
+a key file exists) before it leaves the server.
+
+Permit2 pulls whatever amount the session key signs, to whatever `payTo` it signs — the payee allowlist and `perTx` do NOT apply to a signed Permit2 transfer (plan §3.9); `canSignX402` is off by default and the owner caps the Permit2 allowance at approval.
 
 ## Pinned deployment (source: `shared/deployments/testnet.json`)
 

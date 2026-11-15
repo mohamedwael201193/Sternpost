@@ -11,7 +11,7 @@ import {
 /**
  * Fork tests (plan §5.1, task 1.9 scope note): the Wave 2 system IS now
  * deployed on live testnet (TroveAccount impl, Factory, Radar, Batcher —
- * 2026-11-15 22:45 EET) but NO account has been opened there yet
+ * 2026-11-15, task 1.9) but NO account has been opened there yet
  * (deploy-19 broadcast: 4 deploy txs, no createAndOpen), so the full
  * success paths of `balance` / `pay` / `request_session` / `radar` are
  * still verified on an anvil fork of testnet (FORK=1, nothing broadcast).

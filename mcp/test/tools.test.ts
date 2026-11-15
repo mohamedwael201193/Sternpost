@@ -404,12 +404,23 @@ describe("refusal reasons", () => {
     }
   });
 
-  it("mainnet is refused without STERNPOST_MAINNET_OK=1 (J1 F5: MAINNET_REFUSED is wired, not dead)", async () => {
+  it("mainnet is refused without STERNPOST_MAINNET_OK=1 (J1 F5: MAINNET_REFUSED is wired, not dead; J3 F4/d: pay, request_session, helpers too)", async () => {
     const ctx = createContext(
       loadEnv({ ...process.env, STERNPOST_NETWORK: "mainnet", STERNPOST_ACCOUNT: ADDRESSES.governor }),
     );
     await expect(handleBalance(ctx, {})).rejects.toThrow(/mainnet is never served unless STERNPOST_MAINNET_OK=1/);
     await expect(handleRadar(ctx, { network: "mainnet" })).rejects.toThrow(/mainnet is never served/);
+    await expect(handlePay(ctx, { url: "https://demo.vativ.io/", dryRun: true })).rejects.toThrow(
+      /mainnet is never served/,
+    );
+    await expect(
+      handleRequestSession(ctx, { account: ADDRESSES.governor, purpose: "mainnet probe", budget: "1" }),
+    ).rejects.toThrow(/mainnet is never served/);
+    await expect(
+      handlePreviewDraw(ctx, { app: ADDRESSES.spendWallet, amountMusd: "10", payee: ADDRESSES.spendWallet }),
+    ).rejects.toThrow(/mainnet is never served/);
+    await expect(handleGovernorStatus(ctx, {})).rejects.toThrow(/mainnet is never served/);
+    await expect(handleX402Quote(ctx, { route: "radar" })).rejects.toThrow(/mainnet is never served/);
   });
 });
 
@@ -519,6 +530,146 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       await rm(tmp, { recursive: true, force: true });
     }
   });
+
+  /**
+   * Full-pay harness (J3 F7): a stub chain + an injected stub wallet, so
+   * the refill branch runs without a live account. The local 402 server
+   * answers 402 for every request (including the retry), so a run that
+   * reaches the payment step ends SETTLE_FAILED — the assertions below
+   * are about the refill, which happens before that. The facilitator
+   * /verify call is the only live call left; it is answered locally.
+   * The x402 Permit2 payload path only signs typed data (no chain reads),
+   * so the stub readContract only needs previewDraw + balanceOf.
+   */
+  async function withFullPayHarness(
+    opts: {
+      balanceOf: bigint;
+      /** previewDraw result for the refill leg (payee = account); null = allowed. */
+      refillPreview: [boolean, number, bigint, bigint] | null;
+      receiptStatus: "success" | "reverted";
+    },
+    run: (
+      url: string,
+      ctxStub: ReturnType<typeof createContext>,
+      draws: unknown[],
+    ) => Promise<void>,
+  ) {
+    const tmp = await mkdtemp(join(tmpdir(), "sternpost-mcp-test-"));
+    try {
+      const env = loadEnv({
+        ...process.env,
+        STERNPOST_ACCOUNT: ADDRESSES.governor,
+        STERNPOST_AGENT_KEY_FILE: join(tmp, "agent.json"),
+        STERNPOST_API: "http://127.0.0.1:9",
+      });
+      await loadOrCreateAgentKey(env);
+      const ctx = createContext(env);
+      const draws: unknown[] = [];
+      const stubClient = {
+        readContract: async ({ functionName, args }: { functionName: string; args?: unknown[] }) => {
+          if (functionName === "previewDraw") {
+            const payee = (args as unknown[])[1] as string;
+            // Refill leg = the draw pays the account itself.
+            if (opts.refillPreview && payee.toLowerCase() === (ADDRESSES.governor as string).toLowerCase()) {
+              return opts.refillPreview;
+            }
+            return [true, 0, 2_600_000_000_000_000_000n, 1_000_000_000_000_000n];
+          }
+          if (functionName === "balanceOf") return opts.balanceOf;
+          if (functionName === "allowance" || functionName === "nonces") return 0n;
+          throw new Error(`unexpected call ${functionName}`);
+        },
+        getChainId: async () => 31611,
+        getBytecode: async () => "0x1234",
+        getBalance: async () => 0n,
+        waitForTransactionReceipt: async () => ({ status: opts.receiptStatus }),
+      };
+      const stubWallet = {
+        chain: { id: 31611 },
+        writeContract: async (args: unknown) => {
+          draws.push(args);
+          return "0x1111111111111111111111111111111111111111111111111111111111111111";
+        },
+      };
+      const ctxStub = {
+        ...ctx,
+        client: stubClient as unknown as typeof ctx.client,
+        agentWallet: stubWallet as unknown as NonNullable<typeof ctx.agentWallet>,
+      } as unknown as typeof ctx;
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: unknown, init?: unknown) => {
+        if (String(input).startsWith("https://facilitator.vativ.io/verify")) {
+          return new Response(JSON.stringify({ valid: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return realFetch(input as never, init as never);
+      }) as typeof fetch;
+      try {
+        await with402Server(await fixtureHeader(), async (url) => run(url, ctxStub, draws));
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }
+
+  it("pay draws the FULL amount when the balance is partial (0 < balance < amount) (J3 F7a)", async () => {
+    await withFullPayHarness(
+      { balanceOf: 500_000_000_000_000n, refillPreview: null, receiptStatus: "success" },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        // The retry still 402s (local server), so the payment is refused —
+        // but the refill already happened, for the FULL amount.
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("SETTLE_FAILED");
+        expect(p.refillTx).toBe("0x1111111111111111111111111111111111111111111111111111111111111111");
+        expect(draws).toHaveLength(1);
+        const draw = draws[0] as { functionName: string; args: unknown[] };
+        expect(draw.functionName).toBe("draw");
+        expect(draw.args[0]).toBe(ADDRESSES.governor);
+        expect(draw.args[1]).toBe(1_000_000_000_000_000n); // full 0.001 MUSD, NOT the 0.0005 shortfall
+      },
+    );
+  });
+
+  it("pay reports REFILL_FAILED when the refill draw reverts on-chain (J3 F7b)", async () => {
+    await withFullPayHarness(
+      { balanceOf: 0n, refillPreview: null, receiptStatus: "reverted" },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        expect(p.refillTx).toBe("0x1111111111111111111111111111111111111111111111111111111111111111");
+        expect(p.settleTx).toBeNull();
+        expect(p.detail).toMatch(/reverted on-chain/);
+        expect(draws).toHaveLength(1);
+      },
+    );
+  });
+
+  it("pay refuses PAYEE_NOT_ALLOWED when the refill leg preview fails (J3 F7b)", async () => {
+    await withFullPayHarness(
+      {
+        balanceOf: 0n,
+        refillPreview: [false, 2, 2_600_000_000_000_000_000n, 1_000_000_000_000_000n],
+        receiptStatus: "success",
+      },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("PAYEE_NOT_ALLOWED");
+        expect(p.refillTx).toBeNull();
+        expect(p.detail).toMatch(/refill leg/);
+        expect(draws).toHaveLength(0);
+      },
+    );
+  });
 });
 
 describe("request_session (offline, temp key file, unreachable API)", () => {
@@ -590,6 +741,26 @@ describe("key never returned", () => {
     } finally {
       if (prev === undefined) delete process.env.STERNPOST_API_KEY;
       else process.env.STERNPOST_API_KEY = prev;
+    }
+  });
+
+  it("guardOutput throws if the agent private key would leak into a response (J3 obs c)", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "sternpost-mcp-test-"));
+    try {
+      const keyPath = join(tmp, "agent.json");
+      const env = loadEnv({ ...process.env, STERNPOST_AGENT_KEY_FILE: keyPath });
+      const { key } = await loadOrCreateAgentKey(env);
+      const prev = process.env.STERNPOST_AGENT_KEY_FILE;
+      process.env.STERNPOST_AGENT_KEY_FILE = keyPath;
+      try {
+        expect(() => guardOutput(JSON.stringify({ agent: key.privateKey }))).toThrow(/agent private key/);
+        expect(() => guardOutput(JSON.stringify({ ok: true }))).not.toThrow();
+      } finally {
+        if (prev === undefined) delete process.env.STERNPOST_AGENT_KEY_FILE;
+        else process.env.STERNPOST_AGENT_KEY_FILE = prev;
+      }
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
     }
   });
 

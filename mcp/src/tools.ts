@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
-import type { Address, PublicClient } from "viem";
+import type { Address, PublicClient, WalletClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   ADDRESSES,
@@ -41,7 +44,7 @@ import {
 } from "./chain.js";
 import { REFUSALS, explain, explainTrovePreview } from "./reasons.js";
 import { X402_ROUTES, x402Challenge, type X402Route } from "./x402.js";
-import { loadAgentAddress, loadAgentKey, loadOrCreateAgentKey } from "./agentKey.js";
+import { loadAgentAddress, loadAgentKey, loadOrCreateAgentKey, agentKeyPath } from "./agentKey.js";
 import { newRequestId, storeSessionRequest } from "./store.js";
 
 /**
@@ -80,11 +83,45 @@ export function rejectCredentialFields(args: unknown): void {
   }
 }
 
-/** Throws if the serialized output contains a configured secret value. */
+/**
+ * Throws if the serialized output contains a configured secret value.
+ * Scans STERNPOST_API_KEY (if set) AND the local agent private key (if a
+ * key file exists) — defence in depth: no handler emits the agent key
+ * today, but a future output path must not be able to leak it either.
+ * The key is read lazily and cached per path (a missing file is re-checked
+ * on every call, so a key created later — e.g. by request_session — is
+ * picked up); only the 0x + 64-hex value is ever compared, never logged.
+ */
+let cachedAgentKey: { path: string; key: string } | null = null;
+function agentPrivateKeyValue(): string | null {
+  let path: string;
+  try {
+    path = agentKeyPath(loadEnv());
+  } catch {
+    path = join(homedir(), ".sternpost", "agent.json");
+  }
+  if (cachedAgentKey && cachedAgentKey.path === path) return cachedAgentKey.key;
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { privateKey?: unknown };
+    if (typeof parsed.privateKey === "string" && /^0x[0-9a-fA-F]{64}$/.test(parsed.privateKey)) {
+      cachedAgentKey = { path, key: parsed.privateKey };
+      return parsed.privateKey;
+    }
+  } catch {
+    // No key file (yet), malformed, or unreadable — nothing to scan for.
+    // Never throw from the guard: a missing key must not break responses.
+  }
+  return null;
+}
+
 export function guardOutput(text: string): void {
-  const secret = process.env.STERNPOST_API_KEY;
-  if (secret && secret.length >= 8 && text.includes(secret)) {
+  const apiKey = process.env.STERNPOST_API_KEY;
+  if (apiKey && apiKey.length >= 8 && text.includes(apiKey)) {
     throw new Error("refused: response would contain a configured secret value");
+  }
+  const agentKey = agentPrivateKeyValue();
+  if (agentKey && text.includes(agentKey)) {
+    throw new Error("refused: response would contain the agent private key");
   }
 }
 
@@ -175,6 +212,8 @@ export interface ToolContext {
   client: PublicClient;
   env: McpEnv;
   network: NetworkName;
+  /** Test seam: an injected signing client for `pay`'s refill draw. Production always builds one from the agent key via createAgentWallet. */
+  agentWallet?: WalletClient;
 }
 
 export function createContext(env: McpEnv = loadEnv(), network?: NetworkName): ToolContext {
@@ -520,9 +559,12 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
     });
   }
 
-  // (3) Refill: if the account's MUSD balance is below the amount, borrow
-  // exactly the shortfall with draw(payee = the account itself). The draw
-  // is signed by the agent key, which pays gas.
+  // (3) Refill: if the account's MUSD balance is below the amount, draw
+  // the FULL amount with draw(payee = the account itself, amount) — plan
+  // §5.2: draw(account, max(amount, refillTarget)); testnet refillTarget
+  // is 0, so the draw is exactly `amount`, never just the shortfall (a
+  // partial balance does not reduce the draw). The draw is signed by the
+  // agent key, which pays gas.
   let refillTx: string | null = null;
   const balance = (await client.readContract({
     address: musd as Address,
@@ -531,17 +573,91 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
     args: [account],
   })) as bigint;
   if (balance < amountWei) {
-    const wallet = createAgentWallet(ctx.env, agentKey.privateKey, ctx.network);
-    const hash = await wallet.writeContract({
+    // Refill-leg preview: the draw pays the account itself, so preview
+    // (agent, account, amount) — the (agent, payTo, amount) preview above
+    // never checks this leg. A PayeeNotAllowed(account) here is a clean
+    // refusal (the account was never allowlisted as its own payee),
+    // not a raw revert from the draw.
+    const [refillOk, refillReasonCode, refillIcrAfter, refillFee] = (await client.readContract({
       address: account,
       abi: troveAccountAbi,
-      functionName: "draw",
-      args: [account, amountWei],
-      chain: wallet.chain,
-      account: privateKeyToAccount(agentKey.privateKey),
-    });
-    await client.waitForTransactionReceipt({ hash });
-    refillTx = hash;
+      functionName: "previewDraw",
+      args: [agentKey.address, account, amountWei],
+    })) as unknown as [boolean, number, bigint, bigint];
+    if (!refillOk) {
+      const refillPreview = {
+        allowed: false,
+        ...explainTrovePreview(refillReasonCode),
+        icrAfter: formatUnits(refillIcrAfter, 18),
+        fee: formatUnits(refillFee, 18),
+      };
+      return ok({
+        ok: true,
+        tool: "pay",
+        status: "refused",
+        amount,
+        payTo,
+        network,
+        refillTx: null,
+        settleTx: null,
+        responseStatus: first.status,
+        responseBody: truncate(firstBody),
+        reason: refillPreview.reason,
+        detail: `refill leg refused: draw(agent → account) preview failed (${refillPreview.reason}) — ${refillPreview.explanation}`,
+        preview,
+        refillPreview,
+      });
+    }
+    // Send the draw, then CHECK the receipt: waitForTransactionReceipt
+    // does not throw on a reverted tx, so a draw that reverts at execution
+    // (price move, Recovery Mode flip, concurrent budget use) must not be
+    // reported as a successful refill.
+    try {
+      const wallet = ctx.agentWallet ?? createAgentWallet(ctx.env, agentKey.privateKey, ctx.network);
+      const hash = await wallet.writeContract({
+        address: account,
+        abi: troveAccountAbi,
+        functionName: "draw",
+        args: [account, amountWei],
+        chain: wallet.chain,
+        account: privateKeyToAccount(agentKey.privateKey),
+      });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.status === "reverted") {
+        return ok({
+          ok: true,
+          tool: "pay",
+          status: "refused",
+          amount,
+          payTo,
+          network,
+          refillTx: hash,
+          settleTx: null,
+          responseStatus: first.status,
+          responseBody: truncate(firstBody),
+          reason: "REFILL_FAILED",
+          detail: `refill draw tx ${hash} reverted on-chain (status 0) — price move, Recovery Mode flip, or concurrent budget use; nothing was paid`,
+          preview,
+        });
+      }
+      refillTx = hash;
+    } catch (err) {
+      return ok({
+        ok: true,
+        tool: "pay",
+        status: "refused",
+        amount,
+        payTo,
+        network,
+        refillTx: null,
+        settleTx: null,
+        responseStatus: first.status,
+        responseBody: truncate(firstBody),
+        reason: "REFILL_FAILED",
+        detail: `refill draw failed before it could settle: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
+        preview,
+      });
+    }
   }
 
   // (4) Sign the x402 v2 ExactEvmScheme payment (Permit2, payer = account,
@@ -746,6 +862,23 @@ const MCR = 1_100_000_000_000_000_000n; // 1.1e18
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 /**
+ * Word a deployed-Radar rank() failure by its kind: a timeout is not a
+ * wrong address is not a revert. The old bare `catch {}` labelled every
+ * failure a timeout. The fallback below is the same in every case (direct
+ * walk, rankSource "walk"); only the note — and the logged error — change.
+ */
+function classifyRankError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : "";
+  if (/timeout|timed out|ETIMEDOUT/i.test(msg) || /Timeout/i.test(name)) return "timed out";
+  if (/revert/i.test(msg)) return "reverted on-chain";
+  if (/returned no data|no data was returned|abi|could not decode|decode/i.test(msg)) {
+    return "returned data the Radar ABI could not decode (wrong address or ABI mismatch)";
+  }
+  return `failed (${truncate(msg, 120)})`;
+}
+
+/**
  * radar — Redemption Radar for a trove account or any trove address: rank
  * from the redemption frontier, MUSD of debt ahead, ICR, system TCR vs the
  * 150% Recovery Mode line. Network is labelled; testnet ranks are
@@ -920,12 +1053,16 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
         })) as bigint;
         icr = Number.parseFloat(formatUnits(icrRaw, 18));
         rankSource = "radar";
-      } catch {
+      } catch (err) {
         // The deployed Radar's rank() is one heavy eth_call: on an anvil
         // fork (remote state fetched per slot through the public RPC) or
         // a slow RPC it times out even though the Radar is fine — the
         // fork run hit this on 2026-11-15. Fall back to the direct walk
-        // (same ground truth, one call at a time) and say so.
+        // (same ground truth, one call at a time) and say what happened.
+        const kind = classifyRankError(err);
+        console.error(
+          `[sternpost radar] deployed Radar rank() ${kind}: ${truncate(err instanceof Error ? err.message : String(err), 300)}`,
+        );
         const w = await walkRank();
         rank = w.rank;
         debtAhead = w.debtAhead;
@@ -933,7 +1070,7 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
         complete = w.complete;
         steps = w.steps;
         rankSource = "walk";
-        rankNote = "deployed Radar rank() timed out; fell back to the direct SortedTroves walk";
+        rankNote = `deployed Radar rank() ${kind}; fell back to the direct SortedTroves walk`;
       }
     } else {
       const w = await walkRank();
@@ -1008,6 +1145,7 @@ export async function handleRadar(ctx: ToolContext, rawArgs: unknown) {
 export async function handlePreviewDraw(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.preview_draw).strict().parse(rawArgs);
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, (args.governor ?? ADDRESSES.governor) as string);
   const client = await checkedClient(ctx);
   const governor = (args.governor ?? ADDRESSES.governor) as Address;
   const amountWei = parseMusd(args.amountMusd);
@@ -1049,6 +1187,7 @@ export async function handlePreviewDraw(ctx: ToolContext, rawArgs: unknown) {
 export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.governor_status).strict().parse(rawArgs);
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, (args.governor ?? ADDRESSES.governor) as string);
   const client = await checkedClient(ctx);
   const governor = (args.governor ?? ADDRESSES.governor) as Address;
   const [borrower, floorICR, defendICR, frozen, buffer, standby, icr, feeBps, feeRecipient, musd] =
@@ -1117,6 +1256,7 @@ export async function handleGovernorStatus(ctx: ToolContext, rawArgs: unknown) {
 export async function handleX402Quote(ctx: ToolContext, rawArgs: unknown) {
   rejectCredentialFields(rawArgs);
   const args = z.object(toolSchemas.x402_quote).strict().parse(rawArgs);
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, ADDRESSES.governor);
   // Chain-gated even on the no-app path (J3 F3): a quote for the wrong
   // chain must never be served.
   const client = await checkedClient(ctx);
@@ -1164,6 +1304,7 @@ export async function handleX402Quote(ctx: ToolContext, rawArgs: unknown) {
 
 /** SpendWallet read helper (used by the smoke test, not a tool: the 4 tools are the plan's set). */
 export async function readSpendWallet(ctx: ToolContext, wallet: Address) {
+  if (ctx.network === "mainnet") await requireMainnetGate(ctx.env, wallet);
   const client = await checkedClient(ctx);
   const [agent, agentExpiry, owner, musdBalance] = await Promise.all([
     client.readContract({ address: wallet, abi: spendWalletAbi, functionName: "agent" }),

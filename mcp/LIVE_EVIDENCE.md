@@ -1,6 +1,6 @@
 # MCP live evidence (plan §5.1)
 
-Recorded 2026-11-15 ~22:15 EET by the fix-round builder (commit TBD).
+Recorded 2026-11-15 ~22:15 EET by the fix-round builder (commit d101fcc).
 RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 Classic deployment.
 Fork: anvil fork of testnet (see "Fork evidence" below).
 
@@ -13,11 +13,13 @@ Fork: anvil fork of testnet (see "Fork evidence" below).
 - `npm run test:live`: **13/13 pass** — every tool returns a real
   on-chain read, plus the honest refusal shapes where no TroveAccount
   exists yet (see below), plus the deployed Wave 2 Radar's on-chain
-  `rank()` through the tool (`rankSource: "radar"`). First attempt 7/12:
-  the radar rank walk's 50-wide read batches throttled the public RPC
-  (`eth_chainId` timeouts in the four following tests). Fixed by 10-wide
-  batches + 100 ms pauses + a 30 s viem timeout; re-run 12/12 in 64 s,
-  then 13/13 with the Radar test.
+  `rank()` through the tool (`rankSource: "radar"`). An early attempt
+  failed part-way: the radar rank walk's 50-wide read batches throttled
+  the public RPC (`eth_chainId` timeouts in the following tests). Fixed
+  by 10-wide batches + 100 ms pauses + a 30 s viem timeout; the final
+  run is 13/13 (vitest-live.log, Duration 64.50 s) including the Radar
+  test. No 7/12 or 12/12 intermediate log is committed — the attempt
+  counts above are not logged, only the fix and the final 13/13 run are.
 - `npm run smoke` (live): **PASSED** — initialize ok, `tools/list`
   returned exactly the plan §5.1 4 tools, all 4 called live.
 - `npm run fork`: **PASSED** — fork tests 6/6 + fork smoke PASSED
@@ -30,7 +32,8 @@ Fork: anvil fork of testnet (see "Fork evidence" below).
 ## Live testnet — what is verified, and what is not
 
 The Wave 2 system (task 1.9) **is deployed on live testnet**
-(2026-11-15 22:45 EET: TroveAccount impl
+(2026-11-15, `shared/deployments/testnet.json` `accounts`, blocks
+16803284–16803285: TroveAccount impl
 `0xC4f080498a720887b6086f13fBad5627d8abc470`, Factory
 `0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3`, Radar
 `0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`, Batcher
@@ -52,12 +55,13 @@ deploy txs, no `createAndOpen`). So on live testnet:
 
 ## `radar` — live testnet
 
-Smoke run (no account — system health + frontier only):
+Smoke run (no account — system health + frontier only), values quoted
+from the committed `mcp/evidence/smoke-live.log`:
 
-- TCR `2.324468233934961`, `recoveryMode: false`, `troveCount: 279`
+- TCR `2.3323661410042025`, `recoveryMode: false`, `troveCount: 279`
 - Frontier trove `0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d`
   (the whale — same frontier as the lab run), frontier ICR
-  `1.2636642344819258`, frontier debt `426003387.454256128793338096` MUSD
+  `1.267957819699666`, frontier debt `426003946.349859583251431214` MUSD
 - `synthetic: true`, `network: "testnet"`
 
 Full walk (live test + values script), Wave-1 wallet
@@ -67,7 +71,10 @@ Full walk (live test + values script), Wave-1 wallet
   `icr: 2.3767080790130355`, `frontierIcr: 1.2630549465626084`,
   `tcr: 2.323347471323506`, `complete: true`
 - Rank moved 234 (lab, block 16791591, 271 troves) → 241 (279 troves):
-  the list grew; the rank is read live, not copied.
+  the list grew; the rank is read live, not copied. Lab source:
+  `build-pack/mezo/lab/LAB_METHODS.md` §9 (Wave-1 wallet rank 234 of
+  271 troves) and plan §3.8; pinned fork block 16791591 per
+  `docs/proof/accounts-2026-11-15.md` and `build-pack/TASK_BOARD.md`.
 
 Deployed Wave 2 Radar (live, `STERNPOST_RADAR` set to
 `0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`):
@@ -84,10 +91,12 @@ Deployed Wave 2 Radar (live, `STERNPOST_RADAR` set to
 
 ## `request_session` — live smoke
 
-- `requestId: req_5cdff60d56523a3b`, agent
-  `0xa7207edf7043C6Cb8d1EBB983DeC980b9CE43A55`,
+Values quoted from the committed `mcp/evidence/smoke-live.log`:
+
+- `requestId: req_918d4d597c1d91ea`, agent
+  `0x4089677C9A7Bf4E1f0c97D8061E066D434312548`,
   `status: "pending"`,
-  `approveUrl: https://sternpost-pink.vercel.app/app/crew?request=req_5cdff60d56523a3b`,
+  `approveUrl: https://sternpost-pink.vercel.app/app/crew?request=req_918d4d597c1d91ea`,
   `telegram: "not_linked"`, `backend: "unavailable"`
 - `backend: "unavailable"` is the honest probe result: the API has no
   `/v1/sessions/request` endpoint (root 200, `/v1/radar`, `/v1/muster`,
@@ -197,7 +206,7 @@ Two fork failures on the way here, both fixed (not hidden):
 1. First run: `pay` full flow reverted `PayeeNotAllowed(account)`
    (`0xbc2f3a3f`) — the refill draws to self, but the fork session's
    payee list held only the demo payee. Fixed by allowlisting the
-   account itself as a payee in fork-setup (TroveAccount.sol:491
+   account itself as a payee in fork-setup (TroveAccount.sol:603-607
    documents `payee == address(this)` as "the x402 pay-by-borrow
    refill" — the designed configuration, not a test hack).
 2. First two runs: the deployed Radar's `rank()` is one heavy eth_call
@@ -230,7 +239,11 @@ See `mcp/evidence/` in this repo: `vitest-offline.log` (32/32),
 spend-wallet values above), `live-radar.json` (deployed Radar rank()
 through the tool + `getBytecode` on all four Wave 2 contracts),
 `fork-run.log` + `fork-addresses.json` (final fork run: 6/6 + fork
-smoke). No `/tmp` pointers: the logs live in the repo. Note:
+smoke), `typecheck.log`, `lint.log`, `build.log` (verification runs).
+Test-name coverage: the committed vitest logs name only a subset of
+tests by name (live 8/13, offline 1/31); the counts rest on the logs'
+summary lines plus the `it(` counts in the test files — re-run with
+`--reporter=verbose` for a per-test listing. No `/tmp` pointers: the logs live in the repo. Note:
 `fork-run.log` contains anvil's startup banner with the 10 well-known
 anvil default test private keys — those are public Foundry test keys,
 not secrets, and they are redacted in the committed log (see the

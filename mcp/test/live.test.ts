@@ -19,9 +19,9 @@ import {
  * Outputs are recorded in mcp/LIVE_EVIDENCE.md.
  *
  * Scope note: the Wave 2 system (TroveAccount impl, Factory, Radar,
- * Batcher) IS deployed on live testnet (2026-11-15 22:45 EET, task 1.9)
- * but NO account has been opened there yet (deploy-19 broadcast: 4 deploy
- * txs, no createAndOpen), so `balance`/`pay` against a live TroveAccount
+ * Batcher) IS deployed on live testnet (2026-11-15, task 1.9;
+ * `shared/deployments/testnet.json` `accounts`) but NO account has been
+ * opened there yet (deploy-19 broadcast: 4 deploy txs, no createAndOpen), so `balance`/`pay` against a live TroveAccount
  * cannot be verified here — their live-testnet assertions are the honest
  * refusal shapes (ACCOUNT_NOT_SET / ACCOUNT_NOT_DEPLOYED / SESSION_INACTIVE),
  * and the full success paths are verified on a testnet fork
@@ -91,7 +91,7 @@ describeLive("live testnet reads (chain 31611)", () => {
   );
 
   it("radar: the deployed Wave 2 Radar ranks the same wallet (rankSource radar)", async () => {
-    // TroveAccountFactory + Radar deployed 2026-11-15 22:45 EET (task 1.9).
+    // TroveAccountFactory + Radar deployed 2026-11-15 (task 1.9).
     // The Radar's on-chain rank() must work through the tool and agree
     // with the direct walk above (same wallet, same list).
     const radarCtx = createContext({

@@ -5,8 +5,8 @@
  * command line (see README.md).
  *
  * Live mode (default): STERNPOST_RPC_URL=https://rpc.test.mezo.org.
- *   - balance with no account → ACCOUNT_NOT_SET refusal (no TroveAccount
- *     is deployed on live testnet yet; see LIVE_EVIDENCE.md).
+ *   - balance with no account → ACCOUNT_NOT_SET refusal (no account
+ *     has been opened on the live 1.9 system yet; see LIVE_EVIDENCE.md).
  *   - radar without an account → live system health + frontier.
  *   - request_session over stdio with credential fields → the transport
  *     drops them; the response never contains the sentinel (J3 F1).

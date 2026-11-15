@@ -1,8 +1,9 @@
 /**
  * Fork setup + verification runner for the MCP server (plan §5.1, task 1.9
- * scope note): the Wave 2 TroveAccount system is NOT deployed on live
- * testnet, so the full success paths are verified on an anvil fork of
- * testnet (FORK=1, nothing broadcast).
+ * scope note): the Wave 2 TroveAccount system IS deployed on live
+ * testnet (task 1.9), but no account has been opened there yet, so the
+ * full success paths are verified on an anvil fork of testnet (FORK=1,
+ * nothing broadcast).
  *
  * What it does:
  *  1. Starts `anvil --fork-url https://rpc.test.mezo.org --chain-id 31611`.
@@ -299,7 +300,7 @@ async function main() {
     });
     await fork.waitForTransactionReceipt({ hash: payeeHash });
     // The account itself must be an allowed payee: pay refills by drawing
-    // to self (TroveAccount.sol:491 — "payee == address(this) is the x402
+    // to self (TroveAccount.sol:603-607 — "payee == address(this) is the x402
     // pay-by-borrow refill"). Without this the refill draw reverts with
     // PayeeNotAllowed(account) — observed 2026-11-15 on the first fork run.
     const selfPayeeHash = await ownerWallet.writeContract({
