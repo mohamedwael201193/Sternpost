@@ -5,22 +5,22 @@
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.1.0 [39m[90m/home/hatch/workspace/mezo-wave2/work/mcp-21/mcp[39m
 
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: no account configured is refused ACCOUNT_NOT_SET (no chain call)[32m 4[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: a non-TroveAccount address is refused ACCOUNT_NOT_DEPLOYED (real getBytecode read)[33m 2097[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: no account configured is refused ACCOUNT_NOT_SET (no chain call)[32m 5[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: a non-TroveAccount address is refused ACCOUNT_NOT_DEPLOYED (real getBytecode read)[33m 1743[2mms[22m[39m
  [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpay: no account configured is refused ACCOUNT_NOT_SET[32m 3[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: system health + frontier are real reads (no account walk)[33m 1329[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the Wave-1 wallet ranks in the live list (full walk, real reads)[33m 53387[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the deployed Wave 2 Radar ranks the same wallet (rankSource radar)[33m 589[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: mainnet is refused without STERNPOST_MAINNET_OK=1[32m 3[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mgovernor_status (internal helper): live floor/defend/buffer/standby/ICR[33m 388[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): 10 MUSD verdict is a real previewDraw result (allowed iff reason empty)[32m 234[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): an oversized draw is refused with a real reason code[32m 244[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mx402_quote (internal helper): 402 challenge + live payable preview[32m 164[2mms[22m[39m
- [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mspend wallet: agent + expiry + owner are real reads[33m 322[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: system health + frontier are real reads (no account walk)[33m 1470[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the Wave-1 wallet ranks in the live list (full walk, real reads)[33m 61590[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the deployed Wave 2 Radar ranks the same wallet (rankSource radar)[33m 706[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: mainnet is refused without STERNPOST_MAINNET_OK=1[32m 4[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mgovernor_status (internal helper): live floor/defend/buffer/standby/ICR[33m 347[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): 10 MUSD verdict is a real previewDraw result (allowed iff reason empty)[32m 255[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): an oversized draw is refused with a real reason code[32m 230[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mx402_quote (internal helper): 402 challenge + live payable preview[32m 163[2mms[22m[39m
+ [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mspend wallet: agent + expiry + owner are real reads[32m 248[2mms[22m[39m
  [32m✓[39m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: chain id is pinned to 31611[32m 0[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
 [2m      Tests [22m [1m[32m13 passed[39m[22m[90m (13)[39m
-[2m   Start at [22m 23:04:41
-[2m   Duration [22m 59.32s[2m (tests 99%, import 1%)[22m
+[2m   Start at [22m 23:15:16
+[2m   Duration [22m 67.36s[2m (tests 99%, import 1%)[22m
 

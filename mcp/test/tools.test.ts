@@ -674,6 +674,10 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       receiptThrows?: boolean;
       /** When true, writeContract (the draw send) throws before returning a hash (J3 F2 round 4). */
       writeThrows?: boolean;
+      /** When set, writeContract throws this error instead of returning a hash (round 5, J3 F3a/F3b: a real HttpRequestError carrying a keyed RPC URL). */
+      writeError?: unknown;
+      /** When true, the facilitator /verify fetch throws instead of answering (round 5, J3 observation). */
+      verifyThrows?: boolean;
     },
     run: (
       url: string,
@@ -717,6 +721,7 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       const stubWallet = {
         chain: { id: 31611 },
         writeContract: async (args: unknown) => {
+          if (opts.writeError !== undefined) throw opts.writeError;
           if (opts.writeThrows) throw new Error("RPC timeout waiting for the draw hash — no hash returned");
           draws.push(args);
           return "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -730,6 +735,7 @@ describe("pay (offline, local 402 server + stub chain)", () => {
       const realFetch = globalThis.fetch;
       globalThis.fetch = (async (input: unknown, init?: unknown) => {
         if (String(input).startsWith("https://facilitator.vativ.io/verify")) {
+          if (opts.verifyThrows) throw new Error("facilitator unreachable: fetch failed");
           return new Response(JSON.stringify({ valid: true }), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -821,6 +827,84 @@ describe("pay (offline, local 402 server + stub chain)", () => {
         expect(p.detail).toMatch(/nonce\/balance/);
         expect(p.detail).not.toMatch(/before it could settle/);
         expect(draws).toHaveLength(0);
+      },
+    );
+  });
+
+  it("pay redacts a keyed RPC URL from the refill draw error instead of echoing it (J3 F3a round 5)", async () => {
+    const rpcKey = "sk-refill-7f3a9c1e5b8d2a4f6c0e9b7a3d5f1e8c6a";
+    await withFullPayHarness(
+      {
+        balanceOf: 0n,
+        refillPreview: null,
+        receiptStatus: "success",
+        writeError: new HttpRequestError({
+          url: `https://rpc.test.mezo.org/v2?api_key=${rpcKey}`,
+          status: 500,
+          details: "upstream boom",
+        }),
+      },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        expect(p.refillTx).toBeNull();
+        expect(p.settleTx).toBeNull();
+        // The key must not leak through `detail` (ok()/guardOutput only
+        // scan for the API key + agent key, never the RPC key).
+        expect(p.detail).not.toContain(rpcKey);
+        expect(p.detail).toContain("api_key=[redacted]");
+        // Host and status survive: the message stays debuggable.
+        expect(p.detail).toContain("https://rpc.test.mezo.org/v2");
+        expect(p.detail).toContain("500");
+        expect(draws).toHaveLength(0);
+      },
+    );
+  });
+
+  it("pay redacts a path-key RPC URL from the refill draw error (J3 F3b round 5)", async () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    await withFullPayHarness(
+      {
+        balanceOf: 0n,
+        refillPreview: null,
+        receiptStatus: "success",
+        writeError: new HttpRequestError({
+          url: `https://rpc.provider.example/v2/${rpcKey}`,
+          status: 500,
+          details: "upstream boom",
+        }),
+      },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        expect(p.refillTx).toBeNull();
+        expect(p.detail).not.toContain(rpcKey);
+        expect(p.detail).toContain("https://rpc.provider.example/v2/[redacted]");
+        expect(p.detail).toContain("500");
+        expect(draws).toHaveLength(0);
+      },
+    );
+  });
+
+  it("pay keeps the refill hash when the verify step throws after a confirmed refill (J3 observation round 5)", async () => {
+    await withFullPayHarness(
+      { balanceOf: 0n, refillPreview: null, receiptStatus: "success", verifyThrows: true },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("PAYMENT_FAILED");
+        // The refill WAS sent and confirmed: its hash must be
+        // discoverable from the response, not lost to fail().
+        expect(p.refillTx).toBe("0x1111111111111111111111111111111111111111111111111111111111111111");
+        expect(p.settleTx).toBeNull();
+        expect(p.detail).toMatch(/refill tx 0x1111/);
+        expect(p.detail).toContain("facilitator unreachable");
+        expect(draws).toHaveLength(1);
       },
     );
   });
@@ -1040,6 +1124,35 @@ describe("key never returned", () => {
     // The URL itself (minus credentials) and the status survive.
     expect(p.error).toContain("https://rpc.test.mezo.org/v2");
     expect(p.error).toContain("500");
+  });
+
+  it("fail() redacts a path-key RPC URL from a thrown HttpRequestError (J3 F3b round 5)", () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    const err = new HttpRequestError({
+      url: `https://rpc.provider.example/v2/${rpcKey}`,
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.ok).toBe(false);
+    expect(p.error).not.toContain(rpcKey);
+    expect(p.error).toContain("https://rpc.provider.example/v2/[redacted]");
+    // Host and status survive.
+    expect(p.error).toContain("rpc.provider.example");
+    expect(p.error).toContain("500");
+  });
+
+  it("fail() leaves ordinary /v2/ path segments untouched (J3 F3b round 5)", () => {
+    const err = new HttpRequestError({
+      url: "https://rpc.test.mezo.org/v2/getBlockByNumber",
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.error).toContain("https://rpc.test.mezo.org/v2/getBlockByNumber");
+    expect(p.error).not.toContain("[redacted]");
   });
 
   it("snapshot: no tool output contains the configured key (x402_quote, offline path)", async () => {

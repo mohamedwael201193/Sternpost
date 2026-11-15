@@ -5,21 +5,27 @@ Fork section rewritten and counts corrected 2026-11-16 ~01:05 EET by the
 fix-round-4 builder (this commit): the fork values below are re-quoted
 from the committed 16804623 run (`fork-run.log` + `fork-addresses.json`),
 and the test counts now match the committed logs.
+Fix round 5 (2026-11-16 ~01:16 EET): J2 wording fix, refill-error
+redaction (query-key + path-key), and the post-refill verify-throw hash
+carry — counts below are the fresh logs from this round.
 RPC: `https://rpc.test.mezo.org`, chain 31611, 0.9 Classic deployment.
 Fork: anvil fork of testnet (see "Fork evidence" below).
 
 ## Test runs
 
-- `npm test` (offline): **45 passed / 19 skipped (64 total)** — schemas, real 402 fixture,
+- `npm test` (offline): **50 passed / 19 skipped (69 total)** — schemas, real 402 fixture,
   snapshots, refusal reasons, key-not-in-output, stdio transport,
   the Radar-rank fallback (stubbed Radar rank() throws → direct walk,
   `rankSource: "walk"`), the pay refill branch (partial-balance
   full-amount draw, reverted receipt → `REFILL_FAILED`, refill-leg
   preview, receipt-wait throw → sent hash kept, draw-send throw →
-  send-outcome-unknown wording), the mainnet gate on pay/request_session/helpers, and the
-  agent-key output guard (content-hash cache: a same-mtime in-place
-  replacement is detected; `fail()` redacts keyed RPC URLs).
-  (41 passed / 19 skipped before this fix round; +4 new tests.)
+  send-outcome-unknown wording, refill draw error redacts keyed RPC
+  URLs — query-key and path-key — and a verify-step throw after a
+  confirmed refill keeps `refillTx` as `PAYMENT_FAILED`), the mainnet
+  gate on pay/request_session/helpers, and the agent-key output guard
+  (content-hash cache: a same-mtime in-place replacement is detected;
+  `fail()` redacts keyed RPC URLs — query-key, and path-key since this
+  round — while leaving ordinary `/v2/` paths untouched).
 - `npm run test:live`: **13/13 pass** — every tool returns a real
   on-chain read, plus the honest refusal shapes where no TroveAccount
   exists yet (see below), plus the deployed Wave 2 Radar's on-chain
@@ -27,7 +33,7 @@ Fork: anvil fork of testnet (see "Fork evidence" below).
   failed part-way: the radar rank walk's 50-wide read batches throttled
   the public RPC (`eth_chainId` timeouts in the following tests). Fixed
   by 10-wide batches + 100 ms pauses + a 30 s viem timeout; the final
-  run is 13/13 (vitest-live.log, Duration 59.32 s) including the Radar
+  run is 13/13 (vitest-live.log, Duration 67.36 s) including the Radar
   test. No 7/12 or 12/12 intermediate log is committed — the attempt
   counts above are not logged, only the fix and the final 13/13 run are.
 - `npm run smoke` (live): **PASSED** — initialize ok, `tools/list`
@@ -263,9 +269,9 @@ with Claude Code installed.
 
 ## Full raw outputs
 
-See `mcp/evidence/` in this repo: `vitest-offline.log` (45 passed /
-19 skipped, 64 total, Duration 4.14 s),
-`vitest-live.log` (13/13, Duration 59.32 s), `smoke-live.log` (live smoke),
+See `mcp/evidence/` in this repo: `vitest-offline.log` (50 passed /
+19 skipped, 69 total, Duration 3.73 s),
+`vitest-live.log` (13/13, Duration 67.36 s), `smoke-live.log` (live smoke),
 `live-values.json` (governor / preview_draw / x402_quote / radar-walk /
 spend-wallet values above), `live-radar.json` (deployed Radar rank()
 through the tool + `getBytecode` on all four Wave 2 contracts),
@@ -274,7 +280,7 @@ smoke), `typecheck.log`, `lint.log`, `build.log` (verification runs,
 each with an `exit=0` trailer — re-run against the fixed HEAD code in
 this round; the previous logs predated the 88f57f6 code change).
 Test-name coverage: the committed vitest logs were run with
-`--reporter=verbose`, so every test is named (offline 45 passed + 19
+`--reporter=verbose`, so every test is named (offline 50 passed + 19
 skipped, live 13; fork 6 — with the one exception noted in the Fork
 section: the fork log names only 5 of its 6 tests by name, and the 6th
 rests on the summary line); the counts rest on the logs' summary lines,

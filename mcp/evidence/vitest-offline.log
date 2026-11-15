@@ -5,27 +5,34 @@
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.1.0 [39m[90m/home/hatch/workspace/mezo-wave2/work/mcp-21/mcp[39m
 
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22menv is a prepared fork (account + agent key + fork RPC)
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mbalance: full plan §5.1 shape on the fork account with a live session
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mradar: the fork account ranks in the fork list (full walk)
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mpay dryRun: real demo.vativ.io 402 + fork previewDraw (no tx)
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mpay: full flow against demo.vativ.io — refill draw on the fork, then the live verdict
- [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mrequest_session: reuses the fork agent key and returns a pending request
- [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrejects a non-address[32m 6[2mms[22m[39m
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: no account configured is refused ACCOUNT_NOT_SET (no chain call)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: a non-TroveAccount address is refused ACCOUNT_NOT_DEPLOYED (real getBytecode read)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpay: no account configured is refused ACCOUNT_NOT_SET
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: system health + frontier are real reads (no account walk)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the Wave-1 wallet ranks in the live list (full walk, real reads)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the deployed Wave 2 Radar ranks the same wallet (rankSource radar)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: mainnet is refused without STERNPOST_MAINNET_OK=1
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mgovernor_status (internal helper): live floor/defend/buffer/standby/ICR
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): 10 MUSD verdict is a real previewDraw result (allowed iff reason empty)
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): an oversized draw is refused with a real reason code
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mx402_quote (internal helper): 402 challenge + live payable preview
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mspend wallet: agent + expiry + owner are real reads
+ [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: chain id is pinned to 31611
+ [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrejects a non-address[32m 9[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mpins the chain to Mezo testnet 31611 (addresses are chain-agnostic; the chain is pinned in code)[32m 1[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrejects a malformed MUSD amount for preview_draw[32m 3[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrequest_session defaults sandbox to false (plan §5.1) and days to 7[32m 2[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrequest_session rejects days outside 1..90 and more than 10 payees[32m 4[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrequest_session rejects days outside 1..90 and more than 10 payees[32m 9[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mpay requires a url and defaults method to GET, dryRun to false[32m 3[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mpay rejects a maxAmount that is not a decimal MUSD string[32m 1[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mradar accepts an optional account and a testnet|mainnet network[32m 2[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mradar accepts an optional account and a testnet|mainnet network[32m 1[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mschemas (plan §5.1 tool set)[2m > [22mrejects an unknown route for x402_quote[32m 2[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mmatches the backend paywall requirements shape exactly[32m 60[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mthe live demo.vativ.io fixture decodes to an exact-scheme 402 for 0.001 MUSD on eip155:31611[32m 2[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mmatches the backend paywall requirements shape exactly[32m 4[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mthe live demo.vativ.io fixture decodes to an exact-scheme 402 for 0.001 MUSD on eip155:31611[32m 3[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mchallenge wraps the requirements in the x402 v2 402 shape[32m 1[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mx402_quote without an app returns the challenge and no settle of any kind[32m 5[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22m402 fixture (real, from demo.vativ.io)[2m > [22mx402_quote without an app returns the challenge and no settle of any kind[32m 49[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mbalance returns the plan §5.1 shape: session + health + accountMusd[32m 3[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mbalance refuses an address with no code (not a TroveAccount)[32m 2[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mbalance refuses an address with no code (not a TroveAccount)[32m 4[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mbalance refuses with no account configured[32m 1[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mpreview_draw snapshot: allowed verdict with ICR after, floor, remaining budget[32m 2[2mms[22m[39m
 [90mstderr[2m | test/tools.test.ts[2m > [22m[2msnapshots (stub chain, offline)[2m > [22m[2mradar falls back to the direct walk when the deployed Radar rank() throws
@@ -40,50 +47,48 @@
 [90mstderr[2m | test/tools.test.ts[2m > [22m[2msnapshots (stub chain, offline)[2m > [22m[2mradar fallback names the post-rank getCurrentICR read when rank() succeeded but the ICR read throws (J3 O2 round 4)
 [22m[39m[sternpost radar] post-rank getCurrentICR read timed out: simulated getCurrentICR timeout
 
- [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mgovernor_status snapshot: floor/defend/buffer/standby/ICR/fee, deadline clamped (J3 F4)[32m 3[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mgovernor_status snapshot: floor/defend/buffer/standby/ICR/fee, deadline clamped (J3 F4)[32m 4[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22msafeDeadline returns the raw value and a null ISO for out-of-range deadlines[32m 0[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar falls back to the direct walk when the deployed Radar rank() throws[32m 4[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar fallback words a rank() revert distinctly, not as a timeout (J3 F3)[32m 2[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar fallback words a rank() ABI-decode failure distinctly (J3 F3)[32m 2[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar fallback redacts a credential-bearing RPC URL from the logged error (J3 O3)[32m 2[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar fallback names the post-rank getCurrentICR read when rank() succeeded but the ICR read throws (J3 O2 round 4)[32m 1[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22msnapshots (stub chain, offline)[2m > [22mradar fallback names the post-rank getCurrentICR read when rank() succeeded but the ICR read throws (J3 O2 round 4)[32m 2[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mrefusal reasons[2m > [22mexplains every previewDraw reason code the governor can return[32m 1[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mrefusal reasons[2m > [22mmainnet is refused without STERNPOST_MAINNET_OK=1 (J1 F5: MAINNET_REFUSED is wired, not dead; J3 F4/d: pay, request_session, helpers too)[32m 7[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mdryRun parses the real demo.vativ.io 402 and runs previewDraw only (no tx)[33m 359[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mdryRun refuses OVER_MAX when the 402 asks for more than maxAmount[32m 19[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay refuses without an account, and without an agent key[32m 3[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay draws the FULL amount when the balance is partial (0 < balance < amount) (J3 F7a)[32m 193[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay reports REFILL_FAILED when the refill draw reverts on-chain (J3 F7b)[32m 92[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay returns REFILL_FAILED with the sent hash when the receipt wait throws (J3 F5)[32m 22[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay reports REFILL_FAILED with send-outcome-unknown wording when the draw send throws before returning a hash (J3 F2 round 4)[32m 86[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay refuses PAYEE_NOT_ALLOWED when the refill leg preview fails (J3 F7b)[32m 81[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mrequest_session (offline, temp key file, unreachable API)[2m > [22mgenerates a chmod-600 agent key, returns a pending request id + approval link, never the key[32m 12[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mrejects every credential-shaped input field (all 11 blocked fields)[32m 3[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput throws if a configured secret would leak into a response[32m 1[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput throws if the agent private key would leak into a response (J3 obs c)[32m 9[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput picks up an in-place key replacement at the same path (J3 F4)[32m 79[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput detects a same-mtime in-place key replacement (content hash, J3 F1 round 4)[32m 17[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mdryRun parses the real demo.vativ.io 402 and runs previewDraw only (no tx)[32m 271[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mdryRun refuses OVER_MAX when the 402 asks for more than maxAmount[32m 21[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay refuses without an account, and without an agent key[32m 4[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay draws the FULL amount when the balance is partial (0 < balance < amount) (J3 F7a)[32m 167[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay reports REFILL_FAILED when the refill draw reverts on-chain (J3 F7b)[32m 16[2mms[22m[39m
+ [32m✓[39m test/transport.test.ts[2m > [22mstdio transport (J3 F1)[2m > [22madvertises exactly the plan §5.1 four tools, and drops credential fields before the handler[33m 2770[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay returns REFILL_FAILED with the sent hash when the receipt wait throws (J3 F5)[32m 14[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay reports REFILL_FAILED with send-outcome-unknown wording when the draw send throws before returning a hash (J3 F2 round 4)[32m 76[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay redacts a keyed RPC URL from the refill draw error instead of echoing it (J3 F3a round 5)[32m 15[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay redacts a path-key RPC URL from the refill draw error (J3 F3b round 5)[32m 9[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay keeps the refill hash when the verify step throws after a confirmed refill (J3 observation round 5)[32m 12[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mpay (offline, local 402 server + stub chain)[2m > [22mpay refuses PAYEE_NOT_ALLOWED when the refill leg preview fails (J3 F7b)[32m 7[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mrequest_session (offline, temp key file, unreachable API)[2m > [22mgenerates a chmod-600 agent key, returns a pending request id + approval link, never the key[32m 56[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mrejects every credential-shaped input field (all 11 blocked fields)[32m 1[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput throws if a configured secret would leak into a response[32m 0[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput throws if the agent private key would leak into a response (J3 obs c)[32m 7[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput picks up an in-place key replacement at the same path (J3 F4)[32m 7[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mguardOutput detects a same-mtime in-place key replacement (content hash, J3 F1 round 4)[32m 5[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mfail() scans thrown errors through the same guard[32m 1[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mfail() redacts a keyed RPC URL from a thrown HttpRequestError instead of echoing it (J3 F3 round 4)[32m 1[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mfail() redacts a path-key RPC URL from a thrown HttpRequestError (J3 F3b round 5)[32m 0[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22mfail() leaves ordinary /v2/ path segments untouched (J3 F3b round 5)[32m 0[2mms[22m[39m
  [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22msnapshot: no tool output contains the configured key (x402_quote, offline path)[32m 2[2mms[22m[39m
- [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22msnapshot: balance output contains no key material[32m 3[2mms[22m[39m
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: no account configured is refused ACCOUNT_NOT_SET (no chain call)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: a non-TroveAccount address is refused ACCOUNT_NOT_DEPLOYED (real getBytecode read)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpay: no account configured is refused ACCOUNT_NOT_SET
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: system health + frontier are real reads (no account walk)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the Wave-1 wallet ranks in the live list (full walk, real reads)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: the deployed Wave 2 Radar ranks the same wallet (rankSource radar)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mradar: mainnet is refused without STERNPOST_MAINNET_OK=1
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mgovernor_status (internal helper): live floor/defend/buffer/standby/ICR
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): 10 MUSD verdict is a real previewDraw result (allowed iff reason empty)
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mpreview_draw (internal helper): an oversized draw is refused with a real reason code
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mx402_quote (internal helper): 402 challenge + live payable preview
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mspend wallet: agent + expiry + owner are real reads
- [2m[90m↓[39m[22m test/live.test.ts[2m > [22mlive testnet reads (chain 31611)[2m > [22mbalance: chain id is pinned to 31611
- [32m✓[39m test/transport.test.ts[2m > [22mstdio transport (J3 F1)[2m > [22madvertises exactly the plan §5.1 four tools, and drops credential fields before the handler[33m 3670[2mms[22m[39m
+ [32m✓[39m test/tools.test.ts[2m > [22mkey never returned[2m > [22msnapshot: balance output contains no key material[32m 2[2mms[22m[39m
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22menv is a prepared fork (account + agent key + fork RPC)
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mbalance: full plan §5.1 shape on the fork account with a live session
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mradar: the fork account ranks in the fork list (full walk)
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mpay dryRun: real demo.vativ.io 402 + fork previewDraw (no tx)
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mpay: full flow against demo.vativ.io — refill draw on the fork, then the live verdict
+ [2m[90m↓[39m[22m test/fork.test.ts[2m > [22mfork testnet (anvil, chain 31611)[2m > [22mrequest_session: reuses the fork agent key and returns a pending request
 
 [2m Test Files [22m [1m[32m2 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (4)[39m
-[2m      Tests [22m [1m[32m45 passed[39m[22m[2m | [22m[33m19 skipped[39m[90m (64)[39m
-[2m   Start at [22m 23:04:00
-[2m   Duration [22m 4.14s[2m (tests 50%, import 41%, transform 8%, worker 1%)[22m
+[2m      Tests [22m [1m[32m50 passed[39m[22m[2m | [22m[33m19 skipped[39m[90m (69)[39m
+[2m   Start at [22m 23:15:09
+[2m   Duration [22m 3.73s[2m (import 47%, tests 42%, transform 10%, worker 2%)[22m
 

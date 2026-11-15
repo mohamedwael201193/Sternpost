@@ -271,13 +271,21 @@ function truncate(text: string, max = 8192): string {
  * or a bare token as the userinfo), and api-key/token/secret/password
  * query params — including bare `?key=`, `?access_token=` and `?auth=`
  * params (round 4, J3 F3: a keyed RPC URL carries the key exactly that
- * way). The rest of the message is kept intact so the log stays useful
- * for debugging; only the credential-shaped part is replaced.
+ * way). Path-key RPC URLs (round 5, J3 F3b): providers such as Alchemy
+ * (`/v2/<32-hex>`) and Infura (`/v3/<32-hex>`) carry the key as a path
+ * segment, which neither rule above matches — so a segment of 20+
+ * key-like characters after /v2/ or /v3/ is redacted too, but only when
+ * it mixes letters and digits, so ordinary RPC paths (e.g.
+ * /v2/getBlockByNumber, all letters, or a numeric id, all digits)
+ * survive untouched. The rest of the message is kept intact so the log
+ * stays useful for debugging; only the credential-shaped part is
+ * replaced.
  */
 function redactCredentials(text: string): string {
   return text
     .replace(/(https?:\/\/)[^\s/@]+@/g, "$1[redacted-credentials]@")
-    .replace(/([?&](?:api[_-]?key|key|token|secret|password|access_token|auth)=)[^\s&]*/gi, "$1[redacted]");
+    .replace(/([?&](?:api[_-]?key|key|token|secret|password|access_token|auth)=)[^\s&]*/gi, "$1[redacted]")
+    .replace(/(\/v[23]\/)(?=[A-Za-z0-9_-]*[A-Za-z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{20,}/g, "$1[redacted]");
 }
 
 const TROVE_STATUS = ["none", "active", "closedByOwner", "closedByLiquidation", "closedByRedemption"] as const;
@@ -710,8 +718,8 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
         reason: "REFILL_FAILED",
         detail:
           refillHash !== null
-            ? `refill draw tx ${refillHash} was sent but its receipt could not be confirmed: ${truncate(err instanceof Error ? err.message : String(err), 500)} — the draw may still confirm on-chain; check the hash before retrying`
-            : `refill draw could not be confirmed as sent (no hash returned) — the draw may still confirm on-chain; check the account nonce/balance before retrying: ${truncate(err instanceof Error ? err.message : String(err), 500)}`,
+            ? `refill draw tx ${refillHash} was sent but its receipt could not be confirmed: ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 500)} — the draw may still confirm on-chain; check the hash before retrying`
+            : `refill draw could not be confirmed as sent (no hash returned) — the draw may still confirm on-chain; check the account nonce/balance before retrying: ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 500)}`,
         preview,
       });
     }
@@ -728,62 +736,102 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
     maxTimeoutSeconds: wanted.maxTimeoutSeconds ?? 300,
     extra: { name: "Mezo USD", version: "1", assetTransferMethod: "permit2" },
   };
-  const agentAccount = privateKeyToAccount(agentKey.privateKey);
-  const signer = {
-    address: account,
-    signTypedData: (a: Parameters<typeof agentAccount.signTypedData>[0]) => agentAccount.signTypedData(a),
-    readContract: (a: never) => client.readContract(a),
-  };
-  const paymentPayload = await new ExactEvmScheme(signer as never).createPaymentPayload(2, requirements as never);
-  const payload = { accepted: requirements, resource: { url: args.url, description: "Sternpost x402", mimeType: "application/json" }, ...paymentPayload, x402Version: 2 };
+  // (4)-(6) run inside a catch wrapper (round 5, J3 observation): if
+  // signing, the facilitator verify, or the retry throws AFTER a
+  // confirmed refill, the response still carries refillTx — otherwise
+  // the throw would reach fail() and the sent draw's hash would be
+  // undiscoverable from the response. A retry after this skips the
+  // refill block (the balance now covers the amount), so surfacing the
+  // hash cannot double-draw.
+  let settleTx: string | null = null;
+  try {
+    const agentAccount = privateKeyToAccount(agentKey.privateKey);
+    const signer = {
+      address: account,
+      signTypedData: (a: Parameters<typeof agentAccount.signTypedData>[0]) => agentAccount.signTypedData(a),
+      readContract: (a: never) => client.readContract(a),
+    };
+    const paymentPayload = await new ExactEvmScheme(signer as never).createPaymentPayload(2, requirements as never);
+    const payload = { accepted: requirements, resource: { url: args.url, description: "Sternpost x402", mimeType: "application/json" }, ...paymentPayload, x402Version: 2 };
 
-  // (4b) Verify through the facilitator before retrying (diagnostic: a bad
-  // signature is refused here instead of burning the retry).
-  const verifyRes = await fetch(`${X402_FACILITATOR_URL}/verify`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ x402Version: 2, paymentPayload: payload, paymentRequirements: requirements }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const verifyJson = (await verifyRes.json().catch(() => ({}))) as { valid?: boolean; invalidReason?: string };
-  if (verifyJson.valid !== true) {
+    // (4b) Verify through the facilitator before retrying (diagnostic: a bad
+    // signature is refused here instead of burning the retry).
+    const verifyRes = await fetch(`${X402_FACILITATOR_URL}/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ x402Version: 2, paymentPayload: payload, paymentRequirements: requirements }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const verifyJson = (await verifyRes.json().catch(() => ({}))) as { valid?: boolean; invalidReason?: string };
+    if (verifyJson.valid !== true) {
+      return ok({
+        ok: true,
+        tool: "pay",
+        status: "refused",
+        amount,
+        payTo,
+        network,
+        refillTx,
+        settleTx: null,
+        responseStatus: first.status,
+        responseBody: truncate(firstBody),
+        reason: "VERIFY_FAILED",
+        detail: `facilitator verify rejected the payment: ${truncate(JSON.stringify(verifyJson), 500)}`,
+        preview,
+      });
+    }
+
+    // (5) Retry with PAYMENT-SIGNATURE; (6) read payment-response for the settle hash.
+    const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+    const retry = await fetch(args.url, {
+      method: args.method,
+      body: args.method === "POST" ? (args.body ?? "") : undefined,
+      headers: { "PAYMENT-SIGNATURE": encoded, "X-PAYMENT": encoded },
+      signal: AbortSignal.timeout(30_000),
+    });
+    const retryBody = await retry.text();
+    const paymentResponse = retry.headers.get("payment-response");
+    if (paymentResponse) {
+      try {
+        const pr = JSON.parse(Buffer.from(paymentResponse, "base64").toString("utf8")) as Record<string, unknown>;
+        settleTx = (pr.transaction as string | undefined) ?? (pr.txHash as string | undefined) ?? (pr.settleTx as string | undefined) ?? null;
+      } catch {
+        settleTx = null;
+      }
+    }
+    if (retry.status === 402) {
+      return ok({
+        ok: true,
+        tool: "pay",
+        status: "refused",
+        amount,
+        payTo,
+        network,
+        refillTx,
+        settleTx,
+        responseStatus: retry.status,
+        responseBody: truncate(retryBody),
+        reason: "SETTLE_FAILED",
+        detail: "the resource still answers 402 after payment (settlement did not go through on its side)",
+        preview,
+      });
+    }
     return ok({
       ok: true,
       tool: "pay",
-      status: "refused",
+      status: "paid",
       amount,
       payTo,
       network,
       refillTx,
-      settleTx: null,
-      responseStatus: first.status,
-      responseBody: truncate(firstBody),
-      reason: "VERIFY_FAILED",
-      detail: `facilitator verify rejected the payment: ${truncate(JSON.stringify(verifyJson), 500)}`,
+      settleTx,
+      responseStatus: retry.status,
+      responseBody: truncate(retryBody),
+      reason: null,
       preview,
+      ...(settleTx ? { explorer: explorerTxFor(ctx.network, settleTx) } : {}),
     });
-  }
-
-  // (5) Retry with PAYMENT-SIGNATURE; (6) read payment-response for the settle hash.
-  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
-  const retry = await fetch(args.url, {
-    method: args.method,
-    body: args.method === "POST" ? (args.body ?? "") : undefined,
-    headers: { "PAYMENT-SIGNATURE": encoded, "X-PAYMENT": encoded },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const retryBody = await retry.text();
-  let settleTx: string | null = null;
-  const paymentResponse = retry.headers.get("payment-response");
-  if (paymentResponse) {
-    try {
-      const pr = JSON.parse(Buffer.from(paymentResponse, "base64").toString("utf8")) as Record<string, unknown>;
-      settleTx = (pr.transaction as string | undefined) ?? (pr.txHash as string | undefined) ?? (pr.settleTx as string | undefined) ?? null;
-    } catch {
-      settleTx = null;
-    }
-  }
-  if (retry.status === 402) {
+  } catch (err) {
     return ok({
       ok: true,
       tool: "pay",
@@ -793,28 +841,16 @@ export async function handlePay(ctx: ToolContext, rawArgs: unknown) {
       network,
       refillTx,
       settleTx,
-      responseStatus: retry.status,
-      responseBody: truncate(retryBody),
-      reason: "SETTLE_FAILED",
-      detail: "the resource still answers 402 after payment (settlement did not go through on its side)",
+      responseStatus: first.status,
+      responseBody: truncate(firstBody),
+      reason: "PAYMENT_FAILED",
+      detail:
+        refillTx !== null
+          ? `payment step failed after a confirmed refill (refill tx ${refillTx}): ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 500)} — the refill draw may already be on-chain; check the hash before retrying`
+          : `payment step failed before any refill was sent: ${truncate(redactCredentials(err instanceof Error ? err.message : String(err)), 500)}`,
       preview,
     });
   }
-  return ok({
-    ok: true,
-    tool: "pay",
-    status: "paid",
-    amount,
-    payTo,
-    network,
-    refillTx,
-    settleTx,
-    responseStatus: retry.status,
-    responseBody: truncate(retryBody),
-    reason: null,
-    preview,
-    ...(settleTx ? { explorer: explorerTxFor(ctx.network, settleTx) } : {}),
-  });
 }
 
 /* ------------------------------------------------------------------ */
