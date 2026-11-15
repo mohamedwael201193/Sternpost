@@ -361,7 +361,8 @@
       "tx": "0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",
       "block": 16804467,
       "gasUsed": 859130,
-      "verified": true,
+      "verified": false,
+      "verifiedViaIdenticalBytecode": true,
       "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Radar). Deployed bytecode independently MATCHes the local forge build."
     },
     "batcher": {
@@ -369,7 +370,8 @@
       "tx": "0x339c550ab276f609bed44377a103602850cf373e3ffe1c3908bc2ea7e17b3587",
       "block": 16804468,
       "gasUsed": 654843,
-      "verified": true,
+      "verified": false,
+      "verifiedViaIdenticalBytecode": true,
       "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Batcher). Deployed bytecode independently MATCHes the local forge build."
     },
     "bytecodeMatch": "all four deployed bytecodes MATCH the local forge build (immutable slots masked): TroveAccount 22,713 B / 65 slots, Factory 2,539 B / 7 slots, Radar 3,726 B / 18 slots, Batcher 2,784 B / 0 slots",
@@ -381,8 +383,8 @@
     },
     "totalGasUsed": 7091664,
     "totalFeeWei": 1036001798,
-    "deployerBalanceBeforeBTC": "0.013361427276718716",
-    "deployerBalanceAfterBTC": "0.013361426240716918",
+    "deployerBalanceBeforeBTC": "0.013361427276718717",
+    "deployerBalanceAfterBTC": "0.013361426240716919",
     "previous": {
       "date": "2026-11-15",
       "task": "1.9 Wave 2 account contracts (TroveAccount implementation + Factory + Radar + Batcher)",
@@ -423,12 +425,12 @@
       "bytecodeMatch": "all four deployed bytecodes MATCH the local forge build (immutable slots masked)",
       "demo": {
         "status": "BLOCKED",
-        "reason": "funding gap: deployer holds 0.013361428281097685 BTC; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Thresholds derived at deploy time: min debt 2,000 MUSD (1,800 min + 200 gas comp); 110% MCR -> 2,200/price ~= 0.0340 BTC; 250% ICR -> 5,000/price ~= 0.0774 BTC; implied price ~$64.6k/BTC (exact price-feed value not preserved in the record). Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
+        "reason": "funding gap: deployer holds 0.013361427276718717 BTC after the 1.9 deploy; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Thresholds derived at deploy time: min debt 2,000 MUSD (1,800 min + 200 gas comp); 110% MCR -> 2,200/price ~= 0.0340 BTC; 250% ICR -> 5,000/price ~= 0.0774 BTC; implied price ~$64.6k/BTC (exact price-feed value not preserved in the record). Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
       }
     },
     "demo": {
       "status": "BLOCKED",
-      "reason": "funding gap: deployer holds 0.013361426240716918 BTC after the redeploy; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Thresholds derived at 1.9 deploy time: min debt 2,000 MUSD (1,800 min + 200 gas comp); 110% MCR -> 2,200/price ~= 0.0340 BTC; 250% ICR -> 5,000/price ~= 0.0774 BTC; implied price ~$64.6k/BTC. Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
+      "reason": "funding gap: deployer holds 0.013361426240716919 BTC after the redeploy; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Thresholds derived at 1.9 deploy time: min debt 2,000 MUSD (1,800 min + 200 gas comp); 110% MCR -> 2,200/price ~= 0.0340 BTC; 250% ICR -> 5,000/price ~= 0.0774 BTC; implied price ~$64.6k/BTC. Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
     }
   }
 }
