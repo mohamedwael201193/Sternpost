@@ -252,7 +252,7 @@ Two fork failures on the way here, both fixed (not hidden):
 1. First run: `pay` full flow reverted `PayeeNotAllowed(account)`
    (`0xbc2f3a3f`) — the refill draws to self, but the fork session's
    payee list held only the demo payee. Fixed by allowlisting the
-   account itself as a payee in fork-setup (TroveAccount.sol:603-607
+   account itself as a payee in fork-setup (TroveAccount.sol:686-687
    documents `payee == address(this)` as "the x402 pay-by-borrow
    refill" — the designed configuration, not a test hack).
 2. First two runs: the deployed Radar's `rank()` is one heavy eth_call

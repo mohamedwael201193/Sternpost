@@ -300,7 +300,7 @@ async function main() {
     });
     await fork.waitForTransactionReceipt({ hash: payeeHash });
     // The account itself must be an allowed payee: pay refills by drawing
-    // to self (TroveAccount.sol:603-607 — "payee == address(this) is the x402
+    // to self (TroveAccount.sol:686-687 — "payee == address(this) is the x402
     // pay-by-borrow refill"). Without this the refill draw reverts with
     // PayeeNotAllowed(account) — observed 2026-11-15 on the first fork run.
     const selfPayeeHash = await ownerWallet.writeContract({
