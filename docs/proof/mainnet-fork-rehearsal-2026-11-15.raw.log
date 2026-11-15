@@ -1,0 +1,69 @@
+fork block 13250363 (chain 31612); live mainnet block 13250913
+live mainnet price 64914581110000000000000
+stub price now 64914581110000000000000 [6.491e22]
+composite debt 2001.8 MUSD; BTC for ICR 250% = 0.077093619252039856, 300% = 0.092512343102447840
+== deploy TroveAccount implementation (production, fee 10 bps to fork owner)
+Deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+implementation 0x5FbDB2315678afecb367f032d93F642f64180aa3
+== deploy TroveAccountFactory
+Deployed to: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+factory 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+hints 250%: up=0x593c427d8C7bf5C555Ed41cd7CB7cCe8C9F15bB5 lo=0x08278D4b1c5F7D652095a2050f1d978AEc5377ac
+hints 300%: up=0x593c427d8C7bf5C555Ed41cd7CB7cCe8C9F15bB5 lo=0x08278D4b1c5F7D652095a2050f1d978AEc5377ac
+== Account A: createAndOpen at ICR 2.5 (250%)
+predicted account A 0x51580354C12B425e6104B6b50762381A0c0Cce47
+  createAndOpen tx 0x1 gasUsed 855533
+  status A 1 (1 = active); ICR A 2499999999999999383 [2.499e18] (expect ~2.5e18)
+== Account B: createAndOpen at ICR 3.0 (300%)
+predicted account B 0x9c5d417dD7de587284A0a3D061c034343d85bbF5
+  createAndOpen tx 0x1 gasUsed 881845
+  status B 1 (1 = active); ICR B 2999999999999999674 [2.999e18] (expect ~3.0e18)
+== session for agent + draw 5 MUSD JIT to a payee (account B)
+  tx 0x1 gasUsed 145658
+  draw tx 0x1 gasUsed 461548
+  status B 1; ICR B 2992510488610152184 [2.992e18]; payee MUSD 5000000000000000000 [5e18]
+== park 1000 MUSD in real mainnet sMUSD (account A)
+  tx 0x1 gasUsed 233602
+  sMUSD balance A 1000000000000000000000 [1e21]
+  status A 1
+== crash the price 40% (fork-only), read the shield trigger, probe shield()
+  ICR A at crashed price 1549999991158841544 [1.549e18]
+  needed() A: 1549999991158841544 [1.549e18]
+1800011418213013728 [1.8e18]
+22292570921371659 [2.229e16]
+1 (icr, repayWanted, collWanted, reason; reason 1 = ICR trigger)
+  shield() probe: 
+blockHash            0xd04050c9a1430fc2e9283d3bd20408bfe4cc676e6cbe9c51d16352779ca5fcdd
+blockNumber          13250371
+contractAddress      
+cumulativeGasUsed    25273
+effectiveGasPrice    547266
+from                 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+gasUsed              25273
+logs                 []
+logsBloom            0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+root                 
+status               0 (failed)
+transactionHash      0xbafb8d1897e6bbb8fa8d0c36f94eb551f0117b7d9e535ec86389fbe73e8853af
+transactionIndex     0
+type                 2
+blobGasPrice         
+blobGasUsed          
+to                   0x51580354C12B425e6104B6b50762381A0c0Cce47
+  NOTE: shield() is task 1.4 and is NOT in the production TroveAccount on main yet — the probe above is EXPECTED to fail. The trigger (needed reason 1) is verified; the actuator is not.
+  price restored; ICR A 2499999977025664176 [2.499e18]; status A 1
+== CLOSE A: unpark everything, fund the fee/interest shortfall (impersonated holder, fork-only), closeAccount
+  account A MUSD 1830000000000000000000 [1.83e21], debt 77093619252039856 [7.709e16] 2001800000000000000000 [2.001e21] 
+  tx 0x1 gasUsed 392730
+  account A BTC after close 0 (closeAccount sweeps to owner)
+  trove status A 2 (2 = closedByOwner); owner BTC delta 0.07709347451925296
+== CLOSE B: fund shortfall, closeAccount
+  tx 0x1 gasUsed 364030
+  account B BTC after close 0
+  trove status B 2 (2 = closedByOwner); owner BTC delta 0.09251223913365969
+== SUMMARY (mainnet fork-tested, never live on mainnet)
+  implementation 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  factory 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  account A 0x51580354C12B425e6104B6b50762381A0c0Cce47 (opened 2.5, closed, status 2)
+  account B 0x9c5d417dD7de587284A0a3D061c034343d85bbF5 (opened 3.0, closed, status 2)
+  shield(): NOT PRESENT in production TroveAccount on main (task 1.4 unmerged); trigger verified via needed(), actuator missing.
