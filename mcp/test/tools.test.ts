@@ -890,6 +890,60 @@ describe("pay (offline, local 402 server + stub chain)", () => {
     );
   });
 
+  it("pay redacts a bare-segment path-key RPC URL from the refill draw error (QuickNode form, J3 F1 round 6)", async () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    await withFullPayHarness(
+      {
+        balanceOf: 0n,
+        refillPreview: null,
+        receiptStatus: "success",
+        writeError: new HttpRequestError({
+          url: `https://abc123.quiknode.pro/${rpcKey}/`,
+          status: 500,
+          details: "upstream boom",
+        }),
+      },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        expect(p.refillTx).toBeNull();
+        expect(p.detail).not.toContain(rpcKey);
+        expect(p.detail).toContain("https://abc123.quiknode.pro/[redacted]/");
+        expect(p.detail).toContain("500");
+        expect(draws).toHaveLength(0);
+      },
+    );
+  });
+
+  it("pay redacts an /eth/-prefixed path-key RPC URL from the refill draw error (Ankr form, J3 F1 round 6)", async () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    await withFullPayHarness(
+      {
+        balanceOf: 0n,
+        refillPreview: null,
+        receiptStatus: "success",
+        writeError: new HttpRequestError({
+          url: `https://rpc.ankr.com/eth/${rpcKey}`,
+          status: 500,
+          details: "upstream boom",
+        }),
+      },
+      async (url, ctxStub, draws) => {
+        const res = await handlePay(ctxStub, { url });
+        const p = JSON.parse(res.content[0].text);
+        expect(p.status).toBe("refused");
+        expect(p.reason).toBe("REFILL_FAILED");
+        expect(p.refillTx).toBeNull();
+        expect(p.detail).not.toContain(rpcKey);
+        expect(p.detail).toContain("https://rpc.ankr.com/eth/[redacted]");
+        expect(p.detail).toContain("500");
+        expect(draws).toHaveLength(0);
+      },
+    );
+  });
+
   it("pay keeps the refill hash when the verify step throws after a confirmed refill (J3 observation round 5)", async () => {
     await withFullPayHarness(
       { balanceOf: 0n, refillPreview: null, receiptStatus: "success", verifyThrows: true },
@@ -1152,6 +1206,64 @@ describe("key never returned", () => {
     const res = fail(err);
     const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
     expect(p.error).toContain("https://rpc.test.mezo.org/v2/getBlockByNumber");
+    expect(p.error).not.toContain("[redacted]");
+  });
+
+  it("fail() redacts a bare-segment path-key RPC URL (QuickNode form, J3 F1 round 6)", () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    const err = new HttpRequestError({
+      url: `https://abc123.quiknode.pro/${rpcKey}/`,
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.ok).toBe(false);
+    expect(p.error).not.toContain(rpcKey);
+    expect(p.error).toContain("https://abc123.quiknode.pro/[redacted]/");
+    expect(p.error).toContain("500");
+  });
+
+  it("fail() redacts an /eth/-prefixed path-key RPC URL (Ankr form, J3 F1 round 6)", () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    const err = new HttpRequestError({
+      url: `https://rpc.ankr.com/eth/${rpcKey}`,
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.ok).toBe(false);
+    expect(p.error).not.toContain(rpcKey);
+    expect(p.error).toContain("https://rpc.ankr.com/eth/[redacted]");
+    expect(p.error).toContain("500");
+  });
+
+  it("fail() redacts a ?dkey= query param (dRPC form, J3 F1 round 6)", () => {
+    const rpcKey = "9f27c1a4b8e6d3f2a1c0e5b7a9d8f6c2";
+    const err = new HttpRequestError({
+      url: `https://rpc.test.mezo.org/?dkey=${rpcKey}`,
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.ok).toBe(false);
+    expect(p.error).not.toContain(rpcKey);
+    expect(p.error).toContain("?dkey=[redacted]");
+    expect(p.error).toContain("https://rpc.test.mezo.org/");
+    expect(p.error).toContain("500");
+  });
+
+  it("fail() leaves a 20-digit numeric path segment untouched (round 6 guard pin)", () => {
+    const err = new HttpRequestError({
+      url: "https://rpc.test.mezo.org/v2/12345678901234567890",
+      status: 500,
+      details: "upstream boom",
+    });
+    const res = fail(err);
+    const p = JSON.parse(res.content[0].text) as { ok: boolean; error: string };
+    expect(p.error).toContain("https://rpc.test.mezo.org/v2/12345678901234567890");
     expect(p.error).not.toContain("[redacted]");
   });
 

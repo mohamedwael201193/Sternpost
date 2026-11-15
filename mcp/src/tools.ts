@@ -277,15 +277,33 @@ function truncate(text: string, max = 8192): string {
  * key-like characters after /v2/ or /v3/ is redacted too, but only when
  * it mixes letters and digits, so ordinary RPC paths (e.g.
  * /v2/getBlockByNumber, all letters, or a numeric id, all digits)
- * survive untouched. The rest of the message is kept intact so the log
- * stays useful for debugging; only the credential-shaped part is
- * replaced.
+ * survive untouched. Round 6 (J3 F1): the /v[23]/ anchor was too
+ * narrow — real provider forms put the key elsewhere, so ANY
+ * `/`-delimited segment of 20+ mixed letter+digit characters is now
+ * redacted, whatever precedes it: a bare first segment (QuickNode
+ * `https://<subdomain>.quiknode.pro/<32-hex>/`, Blast
+ * `https://eth-mainnet.blastapi.io/<project-id>`, GetBlock
+ * `https://eth.getblock.io/<key>/mainnet/`), a provider prefix
+ * (Ankr `/eth/<key>`, `/api/`, `/rpc/`, `/v1/`, `/v4/`), or the old
+ * `/v2/`/`/v3/` forms. The mixed letter+digit guard is kept, so
+ * all-letters method names (e.g. getTransactionReceipt, 20 chars)
+ * and all-digits numeric segments (e.g. a 20-digit id) still survive
+ * untouched; the all-letters/all-digits key edge and sub-20-char
+ * keys are documented trade-offs and are NOT covered (widening
+ * would false-positive on ordinary paths). Accepted nit: a non-secret
+ * 20+ mixed segment (e.g. a bare 40-hex address) is redacted too.
+ * The query rule also covers `dkey` (dRPC `?dkey=<key>`), which the
+ * old `key|api_key|…` alternation did not match. The rest of the
+ * message is kept intact so the log stays useful for debugging; only
+ * the credential-shaped part is replaced.
  */
 function redactCredentials(text: string): string {
   return text
     .replace(/(https?:\/\/)[^\s/@]+@/g, "$1[redacted-credentials]@")
-    .replace(/([?&](?:api[_-]?key|key|token|secret|password|access_token|auth)=)[^\s&]*/gi, "$1[redacted]")
-    .replace(/(\/v[23]\/)(?=[A-Za-z0-9_-]*[A-Za-z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{20,}/g, "$1[redacted]");
+    .replace(/([?&](?:dkey|api[_-]?key|key|token|secret|password|access_token|auth)=)[^\s&]*/gi, "$1[redacted]")
+    // (?<!\/) keeps the `://` of the scheme out of the match: the
+    // second slash of `://` must not redact a long mixed subdomain.
+    .replace(/(?<!\/)\/(?=[A-Za-z0-9_-]*[A-Za-z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{20,}/g, "/[redacted]");
 }
 
 const TROVE_STATUS = ["none", "active", "closedByOwner", "closedByLiquidation", "closedByRedemption"] as const;
