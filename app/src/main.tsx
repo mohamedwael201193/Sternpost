@@ -11,6 +11,7 @@ import Landing from './landing/Landing'
 
 // Wallet libraries only load on /app, keeping the landing bundle small.
 const Dashboard = lazy(() => import('./app/Dashboard'))
+const ProveIt = lazy(() => import('./app/pages/ProveIt'))
 
 /** Old or guessed top-level links like /pay go to the matching dashboard page, keeping the query string. */
 function ToApp() {
@@ -36,8 +37,9 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/prove-it" element={<Suspense fallback={<div className="p-10 display text-2xl">Opening the proof…</div>}><ProveIt /></Suspense>} />
         <Route path="/app/*" element={<Suspense fallback={<div className="p-10 display text-2xl">Opening the chartroom…</div>}><Dashboard /></Suspense>} />
-        {['pay', 'apps', 'activity', 'revoke', 'draw', 'dashboard', 'open', 'crew', 'watch', 'logbook', 'muster', 'classic', 'close', 'break'].map((p) => <Route key={p} path={`/${p}/*`} element={<ToApp />} />)}
+        {['pay', 'apps', 'activity', 'revoke', 'draw', 'dashboard', 'open', 'crew', 'watch', 'logbook', 'classic', 'close'].map((p) => <Route key={p} path={`/${p}/*`} element={<ToApp />} />)}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
