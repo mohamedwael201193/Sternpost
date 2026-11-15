@@ -1,0 +1,43 @@
+# Drift gate for the test-count numbers (task 0.8, plan §7.1 / C12).
+#
+# README.md, app/src/landing/Proof.tsx and judges/JUDGES.md carry numbers
+# generated from TESTS.json by scripts/sync-proof.mjs. This job fails if
+# any of those numbers differs from the committed TESTS.json, so the docs
+# can never quietly drift from the last real `make test-all` run.
+#
+# Deliberately cheap: it reads the committed TESTS.json and diffs the
+# numbers — it does NOT re-run any suite (the per-package workflows run
+# the suites themselves). Fork rows are skipped while the fork suites in
+# TESTS.json are "not-run"; sync-proof warns about that instead of
+# failing, so a fork run is never claimed that did not happen.
+name: tests-drift
+
+on:
+  push:
+    paths:
+      - TESTS.json
+      - README.md
+      - app/src/landing/Proof.tsx
+      - judges/JUDGES.md
+      - scripts/sync-proof.mjs
+      - Makefile
+      - .github/workflows/tests-drift.yml
+  pull_request:
+    paths:
+      - TESTS.json
+      - README.md
+      - app/src/landing/Proof.tsx
+      - judges/JUDGES.md
+      - scripts/sync-proof.mjs
+      - Makefile
+      - .github/workflows/tests-drift.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: make check-tests

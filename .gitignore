@@ -6,7 +6,13 @@ dist/
 contracts/out/
 contracts/cache/
 contracts/lib/
+contracts/broadcast/
 contracts/broadcast/*/31611/run-latest.json.bak
+# 0.8 test-all outputs: out/ is intermediate (TESTS.json at the root is
+# the committed artifact); foundry.lock is a local build lock, never
+# committed.
+out/
+foundry.lock
 coverage/
 *.log
 .vercel

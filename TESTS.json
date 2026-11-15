@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-11-15T09:48:30.586Z",
+  "commit": "2713e4e9621e035d4447d63353eadbb9fa24c6c4",
+  "suites": [
+    {
+      "name": "contracts-unit",
+      "kind": "unit",
+      "passed": 77,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "contracts-fuzz",
+      "kind": "fuzz",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "contracts-invariant",
+      "kind": "invariant",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "contracts-fork-offline",
+      "kind": "fork",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 2,
+      "status": "completed",
+      "note": "excluded from total to avoid double-counting; forge reports skipped fork contracts as 1 skipped setUp() each (10 fork tests declared)"
+    },
+    {
+      "name": "contracts-fork-testnet",
+      "kind": "fork",
+      "passed": 9,
+      "failed": 1,
+      "skipped": 0,
+      "status": "completed",
+      "note": "excluded from total to avoid double-counting"
+    },
+    {
+      "name": "contracts-fork-mainnet",
+      "kind": "fork",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 1,
+      "status": "completed",
+      "note": "excluded from total to avoid double-counting"
+    },
+    {
+      "name": "sdk",
+      "kind": "unit",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "backend",
+      "kind": "unit",
+      "passed": 65,
+      "failed": 2,
+      "skipped": 5,
+      "status": "completed"
+    },
+    {
+      "name": "app",
+      "kind": "unit",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "mcp",
+      "kind": "unit",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "status": "missing",
+      "note": "mcp package does not exist yet"
+    },
+    {
+      "name": "keeper",
+      "kind": "unit",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "status": "missing",
+      "note": "keeper package does not exist yet"
+    }
+  ],
+  "total": {
+    "passed": 179,
+    "failed": 2,
+    "skipped": 5
+  },
+  "forkNote": "fork suites listed separately, never added twice"
+}
