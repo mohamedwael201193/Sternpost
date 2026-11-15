@@ -15,3 +15,4 @@ coverage/
 agent*.json
 btctestkey.json
 contracts/foundry.lock
+STATUS.md
