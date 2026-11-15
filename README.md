@@ -101,13 +101,15 @@ The script for the full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples
 
 ABIs: [`shared/abis`](shared/abis). Every address and hash: [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
 
+The 0.9 Classic redeploy (2026-11-15): the Factory was deployed in [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) at [block 16794393](https://explorer.test.mezo.org/block/16794393) (gas 4,773,613). The governor, spend wallet and router deploys from the same redeploy are in [`shared/deployments/testnet.json`](shared/deployments/testnet.json).
+
 ## Live proof (Wave-1 run on the superseded deployment, plus the 0.9 `defend()` re-run)
 
 Every row marked **Wave 1** ran on the Wave-1 deployment, superseded by the 0.9 Classic redeploy on 2026-11-15 (see [Deployments](#deployments-mezo-testnet-chain-31611)). Those rows demonstrate the flows on the pre-0.9 contracts — the 0.9 redeploy changed the governor code, so they are not proof of the current deployment. The only flow re-run on the current 0.9 deployment is `defend()` (last row); the full 0.9 run is in [`judges/TESTNET_TXS.md`](judges/TESTNET_TXS.md).
 
 | What it proves | Deployment | Tx |
 |---|---|---|
-| Factory deployed | 0.9 (current) | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
+| Factory deployed ([block 16794393](https://explorer.test.mezo.org/block/16794393), gas 4,773,613) | 0.9 (current) | [`0x1c66a1c5…`](https://explorer.test.mezo.org/tx/0x1c66a1c572024a808645abbb7163496c4b7252c800246a1b9aabc6f303cbd1e1) |
 | Safe draw by an app key → SpendWallet | Wave 1 (superseded) | [`0xba4eb129…`](https://explorer.test.mezo.org/tx/0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523) |
 | Unsafe draw refused (`Unsafe`, ICR 218% < floor 250%) | Wave 1 (superseded) | [`0xf3920683…`](https://explorer.test.mezo.org/tx/0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf) |
 | Direct Mezo submission blocked by the gate | Wave 1 (superseded) | [`0xfd93314c…`](https://explorer.test.mezo.org/tx/0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2) |
@@ -119,21 +121,31 @@ Every row marked **Wave 1** ran on the Wave-1 deployment, superseded by the 0.9 
 | Save route: draw → sMUSD | Wave 1 (superseded) | [`0x2e775fc4…`](https://explorer.test.mezo.org/tx/0x2e775fc4c97ee6762ad3bbb7b8634f02b888221ef6008f4f0a111f88ac53f311) |
 | Swap route: draw → BTC with min-out | Wave 1 (superseded) | [`0x8f1cffa6…`](https://explorer.test.mezo.org/tx/0x8f1cffa6e45f14b612b5998a1e08ca1666a980fdc877401b6cb9ed5691cb1c91) |
 | Loop route: 2 legs, floor re-checked each leg | Wave 1 (superseded) | [`0x589fd815…`](https://explorer.test.mezo.org/tx/0x589fd81568ee61521091b3be036c00c7852a6f030d0d052f32a5794d5d6735c1) |
-| `defend()` re-run on 0.9: repaid 30 MUSD, ICR 2.3791 → 2.4081 (block 16794538) | 0.9 (current) | [`0x3e57c0b2…`](https://explorer.test.mezo.org/tx/0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2) |
+| `defend()` re-run on 0.9: repaid 30 MUSD, ICR 2.3791 → 2.4081 ([block 16794538](https://explorer.test.mezo.org/block/16794538)) | 0.9 (current) | [`0x3e57c0b2…`](https://explorer.test.mezo.org/tx/0x3e57c0b2b71099c01cbb4e47facd97eccece12f46bbe675bed0f4013f87600c2) |
 
 The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judges/TESTNET_TXS.md).
 
+## Wave 2 — what landed
+
+| Landing | Commit |
+|---|---|
+| 1.3 — `draw()` / `drawBySig()` acceptance tests + J3 fixes | acceptance tests [`cac8ef2`](https://github.com/mohamedwael201193/Sternpost/commit/cac8ef2e4f407e3459cf370ffe5ec6d96c243381) + J3 fixes [`b8845bb`](https://github.com/mohamedwael201193/Sternpost/commit/b8845bb40b62969990fab4d57941af21f0b3de3e) |
+| 1.3/1.6 — `closeAccount` tolerates zero surplus on a redeemed trove; Batcher mock fix | `closeAccount` [`026d0c4`](https://github.com/mohamedwael201193/Sternpost/commit/026d0c4984e3922dc83c2d015fc933849ff742cf) + Batcher mock [`47eb2b0`](https://github.com/mohamedwael201193/Sternpost/commit/47eb2b0dc6f13ee614f5c0c97cb01e1e1f749845) |
+| 1.6 — Batcher `promote` / claims + saturating balance delta + `MAX_BATCH` docs (J3) | promote / claims [`1dd55ed`](https://github.com/mohamedwael201193/Sternpost/commit/1dd55edee934b7bf0db6b6dc98c70e30d9cd36bf) + saturating delta / `MAX_BATCH` docs [`ad48467`](https://github.com/mohamedwael201193/Sternpost/commit/ad48467bb7c66a6fa7b2d666a1ec5baf3295449c) |
+| 0.8 — test-all hardening + [`TESTS.json`](TESTS.json); fresh FORK=1 counts 256 / 270 / 273 / 137 | hardening [`47d5623`](https://github.com/mohamedwael201193/Sternpost/commit/47d562356c3eba03a2ecb48bd1582874be9abdf2) + counts [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) |
+
 ## Tests
 
-Contracts, SDK and backend counts are from the latest green CI runs; fork and app counts from the last local runs. 256 passing (non-fork subtotal; E2E not counted).
+Counts are from [`TESTS.json`](TESTS.json) @ [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) (generated 2026-11-15 11:39 UTC; refresh pending) — **256 passing (non-fork subtotal; E2E not counted)**, **270 distinct** declared (258 non-fork + 10 fork + 2 invariant properties), **273 incl. fork** (256 + 10 testnet + 7 mainnet). The account suite was re-verified separately (row below) — the **137** and **161** rows are different snapshots, not one run: 137 is the TESTS.json contracts total (account 33 inside it), while 161 is the later account-suite re-verification @ `6c69ab2`. Note on the citation: the `commit` field embedded inside `TESTS.json` still records `7b1ffcd`, the pre-landing run commit, which does not resolve in this repository's history; `3374eee` is the commit that landed the file, and the counts above are from the file as landed at `3374eee`.
 
 | Suite | Command | Result |
 |---|---|---|
-| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **137 passing** (Governor 31 + 15 branch + 4 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5 + 15 account + 1 fuzz, Radar 17, RouterSlippage 8, Reentrancy 1, invariants 2) |
+| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **137 passing** ([TESTS.json](TESTS.json) @ `3374eee`; refresh pending) — Governor 31 + 15 branch + 4 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5 (unit), RouterSlippage 8, Reentrancy 1, invariants 2, account 33 (32 + 1 fuzz) |
+| Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **161 passed, 0 failed, 3 skipped** ([`6c69ab2`](https://github.com/mohamedwael201193/Sternpost/commit/6c69ab2bb415fed73db960b768ced0737bfda80b); [artifact](judges/forge-account.json)) — TroveAccountTest 57/57, Draw 36, RadarUnit 17, FactoryTest 23/23, BatcherTest 28 (+1 skipped), RadarFork 2 skipped |
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/10** (3 skipped — Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
 | SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **10/10** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74/74** (API, indexer, x402, Telegram bot) |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74 passed of 80 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) was not in the TESTS.json run, so only 74 executed; the 6 pass standalone |
 | App unit | `cd app && npx vitest run` | **35/35** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |
