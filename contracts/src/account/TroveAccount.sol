@@ -47,9 +47,11 @@ interface ICollSurplusPool {
 ///      steal the victim's (owner, salt).
 ///      `spIn`/`spOut` are CUT (plan 3.3): StabilityPool deferred, the lab
 ///      verdict is that liquidations consume its MUSD.
-///      `shield()` is task 1.4 and is NOT in this file yet; `needed()` below
-///      is the ICR view shield will use (reason 2 RANK is reserved for the
-///      1.4/1.5 rank integration).
+///      `shield()` is task 1.4 (plan 3.7): ICR / rank / TCR triggers,
+///      bounded repay (G1/I6), reserve-BTC addColl, bounty anti-farming
+///      + cooldown (I7), `TroveNotActive` for non-active troves (I8),
+///      continues in Recovery Mode (I9). `needed()` below reports the
+///      ICR view shield uses, with reason 2 RANK wired by 1.4/1.5.
 contract TroveAccount is ITroveAccount {
     // ---- Immutables (implementation bytecode; shared by all clones) ----
     IBO public immutable bo;
@@ -70,6 +72,8 @@ contract TroveAccount is ITroveAccount {
     uint256 public constant MAX_SESSION = 90 days;
     uint256 public constant MAX_RANK_STEPS = 25;
     uint256 public constant MCR = 1.1e18;
+    uint256 public constant MIN_ICR_IMPROVEMENT = 0.5e18 / 100; // 0.5 pp: bounty gate (I7)
+    uint256 public constant TCR_SHIELD_THRESHOLD = 1.55e18; // Recovery Mode approaching: TCR trigger
     uint256 public constant NICR_SCALE = 1e20; // canonical on-chain NICR scale: coll * 1e20 / debt
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
     bytes4 public constant MAGIC = 0x1626ba7e;
@@ -357,7 +361,22 @@ contract TroveAccount is ITroveAccount {
         uint64 expiry,
         bool anyPayee,
         bool canSignX402
-    ) external onlyOwner {
+    ) external virtual onlyOwner {
+        _setSession(agent, budget, perTx, dailyLimit, expiry, anyPayee, canSignX402);
+    }
+
+    /// @notice Session issuance shared by `setSession` and the mainnet
+    ///         variant (1.10), which adds its budget cap before calling
+    ///         this. Behaviour is identical to the old inline body.
+    function _setSession(
+        address agent,
+        uint128 budget,
+        uint128 perTx,
+        uint128 dailyLimit,
+        uint64 expiry,
+        bool anyPayee,
+        bool canSignX402
+    ) internal {
         if (agent == address(0)) revert ZeroAddress();
         if (expiry <= block.timestamp || expiry > block.timestamp + MAX_SESSION) revert BadSession();
         uint32 gen = ++genCounter[agent];
@@ -483,6 +502,102 @@ contract TroveAccount is ITroveAccount {
         emit Checkpoint(status(), icr, tcr, rm);
     }
 
+    // ============ Anyone: shield ============
+
+    /// @notice Permissionless keeper shield (plan 3.7, invariants I6/I7/I8/I9).
+    ///         Anyone (a keeper, a stranger EOA) may call; no signature, no
+    ///         nonce. Fires on EITHER trigger — `reason`: 1 ICR
+    ///         (`ICR < shieldICR`), 2 RANK (`minDebtAhead > 0` and the
+    ///         bounded walk proves redeemable debt ahead `< minDebtAhead`),
+    ///         3 TCR (`TCR < 155%`, Recovery Mode approaching). Repays toward
+    ///         `targetICR` bounded by `debt - 200 - minNetDebt` (G1/I6),
+    ///         taking MUSD from the balance first then unparking from sMUSD,
+    ///         and closes the remaining gap with `addColl` from reserve BTC
+    ///         (`address(this).balance`). Never draws. Continues in Recovery
+    ///         Mode (I9). Bounty (I7): paid only when the ICR improves by at
+    ///         least 0.5 pp OR `valueAdded` (repaid MUSD + reserve-BTC value)
+    ///         is at least 10x the bounty, and at most once per
+    ///         `cooldownBlocks`; `lastShieldBlock` advances only on success.
+    function shield() external nonReentrant returns (uint256 repaid, uint256 collAdded) {
+        uint8 st = status();
+        if (st != 1) revert TroveNotActive(st);
+        if (lastShieldBlock != 0 && block.number < uint256(lastShieldBlock) + policy.cooldownBlocks) {
+            revert Cooldown(uint256(lastShieldBlock) + policy.cooldownBlocks - block.number);
+        }
+        uint256 price = pf.fetchPrice();
+        (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(address(this));
+        uint256 debt = principal + interest;
+        uint256 icrBefore = debt == 0 ? type(uint256).max : coll * price / debt;
+        uint256 tcr = tm.getTCR(price);
+
+        uint8 reason;
+        if (icrBefore < policy.shieldICR) {
+            reason = 1;
+        } else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt)) {
+            reason = 2;
+        } else if (tcr < TCR_SHIELD_THRESHOLD) {
+            reason = 3;
+        } else {
+            revert NotStressed(icrBefore);
+        }
+
+        uint256 repayWanted = _repayWanted(coll, debt, price);
+        uint256 collWanted = _collWanted(coll, debt, repayWanted, price);
+        if (repayWanted == 0 && collWanted == 0) revert NothingToDo();
+        (address up, address lo) = _hints();
+
+        // Repay leg: MUSD balance first, then unpark from sMUSD (enough to
+        // cover the repay AND the bounty, as in the lab). The repay actually
+        // executed is capped by the MUSD the account can muster.
+        if (repayWanted > 0) {
+            uint256 bal = musd.balanceOf(address(this));
+            uint256 want = repayWanted + policy.bounty;
+            if (bal < want) {
+                uint256 sm = smusd.balanceOf(address(this));
+                if (sm > 0) {
+                    uint256 take = want - bal;
+                    if (take > sm) take = sm;
+                    smusd.withdraw(take);
+                    bal = musd.balanceOf(address(this));
+                }
+            }
+            repaid = repayWanted > bal ? bal : repayWanted;
+            if (repaid > 0) bo.repayMUSD(repaid, up, lo);
+        }
+
+        // Collateral leg: recompute the gap after the repay (debt moved),
+        // then addColl from reserve BTC, capped by the reserve.
+        (uint256 collNow, uint256 principal2, uint256 interest2,,,) = tm.getEntireDebtAndColl(address(this));
+        uint256 debtNow = principal2 + interest2;
+        uint256 collWanted2 = _collWanted(collNow, debtNow, 0, price);
+        uint256 reserve = address(this).balance;
+        if (collWanted2 > 0 && reserve > 0) {
+            collAdded = collWanted2 > reserve ? reserve : collWanted2;
+            bo.addColl{value: collAdded}(up, lo);
+        }
+
+        if (repaid == 0 && collAdded == 0) revert NothingToDo();
+
+        uint256 icrAfter = tm.getCurrentICR(address(this), price);
+        uint256 valueAdded = repaid + collAdded * price / 1e18;
+        uint256 bountyPaid;
+        if (
+            policy.bounty > 0
+                && (
+                    (icrAfter > icrBefore && icrAfter - icrBefore >= MIN_ICR_IMPROVEMENT)
+                        || valueAdded >= 10 * uint256(policy.bounty)
+                )
+        ) {
+            uint256 balAfter = musd.balanceOf(address(this));
+            if (balAfter >= policy.bounty) {
+                bountyPaid = policy.bounty;
+                _safeTransfer(msg.sender, bountyPaid);
+            }
+        }
+        lastShieldBlock = uint64(block.number);
+        emit Shielded(msg.sender, repaid, collAdded, icrBefore, icrAfter, reason, bountyPaid);
+    }
+
     // ============ Agent: draw ============
 
     /// @notice Agent draw (plan 3.4). Borrows exactly what is paid, enforces
@@ -553,22 +668,22 @@ contract TroveAccount is ITroveAccount {
     }
 
     /// @notice What the shield would need to restore ICR to `targetICR`.
-    ///         `reason`: 0 none, 1 ICR, 2 RANK (rank is wired by 1.4/1.5).
-    ///         Repay is bounded by the minimum net debt + gas comp (G1).
+    ///         `reason`: 0 none, 1 ICR, 2 RANK (rank is wired by 1.4/1.5:
+    ///         `minDebtAhead > 0` and the bounded walk proves debt ahead
+    ///         `< minDebtAhead` while ICR is below target but at/above the
+    ///         shield line). TCR (reason 3) is a shield-only trigger and is
+    ///         not reported here. Repay is bounded by the minimum net debt
+    ///         + gas comp (G1).
     function needed() external view returns (uint256 icr, uint256 repayWanted, uint256 collWanted, uint8 reason) {
         uint256 price = pf.fetchPrice();
         (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(address(this));
         uint256 debt = principal + interest;
         icr = debt == 0 ? type(uint256).max : coll * price / debt;
         if (icr >= policy.targetICR) return (icr, 0, 0, 0);
-        uint256 minNet = bo.minNetDebt();
-        uint256 cap = debt > GAS_COMP + minNet ? debt - GAS_COMP - minNet : 0;
-        uint256 targetDebt = coll * price / policy.targetICR;
-        uint256 x = debt > targetDebt ? debt - targetDebt : 0;
-        repayWanted = x < cap ? x : cap;
-        uint256 needColl = policy.targetICR * (debt - repayWanted) / price;
-        collWanted = needColl > coll ? needColl - coll : 0;
-        reason = icr < policy.shieldICR ? 1 : 0;
+        repayWanted = _repayWanted(coll, debt, price);
+        collWanted = _collWanted(coll, debt, repayWanted, price);
+        if (icr < policy.shieldICR) reason = 1;
+        else if (policy.minDebtAhead > 0 && _rankStressed(coll, debt)) reason = 2;
     }
 
     /// @notice Dry-run a draw without state changes. `reasonCode`: 0 OK,
@@ -678,6 +793,44 @@ contract TroveAccount is ITroveAccount {
         policy.minDebtAhead = uint128(minDebtAhead);
         uint256 icr = tm.getCurrentICR(address(this), pf.fetchPrice());
         emit TroveOpened(owner, msg.value, debt, icr);
+    }
+
+    /// @notice Repay wanted to restore ICR to `targetICR`: `x = debt -
+    ///         coll*price/target`, bounded by `debt - 200 - minNetDebt`
+    ///         (G1/I6): a shield repay can never leave net debt below
+    ///         `minNetDebt` + gas compensation.
+    function _repayWanted(uint256 coll, uint256 debt, uint256 price) internal view returns (uint256) {
+        if (debt == 0) return 0;
+        uint256 minNet = bo.minNetDebt();
+        uint256 cap = debt > GAS_COMP + minNet ? debt - GAS_COMP - minNet : 0;
+        uint256 targetDebt = coll * price / policy.targetICR;
+        uint256 x = debt > targetDebt ? debt - targetDebt : 0;
+        return x < cap ? x : cap;
+    }
+
+    /// @notice Collateral wanted to restore ICR to `targetICR` after
+    ///         repaying `repay` (0 = as it stands now). A zero price makes
+    ///         collateral value undefined: no collateral is wanted (the
+    ///         repay leg still runs; previously this divided by zero).
+    function _collWanted(uint256 coll, uint256 debt, uint256 repay, uint256 price)
+        internal
+        view
+        returns (uint256)
+    {
+        if (price == 0) return 0;
+        uint256 debtAfter = debt > repay ? debt - repay : 0;
+        uint256 needColl = policy.targetICR * debtAfter / price;
+        return needColl > coll ? needColl - coll : 0;
+    }
+
+    /// @notice Rank stress (plan 3.7): the bounded walk proves redeemable
+    ///         debt ahead of this trove's NICR is `< minDebtAhead`. Step
+    ///         exhaustion is treated as safe (exposure unproven), exactly as
+    ///         in `_open` / plan 3.7(c).
+    function _rankStressed(uint256 coll, uint256 debt) internal view returns (bool) {
+        uint256 nicr = debt == 0 ? type(uint256).max : coll * NICR_SCALE / debt;
+        (uint256 debtAhead, bool complete) = _debtAheadForNICR(nicr, policy.minDebtAhead);
+        return complete && debtAhead < policy.minDebtAhead;
     }
 
     /// @notice Bounded redemption-order walk (plan 3.7): start at
