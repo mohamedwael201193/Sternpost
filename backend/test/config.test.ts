@@ -19,6 +19,15 @@ describe("config: X402_PAY_TO required (C8)", () => {
     expect(() => loadConfig({ X402_PAY_TO: "0x1" })).toThrow(/X402_PAY_TO/);
   });
 
+  it("rejects the zero address", () => {
+    expect(() => loadConfig({ X402_PAY_TO: "0x0000000000000000000000000000000000000000" })).toThrow(/X402_PAY_TO/);
+  });
+
+  it("rejects the burn address in any casing", () => {
+    expect(() => loadConfig({ X402_PAY_TO: "0x000000000000000000000000000000000000dEaD" })).toThrow(/X402_PAY_TO/);
+    expect(() => loadConfig({ X402_PAY_TO: "0x000000000000000000000000000000000000dead" })).toThrow(/X402_PAY_TO/);
+  });
+
   it("loads when X402_PAY_TO is a valid address and keeps other defaults", () => {
     const c = loadConfig({ X402_PAY_TO: PAY_TO });
     expect(c.X402_PAY_TO).toBe(PAY_TO);

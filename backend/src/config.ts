@@ -11,7 +11,14 @@ const schema = z.object({
   INDEXER_INTERVAL_MS: z.coerce.number().int().min(1000).default(15000),
   INDEXER_ENABLED: z.enum(["true", "false"]).default("true"),
   X402_FACILITATOR_URL: z.string().url().default("https://facilitator.vativ.io"),
-  X402_PAY_TO: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  X402_PAY_TO: z.string().regex(/^0x[0-9a-fA-F]{40}$/).refine(
+    (v) => {
+      const a = v.toLowerCase();
+      return a !== "0x0000000000000000000000000000000000000000" &&
+        a !== "0x000000000000000000000000000000000000dead";
+    },
+    { message: "X402_PAY_TO must not be the zero address or the burn address" },
+  ),
   X402_PRICE: z.string().regex(/^\d+$/).default("10000000000000000"),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),

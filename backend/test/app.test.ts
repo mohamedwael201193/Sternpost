@@ -53,7 +53,9 @@ describe("rateLimit", () => {
 
 describe("config", () => {
   it("applies defaults and rejects bad addresses", () => {
-    const c = loadConfig({});
+    // X402_PAY_TO is required (C8) — config.test.ts covers the rejection
+    // cases; here we just need a valid payee to exercise the defaults.
+    const c = loadConfig({ X402_PAY_TO: "0x1111111111111111111111111111111111111111" });
     expect(c.CHAIN_ID).toBe(31611);
     expect(() => loadConfig({ X402_PAY_TO: "0x1" })).toThrow();
   });
