@@ -219,7 +219,9 @@ function freshness(tests) {
 const ACCOUNT_SUITE_PIN = {
   source:
     'forge test --match-path "test/account/*" on current main, lead-verified at the closeAccount merge (2026-11-15). ' +
-    "Not re-executed here: forge is not installed in this VM. Declared counts below are re-checked " +
+    "Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. " +
+    "forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH " +
+    "— the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked " +
     "against the tree on every run (count of `function test*` per file).",
   passed: 161,
   failed: 0,
@@ -372,6 +374,7 @@ const PROOF_TABLE = [
         borrowTx: "0xaa087a2ce640e30cce75f96d6c816e60d2ecf3c31598e0e0af814a6b5be1495f",
         borrowTxUrl: txUrl("0xaa087a2ce640e30cce75f96d6c816e60d2ecf3c31598e0e0af814a6b5be1495f"),
         borrowBlock: 16790934,
+        borrowBlockUrl: blockUrl(16790934),
         settleTx: "0x7876c7b74708877c4537ae3652210b36b328146ba28939ed5231dd4dbc47e342",
         settleTxUrl: txUrl("0x7876c7b74708877c4537ae3652210b36b328146ba28939ed5231dd4dbc47e342"),
         what: "Own-merchant variant: 0.6 MUSD JIT borrow, 0.5 MUSD settled to the merchant",
@@ -449,6 +452,7 @@ const PROOF_TABLE = [
       drawAfterRevokeTx: "0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f",
       drawAfterRevokeTxUrl: txUrl("0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f"),
       drawAfterRevokeBlock: 16310277,
+      drawAfterRevokeBlockUrl: blockUrl(16310277),
       what: "Classic (Wave 1, superseded): revoke() + nonce burn, then a draw with the pre-revoke signature reverts BadHeal (nonce burned)",
       scope: "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account",
     },
