@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # check-threat-model.sh — verify every test cited in docs/THREAT_MODEL.md
 # (rules S1–S26) exists in the repo by file + test name.
+# Scope is NAME EXISTENCE only: this script never runs a test and never
+# checks that a test proves what its row claims. Pass status at this tree
+# is unproven (TESTS.json is stale — see docs/THREAT_MODEL.md).
 # Usage: bash scripts/check-threat-model.sh   (exit 0 = all cited tests found)
 #   or: bash scripts/check-threat-model.sh --list   (print the pairs and exit 0)
 #
 # The threat model marks S18 (code review), S22 (non-goal) and S23
-# (disclosure) as having no test by design, and S11/S12/S14/S15/S25 as
-# partial (mechanism tests cited, execution gap named in the doc).
+# (disclosure) as having no test by design, and S6/S7/S11/S12/S14/S15/S24/S25
+# as partial (mechanism tests cited, execution gap named in the doc).
 # This script checks the tests the doc DOES cite; it does not bless the gaps.
 set -u
 cd "$(dirname "$0")/.." || exit 1
@@ -74,6 +77,11 @@ contracts/test/account/TroveAccount.t.sol|test_I5_closeAccountRevokesSessions
 contracts/test/account/TroveAccount.t.sol|test_I5_withdrawCollAndRepay
 contracts/test/account/TroveAccount.t.sol|test_repayBoundedByMinDebt
 contracts/test/unit/Governor.t.sol|test_defend_clampsAfterPartialRedemption
+contracts/test/fork/Fork.t.sol|test_fork_directBypassReverts
+contracts/test/fork/Fork.t.sol|test_fork_unsafeDrawRefused
+contracts/test/fork/Fork.t.sol|test_fork_revokeBurnsNonce
+contracts/test/fork/Fork.t.sol|test_fork_nonceRace
+contracts/test/fork/Fork.t.sol|test_fork_callbackRemoved_failsClosed_healRecovers
 contracts/test/fork/Fork.t.sol|test_fork_defend
 contracts/test/account/Factory.t.sol|test_createAccountRejectsBountyAboveCap
 contracts/test/account/TroveAccount.t.sol|test_setPolicyRejectsBountyAboveCap
@@ -99,6 +107,8 @@ contracts/test/account/Batcher.t.sol|test_batcherRejectsPlainEthTransfer
 contracts/test/account/Batcher.t.sol|test_batcherRejectsValueOnMulti
 contracts/test/account/Batcher.t.sol|test_batcherRejectsValueOnClaimBatch
 contracts/test/account/Batcher.t.sol|test_combinedSweepLeavesBatcherEmpty
+contracts/test/invariant/Invariant.t.sol|invariant_bypassNeverLands
+contracts/test/invariant/Invariant.t.sol|invariant_budgetNeverExceeded
 contracts/test/invariant/Invariant.t.sol|invariant_governorHoldsOnlyBuffer
 contracts/test/invariant/RouterInvariant.t.sol|invariant_routerHoldsNothing
 contracts/test/account/TroveAccountDraw.t.sol|test_S17_priceFeedRevertPropagates
