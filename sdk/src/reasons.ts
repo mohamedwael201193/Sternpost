@@ -9,6 +9,8 @@ export const reasonText: Record<string, string> = {
   OVER_BUDGET: "More than this app's remaining budget.",
   PAYEE_NOT_ALLOWED: "This app may only pay its approved address.",
   BELOW_FLOOR: "Unsafe. This would push your collateral ratio below your floor.",
+  TROVE_CLOSED: "This trove is closed (redeemed, liquidated, or closed by the owner). Draws are blocked.",
+  RECOVERY_MODE: "Mezo is in Recovery Mode (system health below 150%). Draws are paused until it recovers.",
 };
 
 export const explain = (code: string) => reasonText[code] ?? code;

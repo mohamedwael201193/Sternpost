@@ -9,6 +9,10 @@ export interface GovernorStatus {
   defend: bigint;
   frozen: boolean;
   buffer: bigint;
+  /** standby().live: false means defend() is disarmed (expired, nonce moved, or never armed). */
+  standbyLive: boolean;
+  /** standby().deadline, unix seconds — shown as "armed until". */
+  standbyDeadline: bigint;
 }
 export interface AppAllowance { remaining: bigint; perDrawMax: bigint; expiry: bigint }
 
@@ -28,6 +32,7 @@ const govAbi = parseAbi([
   "function defendICR() view returns (uint256)",
   "function frozen() view returns (bool)",
   "function buffer() view returns (uint256)",
+  "function standby() view returns (uint256 amount, uint256 deadline, uint256 nonce, bool live)",
   "function appPolicy(address) view returns (uint128 budget, uint128 spent, uint128 perDrawMax, uint64 expiry, address payee)",
 ]);
 const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
@@ -41,10 +46,10 @@ export function viemChain(client: PublicClient, a: { factory: Hex; musd: Hex; me
       return g.toLowerCase() === ZERO ? null : (g.toLowerCase() as Hex);
     },
     async status(g) {
-      const [icr, floor, defend, frozen, buffer] = await Promise.all(
-        ["icr", "floorICR", "defendICR", "frozen", "buffer"].map((fn) => read(g, govAbi, fn)),
+      const [icr, floor, defend, frozen, buffer, sb] = await Promise.all(
+        ["icr", "floorICR", "defendICR", "frozen", "buffer", "standby"].map((fn) => read(g, govAbi, fn)),
       );
-      return { icr, floor, defend, frozen, buffer };
+      return { icr, floor, defend, frozen, buffer, standbyLive: (sb as readonly [bigint, bigint, bigint, boolean])[3], standbyDeadline: (sb as readonly [bigint, bigint, bigint, boolean])[1] };
     },
     async allowance(g, app) {
       const [budget, spent, perDrawMax, expiry]: [bigint, bigint, bigint, bigint] = await read(g, govAbi, "appPolicy", [app]);

@@ -41,6 +41,9 @@ abstract contract MockBase is Signer {
     MockMUSD musd; MockPriceFeed pf; MockTroveManager tm; MockActivePool ap; MockBorrowerOperations bo;
     MockSignatures sigs; MockSavings sav; SternpostFactory factory; SternpostGovernor g;
     address app = address(0xA11CE); address payee = address(0xBEEF); address attacker = address(0xBAD);
+    // Shared fixture uses a zero draw fee so the pre-existing behaviour tests keep their exact
+    // expectations; the fee path is covered by dedicated tests with a 10 bps factory (Governor.t.sol).
+    address internal constant FEE_RECIPIENT = address(0xFEE);
 
     function setUp() public virtual {
         vm.warp(1_800_000_000);
@@ -49,7 +52,7 @@ abstract contract MockBase is Signer {
         bo = new MockBorrowerOperations(); sigs = new MockSignatures(musd, tm, ap, bo); sav = new MockSavings(musd);
         sigAddr = address(sigs);
         factory = new SternpostFactory(IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
-            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)));
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 0, FEE_RECIPIENT);
         tm.setTrove(borrower, 0.1e18, 2_000e18); // ICR = 0.1 * 100k / 2000 = 5.0
         vm.prank(borrower); g = factory.createGovernor(3e18, 1.5e18);
         vm.prank(borrower); g.authorizeApp(app, 1_000e18, 400e18, uint64(block.timestamp + 30 days), address(0));

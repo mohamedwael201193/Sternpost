@@ -23,7 +23,7 @@ contract ReentrancyTest is Signer {
         EvilActivePool evil = new EvilActivePool(); MockBorrowerOperations bo = new MockBorrowerOperations();
         MockSignatures sigs = new MockSignatures(musd, tm, MockActivePool(payable(address(evil))), bo); sigAddr = address(sigs);
         SternpostGovernor g = new SternpostGovernor(borrower, IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
-            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(evil), ISavingsMUSD(address(0)), 3e18, 1.5e18);
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(evil), ISavingsMUSD(address(0)), 3e18, 1.5e18, 0, address(0xFEE));
         tm.setTrove(borrower, 0.1e18, 2_000e18);
         address app = address(0xA11CE);
         vm.prank(borrower); g.authorizeApp(app, 1_000e18, 500e18, uint64(block.timestamp + 1 days), address(0));

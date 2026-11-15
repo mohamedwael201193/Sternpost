@@ -7,7 +7,7 @@ import { RouteLines, type Link as RouteLink } from '../../ui/RouteLines'
 import { DrawHero } from '../DrawHero'
 import { Token } from '../../ui/Token'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
-import { useTrove } from '../useTrove'
+import { useTrove, TROVE_STATUS_LABEL } from '../useTrove'
 import { fmt, pct, WAD } from '../../lib/icr'
 import { STERNPOST } from '../../lib/chain'
 import { factoryAbi } from '../../lib/abi'
@@ -29,8 +29,19 @@ export default function Home() {
     { from: sRoute, fromEdge: 'top', to: form, toEdge: 'left' },
   ], [])
   const usd = (v?: bigint) => (v !== undefined && t.price ? `≈ $${fmt((v * t.price) / WAD)}` : '')
+  const standbyDate = t.standby?.[3] ? new Date(Number(t.standby[1]) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
   return (
     <div>
+      {t.recoveryMode === true && (
+        <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
+          <b>Recovery Mode</b> — Mezo system health is below 150%, so draws are paused on-chain. Repay or add collateral to continue; the guard cannot draw until the system recovers.
+        </div>
+      )}
+      {t.hasTrove && t.troveStatus !== undefined && t.troveStatus !== 1 && (
+        <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
+          <b>Trove {TROVE_STATUS_LABEL[t.troveStatus] ?? 'closed'}</b> — draws are blocked. The trove no longer exists on Mezo, so the dashboard numbers above are stale.
+        </div>
+      )}
       <div ref={host} className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px_260px] xl:grid-rows-[auto_auto]">
         <RouteLines host={host} links={links} />
         {/* Stern + compass */}
@@ -67,7 +78,7 @@ export default function Home() {
           <Row k="Collateral" v={t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : '—'} />
           <Row k="Debt" v={t.debt !== undefined ? `${fmt(t.debt)} MUSD` : '—'} />
           <Row k="Floor" v={t.floor ? pct(t.floor) : '—'} />
-          <Row k="Standby heal" v={t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed` : 'not armed'} />
+          <Row k="Standby heal" v={t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
           <Row k="Mezo nonce" v={t.nonce !== undefined ? String(t.nonce) : '—'} />
         </aside>
       </div>
@@ -137,22 +148,23 @@ function Requests({ borrower }: { borrower?: string }) {
 }
 
 function CreateGovernor({ onDone }: { onDone: () => void }) {
-  const [floor, setFloor] = useState(300)
+  const [floor, setFloor] = useState(250)
+  const [defend, setDefend] = useState(160)
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
-  const ok = floor >= 150 && floor <= 1000
+  const ok = floor >= 150 && floor <= 1000 && defend >= 135 && defend < floor
   return (
     <Card title="Set your floor" className="mt-6">
       <p className="text-sm mb-4">Deploys your own Governor. Any draw that would take the trove below this ratio reverts on-chain.</p>
-      <label className="caps text-[11px] text-muted" htmlFor="floor">Collateral floor (%)</label>
       <div className="flex gap-3 mt-2">
-        <input id="floor" type="number" min={150} max={1000} value={floor} onChange={(e) => setFloor(+e.target.value)} className="mono border border-ink/30 bg-paper px-3 py-2 w-32" />
-        <button className="pill" disabled={!ok || !STERNPOST.factory || tx.phase === 'signing' || tx.phase === 'pending'}
-          onClick={async () => { if (await tx.run(() => writeContractAsync({ address: STERNPOST.factory!, abi: factoryAbi, functionName: 'createGovernor', args: [BigInt(floor) * WAD / 100n, BigInt(floor - 30) * WAD / 100n] }))) onDone() }}>
+        <label className="caps text-[11px] text-muted" htmlFor="floor">Collateral floor (%)<input id="floor" type="number" min={150} max={1000} value={floor} onChange={(e) => setFloor(+e.target.value)} className="mono border border-ink/30 bg-paper px-3 py-2 w-32 block mt-1" /></label>
+        <label className="caps text-[11px] text-muted" htmlFor="defend">Defend line (%)<input id="defend" type="number" min={135} max={1000} value={defend} onChange={(e) => setDefend(+e.target.value)} className="mono border border-ink/30 bg-paper px-3 py-2 w-32 block mt-1" /></label>
+        <button className="pill self-end" disabled={!ok || !STERNPOST.factory || tx.phase === 'signing' || tx.phase === 'pending'}
+          onClick={async () => { if (await tx.run(() => writeContractAsync({ address: STERNPOST.factory!, abi: factoryAbi, functionName: 'createGovernor', args: [BigInt(floor) * WAD / 100n, BigInt(defend) * WAD / 100n] }))) onDone() }}>
           Create Governor
         </button>
       </div>
-      <p className="text-xs text-muted mt-2">Auto-defend triggers 30 points above liquidation risk, below your floor ({floor - 30}%).</p>
+      <p className="text-xs text-muted mt-2">Floor {floor}% — draws stop below this. Defend {defend}% — if the trove falls below this, anyone can repay from your buffer to restore it. Liquidation is at 110%, so the defend line must stay above 135%.</p>
       <TxStatus tx={tx} />
     </Card>
   )

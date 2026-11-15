@@ -11,17 +11,31 @@ export function projectedIcr(collBtc: bigint, price: bigint, debt: bigint, amoun
   return icr(collBtc, price, debt + amount + fee)
 }
 
+/**
+ * Fold a getEntireDebtAndColl tuple into the trove's collateral and debt.
+ * Mezo already folds pending redistribution amounts into the first three returns, so the last three
+ * slots (pendingCollateral, pendingPrincipal, pendingInterest) must NOT be added again — doing so
+ * double-counts them (Classic bug C1–C3).
+ */
+export function troveTotals(t: readonly bigint[]): { coll: bigint; debt: bigint } {
+  return { coll: t[0], debt: t[1] + t[2] }
+}
+
 export type DrawVerdict =
   | { ok: true; icrAfter: bigint }
-  | { ok: false; icrAfter: bigint; reason: 'ZERO_AMOUNT' | 'BELOW_FLOOR' | 'OVER_BUDGET' | 'OVER_PER_DRAW' | 'FROZEN' }
+  | { ok: false; icrAfter: bigint; reason: 'ZERO_AMOUNT' | 'BELOW_FLOOR' | 'OVER_BUDGET' | 'OVER_PER_DRAW' | 'FROZEN' | 'TROVE_CLOSED' | 'RECOVERY_MODE' }
 
 export function judgeDraw(p: {
   coll: bigint; price: bigint; debt: bigint; amount: bigint; fee: bigint; floor: bigint
   remaining?: bigint; perDrawMax?: bigint; frozen?: boolean
+  /** TroveManager status: 1 = active; anything else means the trove is closed. */
+  troveStatus?: number; recoveryMode?: boolean
 }): DrawVerdict {
   const icrAfter = projectedIcr(p.coll, p.price, p.debt, p.amount, p.fee)
   if (p.frozen) return { ok: false, reason: 'FROZEN', icrAfter }
   if (p.amount === 0n) return { ok: false, reason: 'ZERO_AMOUNT', icrAfter }
+  if (p.troveStatus !== undefined && p.troveStatus !== 1) return { ok: false, reason: 'TROVE_CLOSED', icrAfter }
+  if (p.recoveryMode) return { ok: false, reason: 'RECOVERY_MODE', icrAfter }
   if (p.perDrawMax !== undefined && p.amount > p.perDrawMax) return { ok: false, reason: 'OVER_PER_DRAW', icrAfter }
   if (p.remaining !== undefined && p.amount > p.remaining) return { ok: false, reason: 'OVER_BUDGET', icrAfter }
   if (icrAfter < p.floor) return { ok: false, reason: 'BELOW_FLOOR', icrAfter }
@@ -55,6 +69,8 @@ export const REASONS: Record<string, string> = {
   APP_NOT_AUTHORIZED: 'This app has no budget on your Governor.',
   APP_EXPIRED: "This app's authorization has expired.",
   PAYEE_NOT_ALLOWED: 'The payee is not the one you approved for this app.',
+  TROVE_CLOSED: 'This trove is closed (redeemed, liquidated, or closed by the owner). Draws are blocked.',
+  RECOVERY_MODE: 'Mezo is in Recovery Mode (system health below 150%). Draws are paused until it recovers.',
 }
 
 export type DrawLimit = 'floor' | 'cap' | 'budget'

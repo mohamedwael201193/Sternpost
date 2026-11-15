@@ -18,6 +18,17 @@ contract GovernorFuzzTest is MockBase {
         }
     }
 
+    /// Projected ICR with zero extra draw equals the live ICR, even with non-zero pending redistribution.
+    function testFuzz_projectedMatchesIcrWithPending(uint96 pc, uint96 pp, uint96 pi) public {
+        tm.setPending(
+            borrower,
+            bound(uint256(pc), 0, 0.05e18),
+            bound(uint256(pp), 0, 500e18),
+            bound(uint256(pi), 0, 100e18)
+        );
+        assertEq(g.projectedICR(0), g.icr());
+    }
+
     function testFuzz_directBypassAlwaysReverts(uint96 amt, uint64 price) public {
         uint256 a = bound(uint256(amt), 1, 3_000e18);
         pf.set(bound(uint256(price), 25_000e18, 200_000e18));

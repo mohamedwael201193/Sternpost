@@ -54,6 +54,12 @@ interface ITroveManager {
             uint256 pendingPrincipal,
             uint256 pendingInterest
         );
+    /// @notice True when the system TCR is below the 150% CCR. Draws always revert inside Mezo in this state.
+    function checkRecoveryMode(uint256 price) external view returns (bool);
+    function getTCR(uint256 price) external view returns (uint256);
+    /// @notice Trove status enum (TroveManager.sol): 0 nonExistent, 1 active, 2 closedByOwner,
+    ///         3 closedByLiquidation, 4 closedByRedemption.
+    function getTroveStatus(address borrower) external view returns (uint8);
 }
 
 interface IPriceFeed {

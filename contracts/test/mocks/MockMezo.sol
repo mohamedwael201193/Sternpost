@@ -29,17 +29,41 @@ contract MockTroveManager {
     MockPriceFeed public pf;
     mapping(address => uint256) public coll;
     mapping(address => uint256) public debt;
+    // Pending redistribution amounts, as the real TroveManager reports them: already folded into the
+    // first three returns of getEntireDebtAndColl, with the raw values in the last three slots.
+    mapping(address => uint256) public pendingColl;
+    mapping(address => uint256) public pendingPrincipal;
+    mapping(address => uint256) public pendingInterest;
+    // Trove status (0 nonExistent, 1 active, 2 closedByOwner, 3 closedByLiquidation, 4 closedByRedemption).
+    mapping(address => uint8) public troveStatus;
+    uint256 public tcr = 2.5e18; // system TCR; Recovery Mode below 1.5e18
     constructor(MockPriceFeed p) { pf = p; }
-    function setTrove(address b, uint256 c, uint256 d) external { coll[b] = c; debt[b] = d; }
+    function setTrove(address b, uint256 c, uint256 d) external { coll[b] = c; debt[b] = d; troveStatus[b] = 1; }
+    function setPending(address b, uint256 pc, uint256 pp, uint256 pi) external {
+        pendingColl[b] = pc; pendingPrincipal[b] = pp; pendingInterest[b] = pi;
+    }
+    function setTCR(uint256 t) external { tcr = t; }
+    function setStatus(address b, uint8 s) external { troveStatus[b] = s; }
     function addDebt(address b, uint256 d) external { debt[b] += d; }
     function subDebt(address b, uint256 d) external { debt[b] -= d; }
     function addColl(address b, uint256 c) external { coll[b] += c; }
     function getCurrentICR(address b, uint256 price) external view returns (uint256) {
-        return debt[b] == 0 ? type(uint256).max : coll[b] * price / debt[b];
+        uint256 d = debt[b] + pendingPrincipal[b] + pendingInterest[b];
+        return d == 0 ? type(uint256).max : (coll[b] + pendingColl[b]) * price / d;
     }
     function getEntireDebtAndColl(address b) external view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        return (coll[b], debt[b], 0, 0, 0, 0);
+        return (
+            coll[b] + pendingColl[b],
+            debt[b] + pendingPrincipal[b],
+            pendingInterest[b],
+            pendingColl[b],
+            pendingPrincipal[b],
+            pendingInterest[b]
+        );
     }
+    function checkRecoveryMode(uint256) external view returns (bool) { return tcr < 1.5e18; }
+    function getTCR(uint256) external view returns (uint256) { return tcr; }
+    function getTroveStatus(address b) external view returns (uint8) { return troveStatus[b]; }
 }
 
 contract MockActivePool {

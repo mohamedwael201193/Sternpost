@@ -27,7 +27,7 @@ contract RouterForkTest is Signer {
         vm.prank(borrower); IBO3(BO).openTrove{value: 0.1 ether}(2000e18, address(0), address(0));
         uint256 i0 = ITroveManager(TM).getCurrentICR(borrower, p0);
         g = new SternpostGovernor(borrower, IBorrowerOperationsSignatures(sigAddr), IBorrowerOperations(BO), ITroveManager(TM),
-            IPriceFeed(PF), IERC20Min(M), IBO3(BO).activePool(), ISavingsMUSD(address(0)), i0 - 0.2e18, 1.2e18);
+            IPriceFeed(PF), IERC20Min(M), IBO3(BO).activePool(), ISavingsMUSD(address(0)), i0 - 0.2e18, 1.35e18, 0, address(0xFEE));
         ForkFactory f = new ForkFactory(); f.set(borrower, address(g));
         r = new SternpostRouter(IFactoryView(address(f)), IBorrowerOperationsSignatures(sigAddr), IERC20Min(M), IMUSDSavingsRate(SMUSD),
             IMezoRouter(0x9a1ff7FE3a0F69959A3fBa1F1e5ee18e1A9CD7E9), 0x4947243CC818b627A5D06d14C4eCe7398A23Ce1A,

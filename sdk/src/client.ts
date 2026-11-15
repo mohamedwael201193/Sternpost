@@ -40,6 +40,9 @@ export async function writePadded(publicClient: PublicClient, wallet: Wallet, re
 /** draw() re-enters Mezo (withdraw + ActivePool callback); estimates under-report it badly (observed ~25k vs ~1.0M used). */
 export const DRAW_GAS = 1_500_000n;
 
+/** Default standby-heal window (C5): 30 days. The old 7-day default let the demo standby lapse unnoticed. */
+export const DEFAULT_HEAL_WINDOW = 30n * 86400n;
+
 export class Sternpost {
   readonly nonces: Map<Address, NonceCoordinator> = new Map();
   constructor(
@@ -96,7 +99,7 @@ export class Sternpost {
       const window = opts.window ?? 90n;
       if (window > MAX_WINDOW) throw new Error("withdraw window must be <= 120 s");
       const withdrawDeadline = t + window;
-      const healDeadline = t + (opts.healWindow ?? 7n * 86400n);
+      const healDeadline = t + (opts.healWindow ?? DEFAULT_HEAL_WINDOW);
       const d = domain(borrowerWallet.chain.id, this.addresses.signatures);
       const withdrawSig = await borrowerWallet.signTypedData({ domain: d, types: withdrawTypes, primaryType: "WithdrawMUSD",
         message: { amount, borrower, recipient: governor, nonce, deadline: withdrawDeadline } });
@@ -133,7 +136,7 @@ export class Sternpost {
   }
 
   /** Re-arm the defend() standby at the current nonce (needed after any other signed action). */
-  async rearm(borrowerWallet: Wallet, governor: Address, amount: bigint, healWindow = 7n * 86400n): Promise<Hex> {
+  async rearm(borrowerWallet: Wallet, governor: Address, amount: bigint, healWindow = DEFAULT_HEAL_WINDOW): Promise<Hex> {
     const borrower = borrowerWallet.account.address;
     return this.coordinator(borrower).run(async (nonce) => {
       const deadline = (await this.now()) + healWindow;

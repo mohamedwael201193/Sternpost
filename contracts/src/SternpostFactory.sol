@@ -22,6 +22,13 @@ contract SternpostFactory {
     IERC20Min public immutable musd;
     address public immutable activePool;
     ISavingsMUSD public immutable savings;
+    /// @notice Immutable draw-fee parameters every governor created here inherits: `feeBps` (<= 50) of each
+    ///         draw goes to `feeRecipient`. No setter, no owner, no upgrade path.
+    uint16 public immutable feeBps;
+    address public immutable feeRecipient;
+
+    uint256 public constant MAX_FEE_BPS = 50;
+    address public constant BURN = 0x000000000000000000000000000000000000dEaD;
 
     mapping(address => address) public governorOf;
     mapping(address => address[]) internal _walletsOf;
@@ -30,6 +37,7 @@ contract SternpostFactory {
     event SpendWalletCreated(address indexed owner, address wallet, address agent, uint64 expiry);
 
     error AlreadyCreated(address governor);
+    error BadFee();
 
     constructor(
         IBorrowerOperationsSignatures signatures_,
@@ -38,8 +46,11 @@ contract SternpostFactory {
         IPriceFeed priceFeed_,
         IERC20Min musd_,
         address activePool_,
-        ISavingsMUSD savings_
+        ISavingsMUSD savings_,
+        uint16 feeBps_,
+        address feeRecipient_
     ) {
+        if (feeBps_ > MAX_FEE_BPS || feeRecipient_ == address(0) || feeRecipient_ == BURN) revert BadFee();
         signatures = signatures_;
         borrowerOperations = borrowerOperations_;
         troveManager = troveManager_;
@@ -47,12 +58,14 @@ contract SternpostFactory {
         musd = musd_;
         activePool = activePool_;
         savings = savings_;
+        feeBps = feeBps_;
+        feeRecipient = feeRecipient_;
     }
 
     function createGovernor(uint256 floorICR, uint256 defendICR) external returns (SternpostGovernor g) {
         if (governorOf[msg.sender] != address(0)) revert AlreadyCreated(governorOf[msg.sender]);
         g = new SternpostGovernor{salt: bytes32(uint256(uint160(msg.sender)))}(
-            msg.sender, signatures, borrowerOperations, troveManager, priceFeed, musd, activePool, savings, floorICR, defendICR
+            msg.sender, signatures, borrowerOperations, troveManager, priceFeed, musd, activePool, savings, floorICR, defendICR, feeBps, feeRecipient
         );
         governorOf[msg.sender] = address(g);
         emit GovernorCreated(msg.sender, address(g), floorICR, defendICR);
@@ -68,7 +81,7 @@ contract SternpostFactory {
                     abi.encodePacked(
                         type(SternpostGovernor).creationCode,
                         abi.encode(
-                            borrower, signatures, borrowerOperations, troveManager, priceFeed, musd, activePool, savings, floorICR, defendICR
+                            borrower, signatures, borrowerOperations, troveManager, priceFeed, musd, activePool, savings, floorICR, defendICR, feeBps, feeRecipient
                         )
                     )
                 )

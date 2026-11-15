@@ -17,7 +17,7 @@ type Sent = { chat: number; text: string; kb?: Keyboard };
 function mocks() {
   const sent: Sent[] = [];
   const answers: { id: string; text?: string }[] = [];
-  const st: GovernorStatus = { icr: 3n * E18, floor: (25n * E18) / 10n, defend: (16n * E18) / 10n, frozen: false, buffer: 20n * E18 };
+  const st: GovernorStatus = { icr: 3n * E18, floor: (25n * E18) / 10n, defend: (16n * E18) / 10n, frozen: false, buffer: 20n * E18, standbyLive: true, standbyDeadline: 1_900_000_000n };
   const allow = { remaining: 0n, perDrawMax: 0n, expiry: 0n };
   const chain: ChainReader & { st: GovernorStatus; allow: typeof allow; gov: string | null } = {
     st, allow, gov: GOV,
@@ -153,6 +153,11 @@ describe("status, balances, revoke", () => {
     await msg("/status");
     expect(last().text).toContain("FROZEN");
   });
+  it("/status warns when defend is disarmed", async () => {
+    m.chain.st.standbyLive = false;
+    await msg("/status");
+    expect(last().text).toContain("Defend DISARMED");
+  });
   it("/balances shows MUSD and MEZO", async () => {
     await msg("/balances");
     expect(last().text).toContain("MUSD 1,234");
@@ -231,6 +236,17 @@ describe("tick sweep", () => {
     await bot.tick();
     expect((await db.query("SELECT alerted_at FROM tg_users")).rows[0].alerted_at).toBeNull();
     m.chain.st.icr = (26n * E18) / 10n;
+    expect((await bot.tick()).alerts).toBe(1);
+  });
+  it("alerts once per hour when defend is disarmed, clears after re-arm", async () => {
+    m.chain.st.standbyLive = false;
+    expect(await bot.tick()).toMatchObject({ users: 1, alerts: 1 });
+    expect(last().text).toContain("Defend DISARMED");
+    expect((await bot.tick()).alerts).toBe(0);
+    m.chain.st.standbyLive = true;
+    await bot.tick();
+    expect((await db.query("SELECT alerted_at FROM tg_users")).rows[0].alerted_at).toBeNull();
+    m.chain.st.standbyLive = false;
     expect((await bot.tick()).alerts).toBe(1);
   });
   it("pushes requests created after linking exactly once", async () => {

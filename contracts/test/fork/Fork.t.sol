@@ -21,11 +21,12 @@ contract ForkTest is Signer {
         vm.prank(borrower); IBO2(BO).openTrove{value: 0.1 ether}(2000e18, address(0), address(0));
         uint256 i0 = ITroveManager(TM).getCurrentICR(borrower, p0);
         g = new SternpostGovernor(borrower, IBorrowerOperationsSignatures(sigAddr), IBorrowerOperations(BO), ITroveManager(TM),
-            IPriceFeed(PF), IERC20Min(M), AP, ISavingsMUSD(address(0)), i0 - 0.2e18, 1.2e18);
+            IPriceFeed(PF), IERC20Min(M), AP, ISavingsMUSD(address(0)), i0 - 0.2e18, 1.35e18, 0, address(0xFEE));
         vm.prank(borrower); g.authorizeApp(app, 10_000e18, 10_000e18, uint64(block.timestamp + 1 days), address(0));
     }
     function _n() internal view returns (uint256) { return IBorrowerOperationsSignatures(sigAddr).getNonce(borrower); }
-    function _debt() internal view returns (uint256 d) { (, uint256 p, uint256 i,, uint256 pp, uint256 pi) = ITroveManager(TM).getEntireDebtAndColl(borrower); d = p + i + pp + pi; }
+    // getEntireDebtAndColl already folds pending redistribution into principal/interest: use only those.
+    function _debt() internal view returns (uint256 d) { (, uint256 p, uint256 i,,,) = ITroveManager(TM).getEntireDebtAndColl(borrower); d = p + i; }
 
     /// 1. Direct native draw to Sternpost reverts; debt and nonce unchanged.
     function test_fork_directBypassReverts() public {
@@ -38,9 +39,12 @@ contract ForkTest is Signer {
     function test_fork_safeDraw_previewMatches() public {
         uint256 n = _n(); uint256 dl = block.timestamp + 60;
         uint256 proj = g.projectedICR(10e18);
+        // 0xBEEF already holds MUSD on live testnet (5.36 at block 16793196), so assert the delta.
+        uint256 payeeBefore = IERC20Min(M).balanceOf(payee);
         vm.prank(app); g.draw(10e18, payee, dl, _w(10e18, address(g), n, dl), dl + 1 days, _r(10e18, n + 1, dl + 1 days));
-        assertEq(IERC20Min(M).balanceOf(payee), 10e18);
+        assertEq(IERC20Min(M).balanceOf(payee) - payeeBefore, 10e18);
         assertApproxEqRel(g.icr(), proj, 1e12, "projected vs realised");
+        assertEq(g.projectedICR(0), g.icr(), "projected(0) == icr");
     }
     /// 3. Draw that would cross the floor is refused; state unchanged.
     function test_fork_unsafeDrawRefused() public {

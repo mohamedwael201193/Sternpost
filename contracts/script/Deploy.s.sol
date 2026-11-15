@@ -22,7 +22,9 @@ contract Deploy is Script {
         require(block.chainid == 31611, "testnet only");
         vm.startBroadcast();
         f = new SternpostFactory(IBorrowerOperationsSignatures(SIG), IBorrowerOperations(BO), ITroveManager(TM),
-            IPriceFeed(PF), IERC20Min(MUSD), ACTIVE_POOL, ISavingsMUSD(SMUSD));
+            IPriceFeed(PF), IERC20Min(MUSD), ACTIVE_POOL, ISavingsMUSD(SMUSD), 10, msg.sender);
+        // Fee interim (TASK_BOARD open question #1): 10 bps to the deployer wallet until the owner
+        // supplies a fee recipient. The recipient is immutable at deployment; 0.9 re-checks it.
         vm.stopBroadcast();
         console2.log("factory", address(f));
     }

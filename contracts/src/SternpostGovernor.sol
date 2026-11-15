@@ -34,9 +34,16 @@ contract SternpostGovernor {
     address public immutable activePool;
     ISavingsMUSD public immutable savings; // address(0) disables the sMUSD reserve option
     bytes32 public immutable DOMAIN_SEPARATOR;
+    /// @notice Immutable draw fee, in basis points of the drawn amount, paid to `feeRecipient` out of the
+    ///         drawn MUSD (the payee receives `amount - fee`). Set once at deployment via the Factory.
+    uint16 public immutable feeBps;
+    address public immutable feeRecipient;
 
     uint256 public constant MAX_WINDOW = 120; // seconds a withdraw signature may live
-    uint256 public constant MIN_FLOOR = 1.1e18; // never below Mezo's MCR
+    uint256 public constant MIN_FLOOR = 1.35e18; // defend line must sit above the 150% CCR with margin, never below it
+    uint256 public constant MAX_FEE_BPS = 50;
+    uint256 public constant GAS_COMPENSATION = 200e18; // Mezo musdGasCompensation: repay cannot take debt below this
+    address public constant BURN = 0x000000000000000000000000000000000000dEaD;
     bytes32 public constant REPAY_TYPEHASH =
         keccak256("RepayMUSD(uint256 amount,address borrower,uint256 nonce,uint256 deadline)");
 
@@ -75,6 +82,8 @@ contract SternpostGovernor {
     event Drawn(address indexed app, address indexed payee, uint256 amount, uint256 icrAfter, uint256 nonceUsed);
     event Healed(address indexed caller, uint256 amount, uint256 icrBefore, uint256 icrAfter);
     event Defended(address indexed caller, uint256 repaid, uint256 icrBefore, uint256 icrAfter);
+    event FeeTaken(address indexed app, uint256 fee);
+    event HealthChecked(uint256 icr, uint256 tcr, bool recoveryMode, uint8 troveStatus);
     event Armed(uint256 amount, uint256 nonce, uint256 deadline);
     event Revoked(bool nonceBurned, uint256 nonceAfter);
     event Unfrozen();
@@ -105,6 +114,16 @@ contract SternpostGovernor {
     error NoSavings();
     error ZeroAmount();
     error TransferFailed();
+    error BadFee();
+    /// @notice Thrown when Mezo is in Recovery Mode (TCR below 150%): every draw reverts inside Mezo.
+    error RecoveryMode(uint256 tcr);
+    /// @notice Thrown when the trove is not active (0 nonExistent, 2 closedByOwner, 3 closedByLiquidation,
+    ///         4 closedByRedemption). A closed trove reports a max ICR, so this must be checked explicitly.
+    error TroveNotActive(uint8 status);
+    /// @notice The standby signature authorises exactly `signed`, but only `repayable` can be repaid now
+    ///         (debt after gas compensation / buffer). Mezo's RepayMUSD signature binds the amount, so a
+    ///         smaller repay needs a fresh signature: re-arm for `repayable` and call defend() again.
+    error StandbyShortfall(uint256 repayable, uint256 signed);
 
     constructor(
         address borrower_,
@@ -116,9 +135,12 @@ contract SternpostGovernor {
         address activePool_,
         ISavingsMUSD savings_,
         uint256 floorICR_,
-        uint256 defendICR_
+        uint256 defendICR_,
+        uint16 feeBps_,
+        address feeRecipient_
     ) {
         if (floorICR_ <= defendICR_ || defendICR_ < MIN_FLOOR) revert BadPolicy();
+        if (feeBps_ > MAX_FEE_BPS || feeRecipient_ == address(0) || feeRecipient_ == BURN) revert BadFee();
         borrower = borrower_;
         signatures = signatures_;
         borrowerOperations = borrowerOperations_;
@@ -129,6 +151,8 @@ contract SternpostGovernor {
         savings = savings_;
         floorICR = floorICR_;
         defendICR = defendICR_;
+        feeBps = feeBps_;
+        feeRecipient = feeRecipient_;
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
@@ -159,12 +183,19 @@ contract SternpostGovernor {
     }
 
     /// @notice ICR the trove would have after drawing `amount` (includes the protocol borrowing fee and accrued interest).
+    /// @dev getEntireDebtAndColl already folds pending redistribution amounts into its first three returns,
+    ///      so the last three slots must NOT be added again. Mezo charges no borrowing fee in Recovery Mode.
     function projectedICR(uint256 amount) public view returns (uint256) {
-        (uint256 coll, uint256 p, uint256 i, uint256 pc, uint256 pp, uint256 pi) =
-            troveManager.getEntireDebtAndColl(borrower);
-        uint256 debt = p + i + pp + pi + amount + borrowerOperations.getBorrowingFee(amount);
+        uint256 price = priceFeed.fetchPrice();
+        return _projectedICR(amount, price);
+    }
+
+    function _projectedICR(uint256 amount, uint256 price) internal view returns (uint256) {
+        (uint256 coll, uint256 p, uint256 i,,,) = troveManager.getEntireDebtAndColl(borrower);
+        uint256 fee = troveManager.checkRecoveryMode(price) ? 0 : borrowerOperations.getBorrowingFee(amount);
+        uint256 debt = p + i + amount + fee;
         if (debt == 0) return type(uint256).max;
-        return ((coll + pc) * priceFeed.fetchPrice()) / debt;
+        return (coll * price) / debt;
     }
 
     /// @notice Why a draw would be refused, as a short code ("" when it would pass the policy checks).
@@ -173,10 +204,14 @@ contract SternpostGovernor {
         view
         returns (bool ok, string memory reason, uint256 icrAfter)
     {
-        icrAfter = projectedICR(amount);
+        uint256 price = priceFeed.fetchPrice();
+        icrAfter = _projectedICR(amount, price);
         AppPolicy memory a = appPolicy[app];
         if (frozen) return (false, "FROZEN", icrAfter);
         if (amount == 0) return (false, "ZERO_AMOUNT", icrAfter);
+        uint8 st = troveManager.getTroveStatus(borrower);
+        if (st != 1) return (false, "TROVE_CLOSED", icrAfter);
+        if (troveManager.checkRecoveryMode(price)) return (false, "RECOVERY_MODE", icrAfter);
         if (a.expiry == 0) return (false, "APP_NOT_AUTHORIZED", icrAfter);
         if (block.timestamp > a.expiry) return (false, "APP_EXPIRED", icrAfter);
         if (amount > a.perDrawMax) return (false, "OVER_PER_DRAW", icrAfter);
@@ -184,6 +219,19 @@ contract SternpostGovernor {
         if (a.payee != address(0) && a.payee != payee) return (false, "PAYEE_NOT_ALLOWED", icrAfter);
         if (icrAfter < floorICR) return (false, "BELOW_FLOOR", icrAfter);
         return (true, "", icrAfter);
+    }
+
+    /// @notice Permissionless health snapshot: emits HealthChecked so keepers, bots and indexers can record
+    ///         ICR / TCR / Recovery Mode / trove status (views cannot emit events).
+    function checkpoint() external {
+        uint256 price = priceFeed.fetchPrice();
+        uint256 tcr = troveManager.getTCR(price);
+        emit HealthChecked(
+            troveManager.getCurrentICR(borrower, price),
+            tcr,
+            troveManager.checkRecoveryMode(price),
+            troveManager.getTroveStatus(borrower)
+        );
     }
 
     /// @notice MUSD held here that did not arrive through draw() or fund(); only heal() can move it.
@@ -297,6 +345,14 @@ contract SternpostGovernor {
         uint256 remaining = a.budget - a.spent;
         if (amount > remaining) revert OverBudget(amount, remaining);
         if (a.payee != address(0) && a.payee != payee) revert PayeeNotAllowed(payee);
+        // Trove and system state BEFORE touching spent: a closed trove reports a max ICR (zero debt),
+        // and every draw reverts inside Mezo in Recovery Mode, so both need named errors here.
+        // The price is read once and reused for the post-draw ICR check (the price precompile
+        // misbehaves on repeated late reads, see SternpostRouter.sol:191-193).
+        uint256 price = priceFeed.fetchPrice();
+        uint8 st = troveManager.getTroveStatus(borrower);
+        if (st != 1) revert TroveNotActive(st);
+        if (troveManager.checkRecoveryMode(price)) revert RecoveryMode(troveManager.getTCR(price));
         a.spent += uint128(amount);
 
         uint256 nonce = signatures.getNonce(borrower);
@@ -312,11 +368,18 @@ contract SternpostGovernor {
         if (_callbacks != 1) revert CallbackMismatch(_callbacks);
         if (musd.balanceOf(address(this)) - pre != amount) revert AmountMismatch();
 
-        uint256 after_ = icr();
+        uint256 after_ = troveManager.getCurrentICR(borrower, price);
         if (after_ < floorICR) revert Unsafe(after_, floorICR);
 
         _standby = Standby(uint128(amount), uint64(healDeadline), uint64(nonce + 1), healSig);
-        if (!musd.transfer(payee, amount)) revert TransferFailed();
+        // Draw fee (C11): taken out of the drawn MUSD. Budget (`spent`) and the ICR check above stay on
+        // the gross drawn amount, so safety is unchanged; the payee receives `amount - fee`.
+        uint256 fee = feeBps == 0 ? 0 : (amount * feeBps) / 10_000;
+        if (fee != 0) {
+            if (!musd.transfer(feeRecipient, fee)) revert TransferFailed();
+            emit FeeTaken(msg.sender, fee);
+        }
+        if (!musd.transfer(payee, amount - fee)) revert TransferFailed();
         emit Drawn(msg.sender, payee, amount, after_, nonce);
         emit Armed(amount, nonce + 1, healDeadline);
     }
@@ -329,9 +392,13 @@ contract SternpostGovernor {
 
     // ---------------------------------------------------------------- recovery
     /// @notice Re-arm the defend() standby with a fresh RepayMUSD signature at the current native nonce.
+    /// @dev Anyone may re-arm (a keeper keeps the guard alive), but shrinking the standby is the
+    ///      borrower's call only: a stranger must not disarm the guard by overwriting a large standby
+    ///      with a smaller valid one.
     function rearm(uint256 amount, uint256 deadline, bytes calldata repaySig) external {
         uint256 nonce = signatures.getNonce(borrower);
         if (amount == 0 || amount > buffer) revert ZeroAmount();
+        if (msg.sender != borrower && amount < _standby.amount) revert OnlyBorrower();
         if (!_validRepay(amount, nonce, deadline, repaySig)) revert BadHeal();
         _standby = Standby(uint128(amount), uint64(deadline), uint64(nonce), repaySig);
         emit Armed(amount, nonce, deadline);
@@ -347,15 +414,35 @@ contract SternpostGovernor {
     }
 
     /// @notice Permissionless: if the trove is below defendICR, repay the armed standby from the buffer and freeze.
+    /// @dev The repay is clamped to what can actually be repaid: the signed standby amount, the debt above
+    ///      the 200 MUSD gas compensation, and the buffer. Repaying more than the debt allows reverts inside
+    ///      Mezo, and repaying more than the buffer underflows the accounting (old Panic 0x11) exactly when
+    ///      the guard is needed most. NOTE: Mezo's RepayMUSD signature binds the amount, so a clamped repay
+    ///      smaller than the signed amount cannot reuse the stored signature: defend() then reverts with the
+    ///      named StandbyShortfall error (re-arm for the repayable amount and call again) instead of failing
+    ///      opaquely. When nothing is repayable it no-ops (standby cleared, frozen, Defended with 0).
     function defend() external nonReentrant {
+        uint8 st = troveManager.getTroveStatus(borrower);
+        if (st != 1) revert TroveNotActive(st);
         uint256 before = icr();
         if (before >= defendICR) revert NotStressed(before);
         Standby memory s = _standby;
         if (s.amount == 0) revert NotArmed();
         delete _standby;
+        (, uint256 p, uint256 i,,,) = troveManager.getEntireDebtAndColl(borrower);
+        uint256 debt = p + i;
+        uint256 debtAfterGasComp = debt > GAS_COMPENSATION ? debt - GAS_COMPENSATION : 0;
+        uint256 repay = s.amount;
+        if (repay > debtAfterGasComp) repay = debtAfterGasComp;
+        if (repay > buffer) repay = buffer;
+        frozen = true;
+        if (repay == 0) {
+            emit Defended(msg.sender, 0, before, before);
+            return;
+        }
+        if (repay != s.amount) revert StandbyShortfall(repay, s.amount);
         uint256 liquid = buffer - parked;
         buffer -= s.amount;
-        frozen = true;
         if (liquid < s.amount) _unpark(s.amount - liquid);
         _approve(address(signatures), s.amount);
         signatures.repayMUSDWithSignature(s.amount, address(0), address(0), borrower, s.signature, s.deadline);

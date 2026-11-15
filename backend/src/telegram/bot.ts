@@ -93,9 +93,12 @@ export function createBot(d: BotDeps) {
     if (!g) return reply(c, `🧭 <b>Trove status</b>\n\nWallet ${addr(u.address)} has no Sternpost governor yet. Create one in the app.`, [[{ text: "🗺 Open app", url: `${d.appUrl}/app` }], navRow("status")]);
     const s = await d.chain.status(g);
     const near = s.icr < (s.floor * (10_000n + margin)) / 10_000n;
+    const disarmed = !s.standbyLive;
+    let text = statusText(s.frozen ? "frozen" : near ? "near" : "healthy", g, { icr: ratio(s.icr), floor: ratio(s.floor), defend: ratio(s.defend), buffer: amt(s.buffer) });
+    if (disarmed) text += `\n\n⚠️ <b>Defend DISARMED</b> — no live standby heal. Re-arm in the app so defend() can repay if the trove falls below your defend line.`;
     return reply(
       c,
-      statusText(s.frozen ? "frozen" : near ? "near" : "healthy", g, { icr: ratio(s.icr), floor: ratio(s.floor), defend: ratio(s.defend), buffer: amt(s.buffer) }),
+      text,
       [[{ text: "🗺 Dashboard", url: `${d.appUrl}/app` }], navRow("status")],
     );
   }
@@ -232,12 +235,16 @@ export function createBot(d: BotDeps) {
         if (g) {
           const s = await d.chain.status(g);
           const near = s.icr < (s.floor * (10_000n + margin)) / 10_000n;
+          const disarmed = !s.standbyLive;
           const recent = u.alerted_at && Date.now() - new Date(u.alerted_at).getTime() < 3_600_000;
-          if (near && !recent) {
-            await d.tg.send(chatId, `🚨 <b>ICR alert</b>\n\nICR ${ratio(s.icr)} is close to your floor ${ratio(s.floor)} (defend ${ratio(s.defend)}). New draws that cross the floor revert on chain. Add collateral or repay to widen the gap.`, [[{ text: "🗺 Open dashboard", url: `${d.appUrl}/app` }, { text: "🛑 Revoke in wallet", url: `${d.appUrl}/app/revoke` }], navRow("status")]);
+          if ((near || disarmed) && !recent) {
+            const parts = [];
+            if (near) parts.push(`🚨 <b>ICR alert</b>\n\nICR ${ratio(s.icr)} is close to your floor ${ratio(s.floor)} (defend ${ratio(s.defend)}). New draws that cross the floor revert on chain. Add collateral or repay to widen the gap.`);
+            if (disarmed) parts.push(`🛡 <b>Defend DISARMED</b>\n\nNo live standby heal, so defend() cannot repay if the trove falls below your defend line. Re-arm in the app.`);
+            await d.tg.send(chatId, parts.join("\n\n"), [[{ text: "🗺 Open dashboard", url: `${d.appUrl}/app` }, { text: "🛑 Revoke in wallet", url: `${d.appUrl}/app/revoke` }], navRow("status")]);
             await d.db.query("UPDATE tg_users SET alerted_at = now() WHERE chat_id = $1", [chatId]);
             alerts++;
-          } else if (!near && u.alerted_at) {
+          } else if (!near && !disarmed && u.alerted_at) {
             await d.db.query("UPDATE tg_users SET alerted_at = NULL WHERE chat_id = $1", [chatId]);
           }
         }

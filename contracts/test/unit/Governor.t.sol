@@ -198,4 +198,169 @@ contract GovernorUnitTest is MockBase {
     function test_constructor_rejectsFloorBelowMCR() public {
         vm.prank(address(0x777)); vm.expectRevert(SternpostGovernor.BadPolicy.selector); factory.createGovernor(1.2e18, 1.05e18);
     }
+
+    // --- Phase 0 chain (0.1): previewDraw must not double-count pending redistribution ---
+    function test_preview_matches_icr_with_pending() public {
+        // Pending already folded in by getEntireDebtAndColl: coll 0.1+0.01, debt 2000+100+5.
+        tm.setPending(borrower, 0.01e18, 100e18, 5e18);
+        assertEq(g.projectedICR(0), g.icr(), "projected(0) == icr with non-zero pending");
+        (bool ok, string memory why, uint256 icrAfter) = g.previewDraw(app, 100e18, payee);
+        assertTrue(ok); assertEq(bytes(why).length, 0);
+        _draw(100e18);
+        assertEq(icrAfter, g.icr(), "projected == realised with pending");
+    }
+
+    // --- Phase 0 chain (0.3): Recovery Mode and trove status ---
+    function test_draw_revertsInRecoveryMode() public {
+        tm.setTCR(1.4e18);
+        (bool ok, string memory why,) = g.previewDraw(app, 10e18, payee);
+        assertFalse(ok); assertEq(why, "RECOVERY_MODE");
+        uint256 dl = block.timestamp + 60; uint256 hdl = block.timestamp + 1 days;
+        vm.prank(app);
+        vm.expectRevert(abi.encodeWithSelector(SternpostGovernor.RecoveryMode.selector, 1.4e18));
+        g.draw(10e18, payee, dl, _w(10e18, address(g), 0, dl), hdl, _r(10e18, 1, hdl));
+        assertEq(sigs.getNonce(borrower), 0, "nonce untouched in Recovery Mode");
+        assertEq(g.remainingBudget(app), 1_000e18, "budget untouched in Recovery Mode");
+        tm.setTCR(2.5e18);
+        _draw(10e18); // draws work again once the system recovers
+        assertEq(musd.balanceOf(payee), 10e18);
+    }
+
+    function test_draw_revertsWhenTroveRedeemed() public {
+        tm.setStatus(borrower, 4); // closedByRedemption: getCurrentICR would still look healthy
+        (bool ok, string memory why,) = g.previewDraw(app, 10e18, payee);
+        assertFalse(ok); assertEq(why, "TROVE_CLOSED");
+        uint256 dl = block.timestamp + 60; uint256 hdl = block.timestamp + 1 days;
+        vm.prank(app);
+        vm.expectRevert(abi.encodeWithSelector(SternpostGovernor.TroveNotActive.selector, uint8(4)));
+        g.draw(10e18, payee, dl, _w(10e18, address(g), 0, dl), hdl, _r(10e18, 1, hdl));
+        assertEq(sigs.getNonce(borrower), 0);
+        vm.expectRevert(abi.encodeWithSelector(SternpostGovernor.TroveNotActive.selector, uint8(4)));
+        g.defend();
+        tm.setStatus(borrower, 1);
+        _draw(10e18); // active again
+    }
+
+    function test_checkpoint_emitsHealthChecked() public {
+        vm.expectEmit(false, false, false, true, address(g));
+        emit SternpostGovernor.HealthChecked(5e18, 2.5e18, false, 1);
+        g.checkpoint();
+        tm.setTCR(1.4e18);
+        vm.expectEmit(false, false, false, true, address(g));
+        emit SternpostGovernor.HealthChecked(5e18, 1.4e18, true, 1);
+        g.checkpoint();
+    }
+
+    // --- Phase 0 chain (0.2): defend clamp + rearm no-shrink ---
+    function test_defend_clampsAfterPartialRedemption() public {
+        _draw(100e18); // standby 100 (sig for 100), buffer 100, debt 2100.1
+        tm.subDebt(borrower, 1900e18); // partial redemption: debt 200.1, only 0.1 above gas comp
+        pf.set(3_000e18); // ICR 0.1*3000/200.1 = 1.499 < defend 1.5
+        // The clamped repay (0.1) is smaller than the signed standby (100). Mezo's RepayMUSD
+        // signature binds the amount, so the stored signature cannot authorise it: defend() fails
+        // closed with a named error instead of an opaque Mezo revert.
+        vm.expectRevert(abi.encodeWithSelector(SternpostGovernor.StandbyShortfall.selector, 0.1e18, 100e18));
+        g.defend();
+        assertEq(g.buffer(), 100e18, "failed defend leaves the buffer untouched");
+        // Re-arm for exactly the repayable amount, then the clamped defend executes.
+        uint256 dl = block.timestamp + 1 days;
+        vm.prank(borrower);
+        g.rearm(0.1e18, dl, _r(0.1e18, 1, dl));
+        g.defend();
+        assertTrue(g.frozen());
+        assertEq(g.buffer(), 100e18 - 0.1e18);
+        assertEq(tm.debt(borrower), 200e18);
+    }
+
+    function test_defend_bufferSmallerThanStandby() public {
+        _draw(100e18); // standby 100, buffer 100, debt 2100.1
+        vm.prank(borrower); g.withdrawBuffer(70e18); // buffer 30
+        pf.set(30_000e18); // ICR 3000/2100.1 = 1.428 < 1.5
+        // Old code did `buffer -= s.amount` here and panicked (0x11) exactly when the guard was needed.
+        vm.expectRevert(abi.encodeWithSelector(SternpostGovernor.StandbyShortfall.selector, 30e18, 100e18));
+        g.defend();
+        assertEq(g.buffer(), 30e18, "no underflow: buffer intact after the refused defend");
+        uint256 dl = block.timestamp + 1 days;
+        vm.prank(borrower);
+        g.rearm(30e18, dl, _r(30e18, 1, dl));
+        g.defend();
+        assertTrue(g.frozen());
+        assertEq(g.buffer(), 0);
+        assertEq(tm.debt(borrower), 2_070.1e18);
+    }
+
+    function test_rearm_shrinkOnlyBorrower() public {
+        _draw(100e18); // standby 100 at nonce 1
+        uint256 dl = block.timestamp + 1 days;
+        // A stranger cannot shrink the standby with a smaller valid signature.
+        vm.prank(attacker);
+        vm.expectRevert(SternpostGovernor.OnlyBorrower.selector);
+        g.rearm(50e18, dl, _r(50e18, 1, dl));
+        // The borrower can shrink it, and anyone may re-arm the same or a larger amount.
+        vm.prank(borrower);
+        g.rearm(50e18, dl, _r(50e18, 1, dl));
+        (uint256 amt,,, bool live) = g.standby();
+        assertEq(amt, 50e18); assertTrue(live);
+        vm.prank(attacker);
+        g.rearm(100e18, dl, _r(100e18, 1, dl));
+        (amt,,,) = g.standby();
+        assertEq(amt, 100e18);
+    }
+
+    // --- Phase 0 chain (0.4): minimum defend line is 1.35e18 (above the 150% CCR with margin) ---
+    function test_minDefendLine_is135() public {
+        vm.prank(address(0x777));
+        vm.expectRevert(SternpostGovernor.BadPolicy.selector);
+        factory.createGovernor(3e18, 1.2e18);
+        vm.prank(address(0x777));
+        vm.expectRevert(SternpostGovernor.BadPolicy.selector);
+        factory.createGovernor(3e18, 1.34e18);
+        vm.prank(borrower);
+        vm.expectRevert(SternpostGovernor.BadPolicy.selector);
+        g.setPolicy(3e18, 1.34e18);
+        vm.prank(address(0xBEEF2));
+        SternpostGovernor g2 = factory.createGovernor(2.5e18, 1.35e18);
+        assertEq(g2.defendICR(), 1.35e18);
+        assertEq(g2.feeBps(), 0);
+    }
+
+    // --- Phase 0 chain (0.7): immutable draw fee ---
+    function test_fee_goesToRecipient_budgetAndIcrOnGross() public {
+        SternpostFactory f10 = new SternpostFactory(IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 10, FEE_RECIPIENT);
+        assertEq(f10.feeBps(), 10);
+        assertEq(factory.predictGovernor(borrower, 3e18, 1.5e18), address(g), "zero-fee factory still predicts");
+        vm.prank(borrower);
+        SternpostGovernor g10 = f10.createGovernor(3e18, 1.5e18);
+        assertEq(g10.feeRecipient(), FEE_RECIPIENT);
+        assertEq(f10.predictGovernor(borrower, 3e18, 1.5e18), address(g10), "prediction includes the fee params");
+        vm.prank(borrower);
+        g10.authorizeApp(app, 1_000e18, 400e18, uint64(block.timestamp + 30 days), address(0));
+        musd.mint(borrower, 100e18);
+        vm.startPrank(borrower); musd.approve(address(g10), type(uint256).max); g10.fund(100e18); vm.stopPrank();
+        uint256 n = sigs.getNonce(borrower); uint256 dl = block.timestamp + 60; uint256 hdl = block.timestamp + 7 days;
+        (bool ok,, uint256 icrAfter) = g10.previewDraw(app, 100e18, payee);
+        assertTrue(ok);
+        vm.prank(app);
+        g10.draw(100e18, payee, dl, _w(100e18, address(g10), n, dl), hdl, _r(100e18, n + 1, hdl));
+        assertEq(musd.balanceOf(payee), 99.9e18, "payee receives amount minus the 10 bps fee");
+        assertEq(musd.balanceOf(FEE_RECIPIENT), 0.1e18, "fee goes to the immutable recipient");
+        assertEq(g10.remainingBudget(app), 900e18, "budget is spent on the gross amount");
+        assertEq(icrAfter, g10.icr(), "ICR check is on the gross drawn amount");
+    }
+
+    function test_feeBpsAbove50_reverts() public {
+        vm.expectRevert(SternpostFactory.BadFee.selector);
+        new SternpostFactory(IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 51, FEE_RECIPIENT);
+        vm.expectRevert(SternpostFactory.BadFee.selector);
+        new SternpostFactory(IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 10, address(0));
+        vm.expectRevert(SternpostFactory.BadFee.selector);
+        new SternpostFactory(IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 10, 0x000000000000000000000000000000000000dEaD);
+        vm.expectRevert(SternpostGovernor.BadFee.selector);
+        new SternpostGovernor(borrower, IBorrowerOperationsSignatures(address(sigs)), IBorrowerOperations(address(bo)),
+            ITroveManager(address(tm)), IPriceFeed(address(pf)), IERC20Min(address(musd)), address(ap), ISavingsMUSD(address(sav)), 3e18, 1.5e18, 51, FEE_RECIPIENT);
+    }
 }

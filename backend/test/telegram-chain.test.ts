@@ -6,7 +6,7 @@ const G = "0x9EEA9762ED3C1DE2308C800687558064DFF0B832";
 
 function client(over: Record<string, unknown> = {}) {
   const calls: any[] = [];
-  const values: Record<string, unknown> = { governorOf: G, icr: 3n, floorICR: 2n, defendICR: 1n, frozen: false, buffer: 9n, appPolicy: [10n, 4n, 5n, 77n, ZERO], ...over };
+  const values: Record<string, unknown> = { governorOf: G, icr: 3n, floorICR: 2n, defendICR: 1n, frozen: false, buffer: 9n, standby: [5n, 999n, 0n, true], appPolicy: [10n, 4n, 5n, 77n, ZERO], ...over };
   return {
     calls,
     c: {
@@ -24,7 +24,7 @@ describe("viem chain reader", () => {
   it("reads status, allowance, balances and time", async () => {
     const { c, calls } = client();
     const r = viemChain(c, A);
-    expect(await r.status(G)).toEqual({ icr: 3n, floor: 2n, defend: 1n, frozen: false, buffer: 9n });
+    expect(await r.status(G)).toEqual({ icr: 3n, floor: 2n, defend: 1n, frozen: false, buffer: 9n, standbyLive: true, standbyDeadline: 999n });
     expect(await r.allowance(G, A.musd)).toEqual({ remaining: 6n, perDrawMax: 5n, expiry: 77n });
     expect(await r.balances(A.factory)).toEqual({ musd: 11n, mezo: 22n });
     expect(await r.now()).toBe(123n);
