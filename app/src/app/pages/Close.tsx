@@ -4,6 +4,7 @@ import { txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
 const REVOKE_TX = deployments.liveFlow.txs.find((t) => t.step.startsWith('revoke()'))?.hash ?? ''
+const UNFREEZE_TX = deployments.sternpost.classicRedeploy.defend.flow.find((t) => t.step.startsWith('unfreeze()'))?.hash ?? ''
 
 export default function Close() {
   return (
@@ -63,7 +64,8 @@ export default function Close() {
           burns the shared Mezo nonce, so every outstanding signature dies at once. The same{' '}
           <span className="mono">revoke()</span> code is proven on the Wave-1 Governor (tx{' '}
           <a className="mono ink-link text-magenta text-xs break-all" href={txUrl(REVOKE_TX)} target="_blank" rel="noreferrer">0xf0763cf4… ↗</a>, block 16310274); on the 0.9 Governor,{' '}
-          <span className="mono">unfreeze()</span> is proven (tx <span className="mono">0x0097174d…</span>, block
+          <span className="mono">unfreeze()</span> is proven (tx{' '}
+          <a className="mono ink-link text-magenta text-xs break-all" href={txUrl(UNFREEZE_TX)} target="_blank" rel="noreferrer">0x0097174d… ↗</a>, block
           16794548) but <span className="mono">revoke()</span> itself has not been called yet.{' '}
           <Link className="ink-link text-magenta" to="/app/revoke">Go to Revoke →</Link>
         </p>

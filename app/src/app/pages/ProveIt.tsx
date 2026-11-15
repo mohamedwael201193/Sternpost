@@ -61,15 +61,17 @@ export default function ProveIt() {
           <span className="mono">contracts-fork-offline</span> row (0 / 0 / 2): the two fork contracts skipped
           offline, which the previous version of this page omitted. This is a stale snapshot from a work-clone
           tree: the snapshot id recorded inside <span className="mono">TESTS.json</span> does not resolve to any
-          commit in this repo&apos;s history, so the counts are anchored only to the file&apos;s{' '}
+          commit on main, so the counts are anchored only to the file&apos;s{' '}
           <span className="mono">generatedAt</span> above — not to any main commit. The mcp and keeper suites are
           listed in that snapshot as missing — the packages do not exist yet — and are shown below as 0 / 0 / 0.
           No test count here is a claim about the future.
         </p>
         <p className="text-sm leading-relaxed mt-3">
-          Since this snapshot the suites have grown: the account suite is now 161 passed · 0 failed · 3 skipped
-          (164 declared — the 3 skipped are env-gated fork tests), the backend declares 80 tests, and the sdk
-          declares 12. A refresh of <span className="mono">TESTS.json</span> is pending.
+          Since this snapshot the suites have grown. On main (3271231), the merged Shield work
+          (task/1.4-shield, 3271231) adds 18 declared tests to the account suite — 219 declared
+          there, up from 201 on 5e4f924 (Shield 14 → 29, Factory 23 → 26), plus 10 invariant
+          functions — and its pass counts will land with the <span className="mono">TESTS.json</span>{' '}
+          refresh, which is pending. The backend declares 80 tests, and the sdk declares 12.
         </p>
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">
@@ -81,7 +83,7 @@ export default function ProveIt() {
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-muted mt-3">backend: 74 of 80 declared executed; 6 config tests not in this run.</p>
+        <p className="text-sm text-muted mt-3">backend: 74 of 80 declared executed; 6 tests not in this run.</p>
 
         <h2 className="display text-3xl mt-12 mb-4">0.9 deployment</h2>
         <dl className="text-sm space-y-3">
