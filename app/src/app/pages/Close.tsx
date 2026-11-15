@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Card } from '../kit'
+import { txUrl } from '../../lib/proofs'
+import deployments from '../../../../shared/deployments/testnet.json'
+
+const REVOKE_TX = deployments.liveFlow.txs.find((t) => t.step.startsWith('revoke()'))?.hash ?? ''
 
 export default function Close() {
   return (
@@ -8,10 +12,10 @@ export default function Close() {
         <p className="text-sm leading-relaxed">
           <span className="mono">closeAccount()</span> is implemented in TroveAccount
           (<span className="mono">contracts/src/account/TroveAccount.sol</span>, merged task 1.3) and covered by unit
-          tests (mock Mezo) plus a lab fork rehearsal — <span className="mono">contracts/test/account/TroveAccount.t.sol:559-666</span>;
+          tests (mock Mezo) — <span className="mono">contracts/test/account/TroveAccount.t.sol:559-666</span>;
           there are zero <span className="mono">closeAccount</span> tests in <span className="mono">contracts/test/fork/</span>.
           The account contract is not deployed on testnet yet, so there is no live close transaction to show —
-          the behaviour below is the deployed code, not a demo.
+          the behaviour below is the merged contract code, not a demo.
         </p>
         <ol className="text-sm leading-relaxed mt-4 space-y-2 list-decimal pl-5">
           <li>Revokes every agent session first, so nothing can draw while the account closes.</li>
@@ -36,20 +40,19 @@ export default function Close() {
       <Card title="Redemption — if Mezo redeems the trove">
         <p className="text-sm leading-relaxed">
           Mezo redemptions repay the debt of the lowest-ratio troves first, at a 0.75% fee, and are blocked while
-          system health is below the 110% minimum. (Mezo protocol constants, read live from testnet:{' '}
-          <span className="mono">BorrowerOperations.redemptionRate()</span> = 0.75%,{' '}
-          <span className="mono">TroveManager MCR</span> = 110% — the same 110% is the{' '}
-          <span className="mono">MCR = 1.1e18</span> constant in{' '}
-          <span className="mono">contracts/src/account/TroveAccount.sol</span>.) A fully redeemed trove leaves its surplus BTC claimable from
+          system health is below the 110% minimum.{' '}
+          <a className="ink-link text-magenta" href="https://mezo.org/docs/developers/musd/musd-redemptions/" target="_blank" rel="noreferrer">Mezo docs state the 0.75% redemption fee and the 110% minimum ↗</a>;{' '}
+          the same 110% is the <span className="mono">MCR = 1.1e18</span> constant in{' '}
+          <span className="mono">contracts/src/account/TroveAccount.sol</span>. A fully redeemed trove leaves its surplus BTC claimable from
           Mezo&apos;s CollSurplusPool. <span className="mono">closeAccount()</span> handles that case: it claims the
           surplus — and it does not brick when the surplus is zero or was already claimed (a fork-found fix in task
           1.6: the live CollSurplusPool reverts on an empty claim, so the account reads the surplus first and skips
           the claim when there is nothing to claim).
         </p>
         <p className="text-sm leading-relaxed mt-3">
-          No redemption has hit the 0.9 trove, so there is no redemption transaction to show for it. (A lab V3 trove
-          was fully redeemed on testnet — tx <span className="mono">0xff2ca3c4…d95c</span>, block 16791587 — but that
-          was a different trove.) The handling above is contract code plus unit tests (mock Mezo), with the
+          No redemption has hit the 0.9 trove, so there is no redemption transaction to show for it. Lab notes
+          mention a V3 trove fully redeemed on testnet, but that was a different trove and no transaction was
+          recorded — treat it as an unverified lab anecdote, not proof. The handling above is contract code plus unit tests (mock Mezo), with the
           empty-claim fix found on a mainnet fork in task 1.6.
         </p>
       </Card>
@@ -59,7 +62,7 @@ export default function Close() {
           Revoking is the available-now exit while the account contract is undeployed: it freezes the Governor and
           burns the shared Mezo nonce, so every outstanding signature dies at once. The same{' '}
           <span className="mono">revoke()</span> code is proven on the Wave-1 Governor (tx{' '}
-          <span className="mono">0xf0763cf4…</span>, block 16310274); on the 0.9 Governor,{' '}
+          <a className="mono ink-link text-magenta text-xs break-all" href={txUrl(REVOKE_TX)} target="_blank" rel="noreferrer">0xf0763cf4… ↗</a>, block 16310274); on the 0.9 Governor,{' '}
           <span className="mono">unfreeze()</span> is proven (tx <span className="mono">0x0097174d…</span>, block
           16794548) but <span className="mono">revoke()</span> itself has not been called yet.{' '}
           <Link className="ink-link text-magenta" to="/app/revoke">Go to Revoke →</Link>

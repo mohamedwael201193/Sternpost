@@ -26,7 +26,7 @@ export default function Open() {
           <li>
             <b>Create a Governor on Bridge.</b> <Link className="ink-link text-magenta" to="/app">Back on Bridge →</Link>{' '}
             set your floor (draws stop below it) and your defend line (a stranger may repay from your buffer below it).
-            One transaction deploys your Governor from the Factory below. This step only appears on Bridge once you
+            One transaction deploys your Governor from the Governor factory below. This step only appears on Bridge once you
             already have a trove and no Governor yet — open the trove first (step 1), then come back.
           </li>
           <li>
@@ -47,7 +47,7 @@ export default function Open() {
 
       <Card title="Live deployment — Mezo testnet 31611" aside={<span className="caps text-[10px] text-safe">Verified · block 16794393</span>}>
         <dl className="text-sm space-y-3">
-          <div><dt className="text-muted">Factory</dt><dd className="mt-1"><Addr a={FACTORY} /></dd><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={txUrl(FACTORY_TX)} target="_blank" rel="noreferrer">Deploy tx {FACTORY_TX} ↗</a></dd></div>
+          <div><dt className="text-muted">SternpostFactory (Governor factory)</dt><dd className="mt-1"><Addr a={FACTORY} /></dd><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={txUrl(FACTORY_TX)} target="_blank" rel="noreferrer">Deploy tx {FACTORY_TX} ↗</a></dd></div>
           <div><dt className="text-muted">Governor (0.9 demo)</dt><dd className="mt-1"><Addr a={GOVERNOR} /></dd></div>
           <div><dt className="text-muted">Router</dt><dd className="mt-1"><Addr a={ROUTER} /></dd></div>
           <div><dt className="text-muted">Spend wallet</dt><dd className="mt-1"><Addr a={SPEND_WALLET} /></dd></div>

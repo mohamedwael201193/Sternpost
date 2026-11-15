@@ -50,12 +50,23 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; sub: string }>
   open: { eyebrow: 'Open account', title: 'Open a credit account', sub: 'Open a trove on Mezo, create your Governor on Bridge, then give your crew budgets — the live path today.' },
   crew: { eyebrow: 'Crew', title: 'Crew', sub: 'Agent session keys, signed on by you, spendable up to the budget you set.' },
   pay: { eyebrow: 'Pay', title: 'Pay', sub: 'Your agent pays x402 services by borrowing exactly the price, the moment it pays.' },
-  watch: { eyebrow: 'Watch', title: 'Watch', sub: 'Sonar, buffer, and Recovery Mode — live on testnet. Shield is in progress.' },
+  watch: { eyebrow: 'Watch', title: 'Watch', sub: 'Buffer and Recovery Mode — live on testnet. Shield is in progress.' },
   logbook: { eyebrow: 'Logbook', title: 'Logbook', sub: 'Every on-chain event of this account, and the proof behind every claim.' },
   classic: { eyebrow: 'Classic', title: 'Classic', sub: 'The trove you already have. Every draw needs your signature, because Mezo allows one signature at a time.' },
   draw: { eyebrow: 'Classic', title: 'Draw', sub: 'Draw MUSD against the trove you already have.' },
   revoke: { eyebrow: 'Classic', title: 'Revoke', sub: 'Revoke an app or freeze the Governor.' },
   close: { eyebrow: 'Close / Revoke', title: 'Close / Revoke', sub: 'Revoke agents, or close the account and take everything back.' },
+}
+
+/** Scroll reset on in-app navigation (shell-owned, ported from task/quick-wins 2ea4a0f): the shell mounts
+ * once for /app/*, so every inner route change scrolls the window back to the top —
+ * headings must never arrive cut off. Mounted inside Dashboard, never in main.tsx. */
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior })
+  }, [pathname])
+  return null
 }
 
 /** Footer chain switcher (plan §6.2). Testnet is live; mainnet is a capped pilot, not started, and read-only — no mainnet deployment exists yet, so selecting it shows that plainly and switches nothing. */
@@ -130,6 +141,7 @@ export default function Dashboard() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
+        <ScrollToTop />
         <div className="min-h-screen grain grid lg:grid-cols-[240px_1fr] overflow-x-clip">
           <aside className="hidden lg:flex flex-col border-r border-ink/15 bg-paper/60 backdrop-blur-[2px] sticky top-0 h-screen">
             <Link to="/" className="flex items-center gap-3 px-6 py-6">

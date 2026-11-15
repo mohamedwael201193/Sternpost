@@ -21,6 +21,8 @@ const SUITES: [string, number, number, number][] = [
   ['sdk', 10, 0, 0],
   ['backend', 74, 0, 0],
   ['app', 35, 0, 0],
+  ['mcp', 0, 0, 0],
+  ['keeper', 0, 0, 0],
 ]
 
 const DEFEND_FLOW: [string, string, number][] = [
@@ -57,11 +59,17 @@ export default function ProveIt() {
           total is <b>256 passed · 0 failed · 2 skipped</b> (non-fork suites only — fork suites are listed
           separately and never added twice). The table below sums to 273 / 0 / 5, including the{' '}
           <span className="mono">contracts-fork-offline</span> row (0 / 0 / 2): the two fork contracts skipped
-          offline, which the previous version of this page omitted. The snapshot id recorded inside{' '}
-          <span className="mono">TESTS.json</span> does not resolve to any commit in this repo&apos;s history, so
-          the counts are anchored to the file&apos;s <span className="mono">generatedAt</span> above and to main HEAD{' '}
-          <span className="mono">3374eee</span>. The mcp and keeper suites are absent from
-          that snapshot; a refresh is pending. No test count here is a claim about the future.
+          offline, which the previous version of this page omitted. This is a stale snapshot from a work-clone
+          tree: the snapshot id recorded inside <span className="mono">TESTS.json</span> does not resolve to any
+          commit in this repo&apos;s history, so the counts are anchored only to the file&apos;s{' '}
+          <span className="mono">generatedAt</span> above — not to any main commit. The mcp and keeper suites are
+          listed in that snapshot as missing — the packages do not exist yet — and are shown below as 0 / 0 / 0.
+          No test count here is a claim about the future.
+        </p>
+        <p className="text-sm leading-relaxed mt-3">
+          Since this snapshot the suites have grown: the account suite is now 161 passed · 0 failed · 3 skipped
+          (164 declared — the 3 skipped are env-gated fork tests), the backend declares 80 tests, and the sdk
+          declares 12. A refresh of <span className="mono">TESTS.json</span> is pending.
         </p>
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">
@@ -73,10 +81,11 @@ export default function ProveIt() {
             </tbody>
           </table>
         </div>
+        <p className="text-sm text-muted mt-3">backend: 74 of 80 declared executed; 6 config tests not in this run.</p>
 
         <h2 className="display text-3xl mt-12 mb-4">0.9 deployment</h2>
         <dl className="text-sm space-y-3">
-          <div><dt className="text-muted">Factory — block 16794393</dt><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(FACTORY)} target="_blank" rel="noreferrer">{FACTORY} ↗</a></dd></div>
+          <div><dt className="text-muted">SternpostFactory (Governor factory) — block 16794393</dt><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(FACTORY)} target="_blank" rel="noreferrer">{FACTORY} ↗</a></dd></div>
           <div><dt className="text-muted">Governor — floor 2.5, defend 1.6, block 16794411</dt><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(GOVERNOR)} target="_blank" rel="noreferrer">{GOVERNOR} ↗</a></dd></div>
           <div><dt className="text-muted">Router — block 16794452</dt><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(ROUTER)} target="_blank" rel="noreferrer">{ROUTER} ↗</a></dd></div>
           <div><dt className="text-muted">Spend wallet — block 16794411</dt><dd className="mt-1"><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(SPEND_WALLET)} target="_blank" rel="noreferrer">{SPEND_WALLET} ↗</a></dd></div>
