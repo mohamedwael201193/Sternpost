@@ -10,9 +10,11 @@ Rule IDs S1–S26 are the plan §7.2 rules. Every rule names a test that exists
 in this repo (file + test name, name-checked by `scripts/check-threat-model.sh`
 — existence only, see the coverage summary), or is marked explicitly as a
 code-review item, a non-goal, a disclosure, or an OPEN gap. Plan-named tests that do not exist are called out, not silently
-renamed: `test_owner_immutable`, `test_x402_session_bound`,
-`test_bounty_farming_blocked` and `test_recovery_mode_semantics` do not exist
-in this repo; the table cites the existing tests that cover the same behavior.
+renamed: `test_owner_immutable`, `test_x402_session_bound` and
+`test_recovery_mode_semantics` do not exist in this repo; the table cites the
+existing tests that cover the same behavior. (`test_bounty_farming_blocked`
+existed only in unmerged Shield work when this file was written; it landed
+with the Shield merge — see S12.)
 
 ## Assets
 
@@ -29,7 +31,7 @@ in this repo; the table cites the existing tests that cover the same behavior.
 | Borrower / account owner | Owns the trove and the governor/account. Signs Mezo EIP-712 messages (Classic) or owns the account (Accounts). |
 | App | Untrusted. Holds a per-app policy: budget, per-draw cap, expiry, payee. |
 | Agent | Untrusted session key for one SpendWallet / one TroveAccount session, with an expiry and a budget. |
-| Keeper | Anyone. Can call Classic `heal()` / `defend()`; TroveAccount `shield()` does not exist on main yet (see S11). |
+| Keeper | Anyone. Can call Classic `heal()` / `defend()` and TroveAccount `shield()` (`contracts/src/account/TroveAccount.sol:587`, Shield merge). |
 | Relayer / Batcher caller | Untrusted. `Batcher` holds no funds and no privileges (S20). |
 | Mezo | Trusted protocol dependency (proxies that can upgrade — see non-goals). |
 | x402 facilitator | Operator unverified; settlement is checked on chain, not trusted. |
@@ -110,10 +112,10 @@ function, and this table does not claim one.
 | S8 | `drawBySig` nonce is per agent, increments once per accepted intent, signatures cannot replay across accounts or chains (domain includes chainId and account) | `contracts/test/account/TroveAccountDraw.t.sol` `test_S8_domainSeparatorBindsChainAndAccount`, `test_S8_signatureCannotReplayAcrossAccounts`, `test_S8_signatureCannotReplayAcrossChains`, `test_I11_nonceIncrementsExactlyOncePerAcceptedIntent`, `test_I11_failedDrawBySigDoesNotConsumeNonce`, `test_I11_twoAgentsIntentsNeverInterfere`, `test_I11_sameNonceDifferentPayloadOrder`; `contracts/test/account/TroveAccount.t.sol` `test_drawBySigReplayReverts`; `contracts/test/account/Factory.t.sol` `testFuzz_predictMatchesCreated`, `test_policyFrontRunCannotStealAddress`. |
 | S9 | Signature malleability (high-s, bad v, zero address recovery) rejected | `contracts/test/account/TroveAccountDraw.t.sol` `test_S9_highSRejected`, `test_S9_badVRejected`, `test_S9_zeroAddressRecoveryRejected`; `contracts/test/unit/SpendWallet.t.sol` `test_highS_malleatedSignature_rejected`; `contracts/test/unit/GovernorBranches.t.sol` `test_rearm_highS_malleatedSig_rejected`. |
 | S10 | Owner can always exit (close, withdraw, sweeps) except where Mezo itself forbids (Recovery Mode, insufficient MUSD) | `contracts/test/account/TroveAccount.t.sol` `test_I5_closeAccountReturnsEverything`, `test_I5_closeAccountNeedsMusd`, `test_I5_closeAccountInRecoveryModeReverts`, `test_I5_closeAccountAfterRedemptionClaimsCollateral`, `test_I5_claimCollateralZeroSurplusSucceeds`, `test_I5_sweepsWorkWithoutSessions`, `test_I5_closeAccountRevokesSessions`, `test_I5_withdrawCollAndRepay`. |
-| S11 | `shield()` never pushes net debt below `minNetDebt` + gas compensation | PARTIAL — GAP. `shield()` does not exist in `contracts/src/account/TroveAccount.sol` on main, and no account `shield()` execution test exists. Closest existing tests: `contracts/test/account/TroveAccount.t.sol` `test_repayBoundedByMinDebt` (the min-net-debt bound on repay) and Classic `contracts/test/unit/Governor.t.sol` `test_defend_clampsAfterPartialRedemption`, `contracts/test/fork/Fork.t.sol` `test_fork_defend`. Task 1.4 (Shield) must add `shield()` and re-prove I8/I9 with it included (see `contracts/test/account/TroveAccountDraw.t.sol:21-25`). |
-| S12 | Keeper bounty is capped, paid only for real stress and real improvement, rate-limited by cooldown | PARTIAL — GAP. The cap is tested: `contracts/test/account/Factory.t.sol` `test_createAccountRejectsBountyAboveCap`, `contracts/test/account/TroveAccount.t.sol` `test_setPolicyRejectsBountyAboveCap`; Classic `contracts/test/unit/Governor.t.sol` `test_minDefendLine_is135`. But plan-named `test_bounty_farming_blocked` does not exist, and with no `shield()` on main there is no test that a bounty is paid only for real stress/improvement or that the cooldown binds. Note: `test_bounty_farming_blocked` exists and passes in unmerged Shield work (`~/workspace/mezo-wave2/work/acct-suite-1.4.log` shows `[PASS] test_bounty_farming_blocked()`); on Shield merge this row and the script's negative check go stale by design — update both then. |
+| S11 | `shield()` never pushes net debt below `minNetDebt` + gas compensation | `contracts/test/account/TroveAccountShield.t.sol` `test_shield_minDebtBound_noOverRepay` (repay capped at debt − 200 − minNetDebt; debt after exactly 2000e18 — "net debt never below minNetDebt + gas comp"), `testFuzz_shieldNeverBreachesMinDebt`; `contracts/test/account/TroveAccount.t.sol` `test_repayBoundedByMinDebt` (the min-net-debt bound on repay) and Classic `contracts/test/unit/Governor.t.sol` `test_defend_clampsAfterPartialRedemption`, `contracts/test/fork/Fork.t.sol` `test_fork_defend`. `shield()` is `contracts/src/account/TroveAccount.sol:587` (Shield merge); the "1.4 must add shield()" gap is closed. |
+| S12 | Keeper bounty is capped, paid only for real stress and real improvement, rate-limited by cooldown | `contracts/test/account/Factory.t.sol` `test_createAccountRejectsBountyAboveCap`, `contracts/test/account/TroveAccount.t.sol` `test_setPolicyRejectsBountyAboveCap`; Classic `contracts/test/unit/Governor.t.sol` `test_minDefendLine_is135`. Bounty-only-for-real-improvement: `contracts/test/account/TroveAccountShield.t.sol` `test_bounty_farming_blocked` (tiny step + tiny value → shield succeeds, bounty 0, second shield reverts `NothingToDo`), `test_shield_valueAddedGate_paysBounty` (bounty paid via the valueAdded ≥ 10x branch), `test_shield_notStressed_reverts`; cooldown binds: `test_shield_cooldown`; hard cap: `test_shield_bounty_cap_fiveMusd`. |
 | S13 | A non-active trove (redeemed/liquidated/closed) freezes draws and shield; collateral surplus is claimable by anyone for the account and sweepable only by the owner | `contracts/test/account/TroveAccountDraw.t.sol` `test_I8_drawRevertsWhenTroveNotActive`, `test_I8_drawBySigRevertsWhenTroveNotActive`, `test_I8_claimCloseSweepsStillWorkWhenNotActive`; `contracts/test/account/TroveAccount.t.sol` `test_I5_closeAccountAfterRedemptionClaimsCollateral`; `contracts/test/unit/Governor.t.sol` `test_draw_revertsWhenTroveRedeemed`; `contracts/test/account/Batcher.t.sol` `testFork_claimCollateralAfterSimulatedRedemption` (fork). |
-| S14 | Recovery Mode blocks draws with a named reason before Mezo is called; repay/addColl/shield continue | PARTIAL. Draw/repay/addColl on mocked Mezo: `contracts/test/account/TroveAccountDraw.t.sol` `test_I9_drawRevertsRecoveryModeBeforeMezo`, `test_I9_drawBySigRevertsRecoveryMode`, `test_I9_repayAndAddCollSucceedInRecoveryMode`, `test_S17_priceZeroImpliesRecoveryMode`; `contracts/test/unit/Governor.t.sol` `test_draw_revertsInRecoveryMode` (Classic). Plan-named fork test `test_recovery_mode_semantics` does not exist, and "shield continues in RM" is unproven (no `shield()`, see S11). |
+| S14 | Recovery Mode blocks draws with a named reason before Mezo is called; repay/addColl/shield continue | PARTIAL. Draw/repay/addColl on mocked Mezo: `contracts/test/account/TroveAccountDraw.t.sol` `test_I9_drawRevertsRecoveryModeBeforeMezo`, `test_I9_drawBySigRevertsRecoveryMode`, `test_I9_repayAndAddCollSucceedInRecoveryMode`, `test_S17_priceZeroImpliesRecoveryMode`; `contracts/test/unit/Governor.t.sol` `test_draw_revertsInRecoveryMode` (Classic). "Shield continues in RM" is now proven: `contracts/test/account/TroveAccountShield.t.sol` `test_shield_inRecoveryMode_succeeds_drawReverts` (shield succeeds at TCR 1.40 while a draw reverts `RecoveryMode`). Only gap left: plan-named fork test `test_recovery_mode_semantics` does not exist. |
 | S15 | Reentrancy: all state-changing externals guarded | PARTIAL. Classic + Router: `contracts/test/unit/Reentrancy.t.sol` `test_reentrantDraw_blocked` (malicious ActivePool re-entering Governor `draw`/`heal`), `contracts/test/unit/Router.t.sol` `test_reentrancyBlocked`; `contracts/test/unit/GovernorBranches.t.sol` `test_draw_payeeTransferFalse_revertsAtomically`. Account `draw`/`drawBySig` are `nonReentrant` in code and `contracts/test/account/Batcher.t.sol` `test_multiDrawAtomicityOnBadSig` covers batch atomicity, but no account-suite test re-enters `draw` with a malicious payee/receiver. |
 | S16 | Native BTC only enters via `receive()`/`addColl`; accounting reconciles | `contracts/test/unit/Governor.t.sol` `test_receive_rejectsWrongCallerOrValue`, `test_directNativeSubmission_isBlocked`; `contracts/test/unit/Router.t.sol` `test_unexpectedBtcRejected`; `contracts/test/account/Batcher.t.sol` `test_batcherRejectsPlainEthTransfer`, `test_batcherRejectsValueOnMulti`, `test_batcherRejectsValueOnClaimBatch`, `test_combinedSweepLeavesBatcherEmpty`; `contracts/test/invariant/Invariant.t.sol` `invariant_governorHoldsOnlyBuffer`, `contracts/test/invariant/RouterInvariant.t.sol` `invariant_routerHoldsNothing`. Note: no `invariant_I12`/`invariant_I13` function exists; reconciliation is covered by the Batcher sweep/balance tests above, not by a ghost-sum invariant. |
 | S17 | Price is read from Mezo's PriceFeed only; a zero/failed price reverts the action (no fallback oracle) | `contracts/test/account/TroveAccountDraw.t.sol` `test_S17_priceFeedRevertPropagates`, `test_S17_priceZeroImpliesRecoveryMode`. |
@@ -123,25 +125,28 @@ function, and this table does not claim one.
 | S21 | Hot session key theft is bounded by budget and expiry (expiry is explicit per session; 7 days is the pilot convention, max 90 days); revoke is one tx | `contracts/test/account/TroveAccount.t.sol` `test_I2_drawWithinCapsSucceeds`, `test_I2_drawOverBudgetReverts`, `test_I2_drawOverDailyReverts`, `test_I3_revokeAllKillsAllSessions`; `MAX_SESSION = 90 days` (`contracts/src/account/TroveAccount.sol:70`). |
 | S22 | Redemption can close the trove: disclosed; Radar + rank trigger reduce the chance but cannot prevent it | NON-GOAL (no test by design). Evidence: `contracts/test/account/Radar.t.sol` `test_rank_frontier`, `test_rank_head`, `test_rank_middle_redeemable`, `test_frontier`, `test_debtAheadForNICR_belowFrontier`, `testForkMainnet_fourTroves`, `testForkTestnet_labRanks`; live incident in `docs/proof/accounts-2026-11-15.md` (ask 2). |
 | S23 | Contracts are unaudited; mainnet use is a capped pilot | DISCLOSURE (no test by design). This file, `docs/proof/mainnet-2026-11-15.md` (pilot: not started), and the README security section. |
-| S24 | Backend gateway/relayer keys are testnet-only until the user enables mainnet | OPS RULE, partially tested. `backend/src/config.ts:7` defaults `CHAIN_ID` to 31611 (testnet); `backend/test/config.test.ts` `loads when X402_PAY_TO is a valid address and keeps other defaults` asserts the 31611 default. But no mainnet-enable gate exists in the repo: the string `STERNPOST_MAINNET_OK` appears nowhere, so "until the user enables mainnet" currently has no implemented switch — enabling mainnet in the backend is an unbuilt step, not a flip. |
+| S24 | Backend gateway/relayer keys are testnet-only until the user enables mainnet | OPS RULE, partially tested. `backend/src/config.ts:7` defaults `CHAIN_ID` to 31611 (testnet); `backend/test/config.test.ts` `loads when X402_PAY_TO is a valid address and keeps other defaults` asserts the 31611 default. But no mainnet-enable gate exists in the BACKEND: the string `STERNPOST_MAINNET_OK` exists in `mcp/src` (the MCP mainnet gate, S26) but nowhere under `backend/`, so "until the user enables mainnet" currently has no implemented switch in the backend — enabling mainnet there is an unbuilt step, not a flip. |
 | S25 | Indexer/leaderboard decides quests from logs only; team addresses are tagged and excluded from the outside count | PARTIAL — GAP. Indexer tests exist: `backend/test/indexer.test.ts` `indexes factory, follows new governor, mirrors policy, is idempotent` and `start() polls and stop clears the timer; errors are swallowed`. But no team-address tagging or exclusion exists anywhere in `backend/src/indexer` or `backend/src/routes` (grep for "team": zero hits), so the exclusion half of this rule is untested and unimplemented. Outside count is 0 today, so nothing is misreported yet. |
-| S26 | MCP never returns or logs the agent key; refuses mainnet without `STERNPOST_MAINNET_OK=1` | OPEN — NOT IMPLEMENTED. There is no MCP package in this repo (`TESTS.json`: mcp suite "missing"), no MCP snapshot test, and `STERNPOST_MAINNET_OK` appears nowhere. This rule cannot be claimed until the MCP server exists. |
+| S26 | MCP never returns or logs the agent key; refuses mainnet without `STERNPOST_MAINNET_OK=1` | MCP server EXISTS (`mcp/`, merged as MCP 2.1, 5872e51; `TESTS.json` mcp suite 56 passed / 0 failed / 19 skipped, generated 2026-11-16 from 54ae7a9). Mainnet gate, verified by reading `mcp/src/chain.ts:151-170` (`requireMainnetGate`): refuses unless `STERNPOST_MAINNET_OK=1` AND the account address appears in `shared/deployments/mainnet.json`. That file exists but records no account (all addresses null), so mainnet is refused outright today even with the flag set. Gate tests: `mcp/test/tools.test.ts` `mainnet is refused without STERNPOST_MAINNET_OK=1` (balance, radar, pay, request_session, governor status, x402 quote) and `mcp/test/live.test.ts` `radar: mainnet is refused without STERNPOST_MAINNET_OK=1`. Key never returned/logged: `mcp/src/agentKey.ts` (only the address is derived; the key file is chmod 600), `mcp/src/tools.ts:90` ("no handler emits the agent key") + `:147-148` (key redacted from output text); tests `mcp/test/tools.test.ts` `generates a chmod-600 agent key, returns a pending request id + approval link, never the key`, `guardOutput throws if the agent private key would leak into a response`. Pass status is from `TESTS.json`, not re-run here; the checker verifies name existence only. |
 
-Coverage summary (name-checked 2026-11-15 by `scripts/check-threat-model.sh` —
+Coverage summary (name-checked 2026-11-16 by `scripts/check-threat-model.sh` —
 the script checks only that each named test exists in the cited file; it does
 not run any test and does not check that a test proves what its row claims.
-Pass status at this tree is unproven: `TESTS.json` is stale — its commit
-`7b1ffcd` is not in this repo's history (work-clone run), so freshness cannot
-be verified from the commit; a fresh run at HEAD is task 0.8's job. The counts
-below are about test existence, not test passes):
+Pass status at this tree is unproven: `TESTS.json` (commit `54ae7a9`, in
+main history, generated 2026-11-16) is stale — sources changed since 54ae7a9
+(`contracts/script/fork-rehearse-prod.sh`, `scripts/muster-report.mjs`, plus
+this branch's `scripts/`), so a fresh `make test-all` re-run is needed; task
+0.8 landed (it produced this TESTS.json) and the re-run is a new need, not
+0.8's job. The counts below are about test existence, not test passes):
 
-- 14 rules fully backed by an existing named test: S1, S2, S3, S4, S5,
-  S8, S9, S10, S13, S16, S17, S19, S20, S21.
-- 8 rules partial (mechanism tested, execution/coverage gap named in the row):
-  S6, S7, S11, S12, S14, S15, S24, S25.
+- 17 rules fully backed by an existing named test: S1, S2, S3, S4, S5,
+  S8, S9, S10, S11, S12, S13, S16, S17, S19, S20, S21, S26.
+- 6 rules partial (mechanism tested, execution/coverage gap named in the row):
+  S6, S7, S14, S15, S24, S25.
 - 3 rules with no test by design: S18 (code review), S22 (non-goal), S23
   (disclosure).
-- 1 rule open / not implemented: S26 (no MCP package).
+- 0 rules open / not implemented. (S26 closed by the MCP 2.1 merge; S11/S12
+  closed by the Shield merge.)
 
 ## Known limits (honest)
 
@@ -161,8 +166,10 @@ below are about test existence, not test passes):
   guard, not liquidation protection. The 0.9 defend was triggered by raising
   the policy line, not by a price move (disclosed in
   `judges/TESTNET_TXS.md`).
-- **Shield does not exist on main yet.** `shield()` is task 1.4; S11/S12/S14
-  (shield clauses) are partial until it lands and is re-proven.
+- **Shield is live on main, demo is not.** `shield()` landed with the
+  Shield merge (S11/S12 proven by tests); S14 is partial only for the
+  missing fork test `test_recovery_mode_semantics`. No stranger `shield()`
+  has run on a production account (demo BLOCKED on funding).
 - **The oracle.** All ICR math uses Mezo's PriceFeed. A manipulated oracle is
   out of scope (S18: no cached price is used, but a wrong live price is still
   trusted).

@@ -22,7 +22,7 @@ From plan §8.1, with the honest status of each item on 2026-11-15:
 
 | # | Gate | Status |
 |---|---|---|
-| 1 | Phase 1 tests green and production contracts source-verified on testnet | PARTIAL. Tests: `TESTS.json` 256 passed / 0 failed / 2 skipped (non-fork subtotal), account suite 161 / 0 / 3 on re-execution (six on-main suites, `judges/forge-account.json`; full log incl. unmerged Shield suite: 175/0/3). BUT the production account contracts (Factory / Implementation / Radar / Batcher) have NOT been deployed to testnet, so they are NOT source-verified anywhere. Classic 0.9 is verified (`judges/VERIFY.md`). |
+| 1 | Phase 1 tests green and production contracts source-verified on testnet | PARTIAL. Tests: `TESTS.json` 495 passed / 0 failed / 24 skipped (non-fork subtotal), account suite 164 / 0 / 3 on re-execution (six on-main suites, `judges/forge-account.json`; full pre-merge log incl. Shield's then-14 tests: 175/0/3). Production contracts ARE deployed to testnet (1.9, blocks 16803284–85; Shield redeploy 2026-11-16, implementation `0x02Dda72b…`, Factory `0x46442898…`); 1.9 Implementation / Radar / Batcher `is_verified: true`, bytecode MATCH. The redeploy's Radar / Batcher Blockscout v2 flags read false (indexer quirk — source available via v1, identical bytecode; see `shared/deployments/testnet.json` accounts), so verification is not clean across all four. Classic 0.9 is verified (`judges/VERIFY.md`). |
 | 2 | A production-contract fork rehearsal passes (task 6.1) | NOT DONE. The lab rehearsal (`lab/mainnet/rehearsal_output2.txt`) covered the LAB V3 contracts, not the production contracts. |
 | 3 | The 4-trove mainnet count re-checked against the official addresses | STALE. Last read: 4 troves, TCR 3,852%, Recovery Mode false (plan §8.1). Re-run `python lab/radar.py mainnet` (step B below) before funding. |
 | 4 | Per-session cap built into the mainnet implementation (task 1.10: immutable `MAX_SESSION_BUDGET`, default 20 MUSD) and visible in the UI | NOT DONE. `MAX_SESSION_BUDGET` does not exist anywhere in this repo (grep: zero hits). Until task 1.10 lands, the cap is ENFORCED MANUALLY: never open a session with `budget` above 20 MUSD (step F). The UI must show "Pilot cap: 20 MUSD per session". |
@@ -37,11 +37,18 @@ If any gate is red, STOP. Do not fund, do not broadcast.
 BTC = $64,160 on 2026-11-15 (plan §8.2). Re-run the step-B reads for fresh
 numbers before funding — do not trust these prices.
 
+Collateral is sized on the COMPOSITE principal 2001.8 MUSD (1800 net +
+1.8 borrowing fee + 200 gas comp), not on 2000: at $64,160, 3.0 × 2001.8 /
+64160 = 0.09360 BTC, 2.5 × 2001.8 / 64160 = 0.07800 BTC, 1.1 × 2001.8 /
+64160 = 0.03432 BTC. The earlier figures (0.09353 / 0.07794) implied debt
+2000 — the 1.8 fee omitted — and are corrected here. Step 3's `COLL_WEI`
+formula already uses the composite (1800 × 1.001 + 200).
+
 | Item | Amount | Comes back? |
 |---|---|---|
-| BTC collateral for ICR 300% (recommended) | **0.09353 BTC** (about $6,000) | yes, at close |
-| BTC collateral for ICR 250% | 0.07794 BTC (about $5,000) | yes, at close |
-| Absolute minimum ICR 110% | 0.0343 BTC | do NOT use |
+| BTC collateral for ICR 300% (recommended) | **0.09360 BTC** (about $6,000) | yes, at close |
+| BTC collateral for ICR 250% | 0.07800 BTC (about $5,000) | yes, at close |
+| Absolute minimum ICR 110% | 0.03432 BTC | do NOT use |
 | Borrow fee 0.1% of 1,800 | 1.8 MUSD | no (cost) |
 | Interest 1% APR on 2,001.8 MUSD | 0.055 MUSD/day, 1.67 MUSD/month | no (cost) |
 | Gas deposit | 200 MUSD (inside the 2,001.8 debt) | yes |
@@ -199,11 +206,14 @@ cast wallet new   # store the output in a file only you hold
 export AGENT=0x... AGENT_PK=0x...   # from that output; load them from your file, not from chat
 cast send $ACC "setSession(address,uint128,uint128,uint128,uint64,bool,bool)" $AGENT 20000000000000000000 10000000000000000000 20000000000000000000 $(( $(date +%s) + 7*24*3600 )) false false \
   --gas-limit 6000000 --rpc-url $M --private-key "$PK"
+# expect status 1.
 # budget 20 MUSD = THE PILOT CAP (manual until task 1.10 lands — never above 20 MUSD), perTx 10, daily 20, expiry +7 days, anyPayee false, canSignX402 false
 cast send $ACC "setPayee(address,address,bool)" $AGENT $ME true --gas-limit 3000000 --rpc-url $M --private-key "$PK"
+# expect status 1.
 # payee = your wallet (draws may only pay you in the pilot)
 # fund the agent with a little BTC for gas:
 cast send $AGENT --value 0.0002ether --gas-limit 3000000 --rpc-url $M --private-key "$PK"
+# expect status 1; then `cast balance $AGENT --ether --rpc-url $M` shows 0.0002.
 # agent draws 5 MUSD to you:
 cast send $ACC "draw(address,uint256)" $ME 5000000000000000000 --gas-limit 6000000 --rpc-url $M --private-key "$AGENT_PK"
 # expect status 1; then:
@@ -213,15 +223,18 @@ cast call $TM "getCurrentICR(address,uint256)(uint256)" $ACC $(cast call $PF 'fe
 
 To revoke everything later (one tx): `cast send $ACC "revokeAll()"`.
 
-## 7. Shield demo — NOT APPLICABLE until task 1.4 lands
+## 7. Shield demo — NO RUNNABLE STEPS YET (task 1.4 has landed, the demo has not been written)
 
-`shield()` does not exist in `contracts/src/account/TroveAccount.sol` on
-main. Do NOT run the lab's shield-line trick here: the lab used the old
-policy ordering (`floor < shield < target`) and raised the shield line above
-the ICR. Production validation requires `shieldICR < floorICR`, so that
-command would revert — and even if it did not, it would prove nothing about
-the production `shield()`. When task 1.4 lands, this section gets the real
-steps (stranger calls `shield()`, bounty 1 MUSD, cooldown 20 blocks) plus the
+`shield()` EXISTS on main now (`contracts/src/account/TroveAccount.sol:587`,
+Shield merge), but this section still has no runnable demo steps: the 6.1
+fork rehearsal predates `shield()` (its stranger-shield probe failed as
+expected) and no production shield run has been recorded. Do NOT run the
+lab's shield-line trick here: the lab used the old policy ordering
+(`floor < shield < target`) and raised the shield line above the ICR.
+Production validation requires `shieldICR < floorICR`, so that command
+would revert — and even if it did not, it would prove nothing about the
+production `shield()`. When the demo steps are written, they are: stranger
+calls `shield()`, bounty 1 MUSD, cooldown 20 blocks — plus fresh
 fork-rehearsal evidence. Until then the pilot page must say the shield step
 was skipped.
 
@@ -230,16 +243,21 @@ was skipped.
 Prerequisite: step 3 showed `eip155:31612` with MUSD on
 `https://facilitator.vativ.io/supported` and a healthy `/health`. Mainnet
 settle is UNTESTED (only `/supported` and `/health` have been seen for
-31612). Prepare `lab/x402/pay.mjs` env per task 6.4 (agent key from a JSON
-file shaped like `cast wallet new --json` output; the testnet equivalent was
-proven against the outside service). Run it yourself and record the settle
-hash with `network: eip155:31612` — or record the documented failure. A
-failed first test is a result, not a reason to retry blindly.
+31612). **No x402 command is given in this runbook — this step defers
+entirely to task 6.4** (`lab/x402/pay.mjs`, which is not in this repo):
+prepare its env per task 6.4 (agent key from a JSON file shaped like
+`cast wallet new --json` output; the testnet equivalent was proven against
+the outside service). Run it yourself and record the settle hash with
+`network: eip155:31612` — or record the documented failure. A failed first
+test is a result, not a reason to retry blindly. Expected outcome: one
+settle tx hash on `eip155:31612` in `docs/proof/mainnet-<date>.md`, or the
+failure recorded verbatim there.
 
 ## 9. Close the trove and get all collateral back (you broadcast)
 
 ```bash
 cast send $ACC "unpark(uint256)" 1000000000000000000000 --gas-limit 6000000 --rpc-url $M --private-key "$PK"   # also pays out accrued sMUSD yield, if any
+# expect status 1 (and the yield, if any, in the account's MUSD balance).
 cast call $TM "getEntireDebtAndColl(address)(uint256,uint256,uint256,uint256,uint256,uint256)" $ACC --rpc-url $M   # debt D = principal + interest (about 2001.8 + interest)
 cast call $MUSD "balanceOf(address)(uint256)" $ACC --rpc-url $M     # must be >= D - 200e18 (the 200 MUSD gas comp is paid by the protocol pool)
 ```
@@ -250,11 +268,15 @@ DEX/Mezo app first if you do not hold it):
 
 ```bash
 cast send $MUSD "transfer(address,uint256)" $ACC 10000000000000000000 --gas-limit 3000000 --rpc-url $M --private-key "$PK"   # 10 MUSD
+# expect status 1; then `cast call $MUSD "balanceOf(address)(uint256)" $ACC --rpc-url $M` shows 10 MUSD more.
 cast send $ACC "closeAccount()" --gas-limit 6000000 --rpc-url $M --private-key "$PK"
+# expect status 1.
 cast call $TM "getTroveStatus(address)(uint256)" $ACC --rpc-url $M   # expect 2 (closedByOwner)
 BAL=$(cast balance $ACC --rpc-url $M); echo "collateral in account: $BAL wei"
 cast send $ACC "sweepBtc(uint256)" $BAL --gas-limit 3000000 --rpc-url $M --private-key "$PK"     # BTC back to your wallet
+# expect status 1; then `cast balance $ACC --rpc-url $M` is 0 and your wallet holds the collateral again.
 cast send $ACC "sweepMusd(uint256)" $(cast call $MUSD 'balanceOf(address)(uint256)' $ACC --rpc-url $M | cut -d' ' -f1) --gas-limit 3000000 --rpc-url $M --private-key "$PK"   # leftover MUSD
+# expect status 1; then the account's MUSD balance is 0.
 ```
 
 If the trove was redeemed meanwhile (status 4): run
@@ -263,15 +285,19 @@ If the trove was redeemed meanwhile (status 4): run
 ## 10. Monitoring
 
 ```bash
-python radar.py mainnet $ACC      # rank from redemption frontier, ICR delta, MUSD debt ahead of you
-cast call $ACC "needed()(uint256,uint256,uint256,uint8)" --rpc-url $M   # (icr, repayWanted, collWanted, reason)
-cast call $TM "getTroveStatus(address)(uint256)" $ACC --rpc-url $M    # 1 active, 2 closedByOwner, 3 liquidated, 4 redeemed
+python radar.py mainnet $ACC      # expect a rank line for $ACC: rank from the redemption frontier, ICR delta, MUSD debt ahead of you. ABORT the demo if the rank moved onto the frontier (rank 1 of 5) since step 3.
+cast call $ACC "needed()(uint256,uint256,uint256,uint8)" --rpc-url $M   # expect four values (icr, repayWanted, collWanted, reason); icr must read above 2.5e18 (the floor) — ABORT if it does not
+cast call $TM "getTroveStatus(address)(uint256)" $ACC --rpc-url $M    # expect 1 (active). 2 closedByOwner, 3 liquidated, 4 redeemed — if 4, run `claimCollateral()` first (see §9)
 ```
 
 ## 11. Abort / safety rules
 
 - Never run `forge create` / `cast send` with `--rpc-url $M` unless you
-  intend a real broadcast. Every broadcast step above has a dry run first.
+  intend a real broadcast. Dry runs exist for §4 (`forge create` without
+  `--broadcast`, plan only) and §5 (`cast call` the factory, revert costs
+  nothing) ONLY. §6/§9 state-changing account calls have no dry run:
+  verify each with the read-back printed after it (owner, ICR above the
+  floor, status 2, zero balances) before proceeding.
 - ABORT if `cast chain-id` is not 31612, if `minNetDebt` is not 1800e18, if
   the facilitator does not list `eip155:31612` with MUSD, or if the trove
   count / Recovery Mode state changed since the last check.
@@ -284,8 +310,9 @@ cast call $TM "getTroveStatus(address)(uint256)" $ACC --rpc-url $M    # 1 active
   blindly.
 - Do not mix lab numbers with production numbers: lab policy was
   floor 1.5 / shield 1.8 / target 2.0 (old ordering); production is
-  floor 2.5 / shield 1.6 / target 2.0. Lab collateral figures (0.07794 /
-  0.09353 BTC) were computed at BTC = $64,160 — recompute at step 3 prices.
+  floor 2.5 / shield 1.6 / target 2.0. The §1 collateral figures (0.07800 /
+  0.09360 BTC) were computed at BTC = $64,160 on the composite 2001.8
+  principal — recompute at step 3 prices.
 - Keep the pilot cap: no session budget above 20 MUSD, no draw that takes
   ICR below 2.5, close the trove at the end of the demo (or leave it open
   with the cap and say so on the pilot page).

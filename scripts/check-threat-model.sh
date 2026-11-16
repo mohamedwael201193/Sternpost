@@ -8,14 +8,15 @@
 #   or: bash scripts/check-threat-model.sh --list   (print the pairs and exit 0)
 #
 # The threat model marks S18 (code review), S22 (non-goal) and S23
-# (disclosure) as having no test by design, and S6/S7/S11/S12/S14/S15/S24/S25
+# (disclosure) as having no test by design, and S6/S7/S14/S15/S24/S25
 # as partial (mechanism tests cited, execution gap named in the doc).
 # This script checks the tests the doc DOES cite; it does not bless the gaps.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-# pairs: file|test-function-name (one per line; S26 intentionally absent:
-# no MCP package exists, so there is nothing to check — see THREAT_MODEL.md)
+# pairs: file|test-function-name (one per line; S26 is checked via the MCP
+# test descriptions — vitest `it("...")` strings, matched literally — see
+# THREAT_MODEL.md S26)
 read -r -d '' PAIRS <<'EOF'
 contracts/test/account/TroveAccount.t.sol|test_I4_ownerNeverChanges
 contracts/test/account/TroveAccount.t.sol|test_I4_initializeOnceOnRealClone
@@ -119,6 +120,18 @@ contracts/test/account/Factory.t.sol|test_predictBindsPolicy
 contracts/test/unit/Factory.t.sol|test_predictGovernor_matchesDeployedAddress_forNewBorrower
 contracts/test/unit/Governor.t.sol|test_factory_predicts_andRejectsDuplicate
 contracts/test/account/Batcher.t.sol|test_claimYieldBatchStaysInAccount
+contracts/test/account/TroveAccountShield.t.sol|test_shield_minDebtBound_noOverRepay
+contracts/test/account/TroveAccountShield.t.sol|testFuzz_shieldNeverBreachesMinDebt
+contracts/test/account/TroveAccountShield.t.sol|test_bounty_farming_blocked
+contracts/test/account/TroveAccountShield.t.sol|test_shield_valueAddedGate_paysBounty
+contracts/test/account/TroveAccountShield.t.sol|test_shield_notStressed_reverts
+contracts/test/account/TroveAccountShield.t.sol|test_shield_cooldown
+contracts/test/account/TroveAccountShield.t.sol|test_shield_bounty_cap_fiveMusd
+contracts/test/account/TroveAccountShield.t.sol|test_shield_inRecoveryMode_succeeds_drawReverts
+mcp/test/tools.test.ts|mainnet is refused without STERNPOST_MAINNET_OK=1
+mcp/test/live.test.ts|radar: mainnet is refused without STERNPOST_MAINNET_OK=1
+mcp/test/tools.test.ts|generates a chmod-600 agent key, returns a pending request id + approval link, never the key
+mcp/test/tools.test.ts|guardOutput throws if the agent private key would leak into a response
 contracts/test/account/Radar.t.sol|test_rank_frontier
 contracts/test/account/Radar.t.sol|test_rank_head
 contracts/test/account/Radar.t.sol|test_rank_middle_redeemable
@@ -152,18 +165,19 @@ done <<< "$PAIRS"
 
 # Negative checks: plan-named tests the threat model says do NOT exist must
 # still not exist (if one appears, the doc's call-out is stale — update it).
-for ghost in test_owner_immutable test_x402_session_bound test_bounty_farming_blocked test_recovery_mode_semantics; do
+# test_bounty_farming_blocked landed with the Shield merge (see S12), so it
+# is a PAIRS entry now, not a ghost.
+for ghost in test_owner_immutable test_x402_session_bound test_recovery_mode_semantics; do
   if grep -rq "$ghost" contracts/test backend/test 2>/dev/null; then
     echo "STALE CALLOUT: $ghost now exists — update docs/THREAT_MODEL.md"
     fail=1
   fi
 done
 
-# S26: no MCP package, no gate string — fail if either silently appears
-# without the doc being updated (a bare grep hit means the rule may now
-# be implementable; the doc must say so).
-if [ -d mcp ] || grep -rq "STERNPOST_MAINNET_OK" contracts backend sdk app shared 2>/dev/null; then
-  echo "STALE CALLOUT: MCP package or STERNPOST_MAINNET_OK now exists — update S26 in docs/THREAT_MODEL.md"
+# S26 (positive check): the MCP package and its mainnet gate must exist —
+# if either silently disappears, the doc's S26 row is stale the other way.
+if [ ! -d mcp ] || ! grep -rq "STERNPOST_MAINNET_OK" mcp/src 2>/dev/null; then
+  echo "STALE CALLOUT: MCP package or STERNPOST_MAINNET_OK gate missing from mcp/src — update S26 in docs/THREAT_MODEL.md"
   fail=1
 fi
 

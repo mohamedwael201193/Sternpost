@@ -21,9 +21,9 @@ read-only Radar counts). The mainnet pilot has NOT started — see
 | 3 | previewDraw double count | Fixed in commit `511f18b` (item 0.1); non-zero pending tests. | [commit 511f18b](https://github.com/mohamedwael201193/Sternpost/commit/511f18b84aefc11c5c034d8609de6c85a79d28da) |
 | 4 | Outside users / agents | **0 outside addresses.** Muster roll is a placeholder. | [Muster placeholder](app/src/app/Dashboard.tsx) |
 | 5 | Source-verify contracts | 0.9 Classic Factory / Governor / SpendWallet / Router: `is_verified: true`, bytecode MATCH. Account contracts: not deployed. | [judges/VERIFY.md](judges/VERIFY.md) |
-| 6 | Reconcile test counts | 256 passed / 0 failed / 2 skipped (non-fork subtotal); 273 passed including fork; account suite 161 / 0 / 3 (six on-main suites; full re-execution log incl. unmerged Shield suite: 175/0/3 — see `judges/forge-account.json`). | [`TESTS.json`](TESTS.json) |
+| 6 | Reconcile test counts | 495 passed / 0 failed / 24 skipped (non-fork subtotal); 505 passed including fork (10 testnet fork + 7 mainnet fork passed, 1 mainnet skipped); account suite 164 / 0 / 3 (six on-main suites; full pre-merge re-execution log incl. Shield suite's then-14 tests: 175/0/3 — see `judges/forge-account.json`). | [`TESTS.json`](TESTS.json) |
 | 7 | Fee model | 10 bps per agent draw, immutable, cap 50 bps. No live fee-bearing production draw yet. | [0.9 Factory (fee 10 bps)](https://explorer.test.mezo.org/address/0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8) |
-| 8 | Agent-builder demand | MCP server does not exist; no install count claimed (0). | [threat model S26](docs/THREAT_MODEL.md) |
+| 8 | Agent-builder demand | MCP server exists (`mcp/`, TESTS.json mcp 56 passed / 0 failed / 19 skipped); mainnet is refused without `STERNPOST_MAINNET_OK=1` and a recorded mainnet account — no account is recorded, so mainnet is refused outright today. No install count claimed (0 agents onboarded). | [threat model S26](docs/THREAT_MODEL.md) |
 
 ## Every claim → proof
 
@@ -59,13 +59,18 @@ only if `is_verified == true`.
 
 ## Test counts (read from `TESTS.json`)
 
-- 256 passed / 0 failed / 2 skipped — non-fork subtotal, not "256 in total".
-- 273 passed including fork suites (10 testnet fork + 7 mainnet fork).
-- Account suite, independently re-executed 2026-11-15: 161 passed / 0 failed /
-  3 skipped. 161 = the six account suites on main (`judges/forge-account.json`:
-  161 Success / 0 Failure / 3 Skipped); the full re-execution log also ran
-  the unmerged Shield suite's 14 tests, 175/0/3 in total
-  (`~/workspace/mezo-wave2/work/acct-suite-1.4.log`, outside the repo).
+- 495 passed / 0 failed / 24 skipped — non-fork subtotal, not "495 in total".
+- 505 passed including fork suites (10 testnet fork + 7 mainnet fork passed, 1 mainnet fork skipped).
+- Account suite, independently re-executed 2026-11-15 and updated for the
+  Shield-round Factory tests from the TESTS.json run at 54ae7a9: 164 passed /
+  0 failed / 3 skipped. 164 = the six account suites on main
+  (`judges/forge-account.json`: TroveAccountTest 57, Draw 36, RadarUnit 17,
+  Factory 26, BatcherTest 28, RadarFork 0 passed / 2 skipped); the full
+  pre-merge re-execution log also ran Shield's then-14 tests, 175/0/3 in
+  total (`~/workspace/mezo-wave2/work/acct-suite-1.4.log`, outside the repo).
+  TESTS.json's own account pass is 192/0/5 (unit) — the pin's 164 plus the
+  Shield suite and the Fork/Fuzz files it does not model; the full
+  reconciliation is in `shared/proof.json` accountSuite.reconciliationNote.
 - Do not use "203 tests" or "77/77" — both are stale/wrong.
 
 ## Do-not-claim caveats (print inline, next to the claims)

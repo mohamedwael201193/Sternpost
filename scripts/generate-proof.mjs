@@ -28,26 +28,32 @@
 //     refuses to generate. testsStale is computed from git: any change
 //     under contracts/backend/sdk/app/mcp/keeper/scripts since the commit
 //     TESTS.json was generated from (or any uncommitted change there)
-//     makes the counts stale. After the 0.8 refresh re-runs
-//     `make test-all`, this flips to false on its own.
+//     makes the counts stale. Task 0.8 landed with TESTS.json 54ae7a9
+//     (2026-11-16); sources have moved since, so testsStale is true
+//     again until the next `make test-all` re-run — a new need, not 0.8's.
 //   - accountSuite: the `forge test --match-path "test/account/*"` run on
-//     current main (lead-verified at the closeAccount merge). The run
-//     itself is NOT in TESTS.json (TESTS.json contracts-account is the
-//     older 0.8 slice: 32 passed / 2 skipped — see the reconciliation
-//     note in the output), so the passed/skipped split is a pinned
-//     constant WITH its provenance. What IS reproducible from the tree:
-//     the DECLARED count per file, checked here by counting
-//     `function test*` in contracts/test/account/*.sol (164 declared =
-//     161 passed + 3 skipped). If the tree drifts, generation FAILS and
-//     the operator must re-run the forge command and update the pin.
+//     current main (lead-verified at the closeAccount merge, then updated
+//     for the Shield-round Factory tests from the TESTS.json run at
+//     54ae7a9 — see ACCOUNT_SUITE_PIN.source). The run itself is NOT in
+//     TESTS.json as a per-file split (TESTS.json contracts-account is the
+//     192/0/5 unit slice of the same pass — see the reconciliation note
+//     in the output), so the passed/skipped split is a pinned constant
+//     WITH its provenance. What IS reproducible from the tree: the
+//     DECLARED count per file, checked here by counting `function test*`
+//     in contracts/test/account/*.sol (167 declared = 164 passed +
+//     3 skipped, after the Shield-round Factory +3). If the tree drifts,
+//     generation FAILS and the operator must re-run the forge command
+//     and update the pin.
 //   - contracts (TroveAccountFactory / TroveAccount / Batcher / Radar):
-//     code+tests only until task 1.9 deploys them. The script checks that
-//     the sources exist and that testnet.json carries NO accounts
-//     deployment; if an `accounts` key ever appears there, generation
-//     FAILS — the 1.9 deployment must be wired into this script first,
-//     not silently papered over with a stale status.
+//     DEPLOYED to testnet (task 1.9, then the Shield redeploy from main
+//     3271231, 2026-11-16 — see deployments.accounts). The script reads
+//     their addresses/txs from shared/deployments/testnet.json `accounts`
+//     and refuses if that deployment is missing or malformed. The demo
+//     account is still BLOCKED on funding, so no production §7.4 flow
+//     has run — the proofTable rows stay "not evidenced on main".
 //   - proofTable (§7.4 rows): production rows are "not evidenced on main"
-//     until task 1.9 lands them. The LAB evidence cited per row is a
+//     because no demo-account flow has run (contracts deployed, demo
+//     BLOCKED on funding). The LAB evidence cited per row is a
 //     pinned constant taken from WAVE2_WIN_PLAN.md §4/§7.3 (full hashes
 //     only — the one hash the plan cites truncated, the redemption tx
 //     0xff2ca3c4…d95c, stays truncated and is flagged as such; never
@@ -59,7 +65,7 @@
 // address/tx/block carries its explorer.test.mezo.org URL. No dependency
 // beyond node.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -128,6 +134,34 @@ function scale18(raw) {
 
 function musd(raw) {
   return scale18(raw);
+}
+
+// Count declared `invariant_*` properties in the tree (forge reports one
+// executed entry per invariant contract, so the distinct-declared total
+// adds properties-minus-contracts). Directories are the two that hold
+// invariant contracts; comments are stripped so a commented-out
+// invariant is never counted.
+function countInvariantProperties() {
+  let n = 0;
+  const files = ["contracts/test/account/Invariant.t.sol"];
+  try {
+    for (const f of readdirSync(join(ROOT, "contracts/test/invariant")).filter((x) => x.endsWith(".t.sol"))) {
+      files.push(`contracts/test/invariant/${f}`);
+    }
+  } catch {
+    // No invariant dir: count only the account file (0 if it is absent too).
+  }
+  for (const rel of files) {
+    let text;
+    try {
+      text = readFileSync(join(ROOT, rel), "utf8");
+    } catch {
+      continue;
+    }
+    const clean = text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, "");
+    n += (clean.match(/function\s+invariant_\w*\s*\(/g) ?? []).length;
+  }
+  return n;
 }
 
 // --- TESTS.json: self-validation (mirrors scripts/sync-proof.mjs) --------
@@ -220,19 +254,22 @@ function freshness(tests) {
 // --- Account suite: pinned lead-verified run + static declared-count check
 const ACCOUNT_SUITE_PIN = {
   source:
-    'forge test --match-path "test/account/*" on current main, lead-verified at the closeAccount merge (2026-11-15). ' +
+    'forge test --match-path "test/account/*" on current main, lead-verified at the closeAccount merge (2026-11-15) and ' +
+    "updated for the Shield-round Factory tests from the forge run behind TESTS.json commit 54ae7a9 " +
+    "(~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries: FactoryTest 25 unit + 1 fuzz Success, 0 failed; " +
+    "no account-test file changed between 54ae7a9 and HEAD, so that run covers this tree). " +
     "Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. " +
     "forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH " +
     "— the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked " +
     "against the tree on every run (count of `function test*` per file).",
-  passed: 161,
+  passed: 164,
   failed: 0,
   skipped: 3,
   suites: {
     TroveAccountTest: { file: "TroveAccount.t.sol", passed: 57, failed: 0, skipped: 0 },
     Draw: { file: "TroveAccountDraw.t.sol", passed: 36, failed: 0, skipped: 0 },
     RadarUnit: { file: "Radar.t.sol", passed: 17, failed: 0, skipped: 0 },
-    Factory: { file: "Factory.t.sol", passed: 23, failed: 0, skipped: 0 },
+    Factory: { file: "Factory.t.sol", passed: 26, failed: 0, skipped: 0 },
     BatcherTest: { file: "Batcher.t.sol", passed: 28, failed: 0, skipped: 1 },
     RadarFork: { file: "Radar.t.sol", passed: 0, failed: 0, skipped: 2, note: "fork tests, skipped offline" },
   },
@@ -250,7 +287,7 @@ function checkAccountSuitePin() {
     "TroveAccount.t.sol": 57,
     "TroveAccountDraw.t.sol": 36,
     "Radar.t.sol": 19, // RadarUnit 17 + RadarFork 2 (split comes from the run record)
-    "Factory.t.sol": 23,
+    "Factory.t.sol": 26, // 22 unit + 1 fuzz at the closeAccount merge, + 3 Shield-round cooldown tests (3271231)
     "Batcher.t.sol": 29, // BatcherTest 28 passed + 1 skipped
   };
   const problems = [];
@@ -277,7 +314,7 @@ function checkAccountSuitePin() {
 }
 
 // --- §7.4 production proof table ------------------------------------------
-// Production rows are "not evidenced on main" until task 1.9 lands them.
+// Production rows are "not evidenced on main" because no demo-account flow has run (contracts deployed, demo BLOCKED on funding).
 // Lab evidence is pinned from WAVE2_WIN_PLAN.md §4/§7.3 (full hashes only,
 // except the redemption tx, which the plan cites truncated — flagged, never
 // expanded). Every lab row is labelled "lab, not Wave 2 production".
@@ -293,9 +330,9 @@ const PROOF_TABLE = [
       txUrl: txUrl("0x0a3f4c0de6132f9abb030a8a1a07238ce6e5169cf699e796d9e028906db50545"),
       block: 16790703,
       blockUrl: blockUrl(16790703),
-      what: "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD debt, ICR 1.9255; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)",
+      what: "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD composite principal (NET 1800 MUSD received: 1800 + 1.8 borrowing fee + 200 gas comp), ICR 1.9255 on the composite principal; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)",
     },
-    note: "Production createAndOpen needs task 1.9 (deploy + demo account).",
+    note: "Production createAndOpen needs a demo account: contracts are deployed (deployments.accounts) but the demo account is BLOCKED on funding — no production flow has run.",
     source: "WAVE2_WIN_PLAN.md §4.1",
   },
   {
@@ -310,7 +347,7 @@ const PROOF_TABLE = [
       batchTx: "0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31",
       batchTxUrl: txUrl("0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31"),
     },
-    note: "Production session-open needs task 1.9.",
+    note: "Production session-open needs a demo account (contracts deployed; demo BLOCKED on funding).",
     source: "WAVE2_WIN_PLAN.md §4.3 step 1",
   },
   {
@@ -419,7 +456,7 @@ const PROOF_TABLE = [
       what: "Classic (Wave 1, superseded): draw(900 MUSD) reverted, Unsafe(icrAfter=2.183e18, floor=2.5e18)",
       scope: "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account",
     },
-    note: "Production unsafe-draw simulation needs task 1.9 (eth_call revert BELOW_FLOOR).",
+    note: "Production unsafe-draw simulation needs a demo account (contracts deployed; demo BLOCKED on funding) — eth_call revert BELOW_FLOOR.",
     source: "WAVE2_WIN_PLAN.md §4.5; shared/deployments/testnet.json liveFlow",
   },
   {
@@ -458,7 +495,7 @@ const PROOF_TABLE = [
       what: "Classic (Wave 1, superseded): revoke() + nonce burn, then a draw with the pre-revoke signature reverts BadHeal (nonce burned)",
       scope: "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account",
     },
-    note: "Production revoke-then-draw revert needs task 1.9.",
+    note: "Production revoke-then-draw revert needs a demo account (contracts deployed; demo BLOCKED on funding).",
     source: "WAVE2_WIN_PLAN.md §7.4; shared/deployments/testnet.json liveFlow",
   },
   {
@@ -472,10 +509,11 @@ const PROOF_TABLE = [
       fullHashAvailable: false,
       block: 16791587,
       blockUrl: blockUrl(16791587),
-      what: "Redemption incident: a bot fully redeemed the V3 minimum trove (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral()",
+      what: "Redemption incident: a lab minimum trove was redeemed (block 16791587); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral() (see contracts/src/account/Batcher.sol:144). No explorer link: the redemption tx hash is truncated in every in-repo record.",
+      forkTest: "contracts/test/account/Batcher.t.sol testFork_claimCollateralAfterSimulatedRedemption",
     },
-    note: "The redemption tx hash is cited TRUNCATED in the plan — never expand it. Production claimCollateral needs task 1.9 (or a fork test only, labelled, if no bot cooperates).",
-    source: "WAVE2_WIN_PLAN.md §4.6",
+    note: "The redemption tx hash is cited TRUNCATED in the plan — never expand it. The plan §4.6 figures (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent) and the 'bot' attribution are NOT repeated here: no full hash exists in-repo, so no judge can re-verify them on-chain. Production claimCollateral needs a demo account (contracts deployed; demo BLOCKED on funding) or a fork test only, labelled, if no bot cooperates.",
+    source: "WAVE2_WIN_PLAN.md §4.6 (incident only — figures not repeated, see note); Batcher.sol:144 (0.0105 BTC surplus)",
   },
   {
     id: "close",
@@ -487,7 +525,7 @@ const PROOF_TABLE = [
       tx: null,
       what: "Fork rehearsal only (lab/mainnet/rehearsal_output2.txt, nothing broadcast): close() 324,307 gas then sweepBtc 29,233 gas returned all collateral",
     },
-    note: "Production closeAccount (status 2, BTC/MUSD returned) needs task 1.9.",
+    note: "Production closeAccount (status 2, BTC/MUSD returned) needs a demo account (contracts deployed; demo BLOCKED on funding).",
     source: "WAVE2_WIN_PLAN.md §3.6",
   },
   {
@@ -517,7 +555,7 @@ const PROOF_TABLE = [
       txUrl: txUrl("0x325e0e96cf6225d331891a0e7b1598b8d0ec6b4235fcfd64caf59dc4ffbe13a8"),
       what: "TroveAccountV3 owned by an OrangeKit Safe of a test BTC key",
     },
-    note: "Production Bitcoin-wallet owner path needs task 1.9 + the OrangeKit flow.",
+    note: "Production Bitcoin-wallet owner path needs a demo account (contracts deployed; demo BLOCKED on funding) + the OrangeKit flow.",
     source: "WAVE2_WIN_PLAN.md §7.3",
   },
 ];
@@ -561,14 +599,41 @@ function main() {
     process.exit(1);
   }
 
-  // Task 1.9 gate: the account contracts must NOT be silently claimed
-  // deployed. If an accounts deployment ever lands, this script must be
-  // taught its schema first.
-  if (deploy.sternpost.accounts || deploy.accounts) {
-    console.error(
-      "generate-proof: REFUSING — testnet.json now carries an accounts deployment (task 1.9 landed). " +
-        "Update scripts/generate-proof.mjs to read its addresses/txs before regenerating."
-    );
+  // Task 1.9 landed: the account contracts ARE deployed to testnet
+  // (Shield redeploy from main 3271231, 2026-11-16). Read them from
+  // testnet.json `accounts` — and refuse if that deployment is missing
+  // or malformed, so a dropped key can never silently revert the record
+  // to "code+tests only". Radar/Batcher carry verified:false on the
+  // Blockscout v2 flag (indexer quirk — same bytecode as the verified
+  // 1.9 deployment, source available via v1); their verificationNote is
+  // carried through verbatim, never upgraded to true here.
+  const acc = deploy.accounts;
+  if (!acc || typeof acc !== "object") {
+    console.error("generate-proof: REFUSING — shared/deployments/testnet.json has no `accounts` deployment (task 1.9 record missing)");
+    process.exit(1);
+  }
+  for (const name of ["implementation", "factory", "radar", "batcher"]) {
+    const c = acc[name];
+    if (
+      !c ||
+      typeof c.address !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(c.address) ||
+      typeof c.tx !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(c.tx) ||
+      typeof c.block !== "number" ||
+      typeof c.gasUsed !== "number" ||
+      typeof c.verified !== "boolean"
+    ) {
+      console.error(`generate-proof: REFUSING — testnet.json accounts.${name} is missing address/tx/block/gasUsed/verified`);
+      process.exit(1);
+    }
+  }
+  if (typeof acc.feeBps !== "number" || typeof acc.feeRecipient !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(acc.feeRecipient)) {
+    console.error("generate-proof: REFUSING — testnet.json accounts has no usable feeBps/feeRecipient");
+    process.exit(1);
+  }
+  if (!acc.demo || acc.demo.status !== "BLOCKED") {
+    console.error("generate-proof: REFUSING — testnet.json accounts.demo is not BLOCKED; a demo account would change every §7.4 row — update this script first");
     process.exit(1);
   }
   for (const f of ["TroveAccountFactory.sol", "TroveAccount.sol", "Batcher.sol", "Radar.sol"]) {
@@ -620,10 +685,24 @@ function main() {
 
   // Totals for notes[3]: derived from the validated reconciliation, so
   // the note can never contradict the tests.* values in the same file.
+  // Distinct declared adds the invariant properties forge collapses:
+  // each invariant suite executes as 1 entry but declares N properties,
+  // so the extra is (properties in the tree) − (invariant suites).
   const totalPassed = tests.total.passed;
   const passedInclFork = tests.reconciliation.passedInclFork;
+  const invariantProperties = countInvariantProperties();
+  const invariantSuites = tests.suites.filter((s) => s.kind === "invariant").length;
+  const invariantExtra = invariantProperties - invariantSuites;
+  if (invariantProperties === 0 || invariantExtra < 0) {
+    console.error(
+      `generate-proof: REFUSING — invariant count implausible (properties=${invariantProperties}, suites=${invariantSuites}) — check countInvariantProperties`
+    );
+    process.exit(1);
+  }
   const distinctDeclared =
-    tests.reconciliation.nonForkDeclared + tests.reconciliation.forkDeclared + 2;
+    tests.reconciliation.nonForkDeclared + tests.reconciliation.forkDeclared + invariantExtra;
+  const distinctDeclaredNote =
+    `nonForkDeclared + forkDeclared + ${invariantExtra} (forge counts each invariant suite as 1 executed test; the files declare ${invariantProperties} invariant properties)`;
 
   // Same defect class (J3-F2) in the §7.4 table: the Recovery Mode row
   // used to cite the fork strings as a hardcoded literal. Derive them
@@ -633,7 +712,7 @@ function main() {
     console.error("generate-proof: REFUSING — PROOF_TABLE is missing the recovery-mode-fork-test row");
     process.exit(1);
   }
-  recoveryRow.forkSuites = `TESTS.json fork suites exist (testnet ${forkTestnetStr}, mainnet ${forkMainnetStr}) but do not name a Recovery Mode test — the 0.8 refresh must map test names`;
+  recoveryRow.forkSuites = `TESTS.json fork suites exist (testnet ${forkTestnetStr}, mainnet ${forkMainnetStr}) but do not name a Recovery Mode test — mapping test names is still open (task 0.8 landed with TESTS.json 54ae7a9; the mapping was not part of it)`;
 
   const head = gitHead();
   const proof = {
@@ -647,12 +726,15 @@ function main() {
       "Testnet only (chain 31611). Sternpost is NOT deployed on mainnet; mainnet rows below are fork-tested, never broadcast.",
       // Conditional (J3-F2): the stale text must never be emitted when
       // testsStale is false — it used to be an unconditional literal.
+      // The stale text now carries the live reason (fresh.reason), not
+      // the old 1.3/1.6 wording: task 0.8 landed with TESTS.json 54ae7a9
+      // (2026-11-16), and staleness since then is sources moving again.
       fresh.stale
-        ? "TESTS.json is stale: it predates the 1.3/closeAccount/1.6 merges. testsStale=true until task/0.8-refresh re-runs FORK=1 make test-all."
+        ? `TESTS.json is stale: ${fresh.reason}`
         : "TESTS.json is fresh: no source under contracts/backend/sdk/app/mcp/keeper/scripts changed since the TESTS.json commit and there are no uncommitted changes there; testsStale=false.",
-      "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
+      "Account contracts ARE deployed to testnet (Shield redeploy 2026-11-16, deployments.accounts), but every §7.4 production proof row is still 'not evidenced on main': the demo account is BLOCKED on funding, so no production flow has run. Lab rows are labelled as lab.",
       `total.passed is a NON-FORK subtotal (${totalPassed}). Passed incl. fork is ${passedInclFork}; distinct declared tests are ${distinctDeclared}. Never quote ${totalPassed} as the whole table total.`,
-      "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), MCP existence, previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic.",
+      "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic; the MCP server (mcp/, TESTS.json mcp 56/0/19) is covered by docs/THREAT_MODEL.md S26.",
     ],
     // F3 disclosure: nothing reads this file yet. Wiring Proof.tsx /
     // sync-proof to it is a separate pending task — until then this
@@ -741,6 +823,74 @@ function main() {
         trigger: cr.defend.trigger,
         finalState: cr.defend.finalState,
       },
+      // Task 1.9 + Shield redeploy (testnet.json `accounts`, validated
+      // above). Radar/Batcher carry the Blockscout v2 flag as it reads
+      // (false) with the verificationNote verbatim — never upgraded here.
+      accounts: {
+        task: acc.task,
+        date: acc.date,
+        deployer: acc.deployer,
+        deployerUrl: addrUrl(acc.deployer),
+        feeBps: acc.feeBps,
+        feeRecipient: acc.feeRecipient,
+        feeRecipientUrl: addrUrl(acc.feeRecipient),
+        implementation: {
+          address: acc.implementation.address,
+          addressUrl: addrUrl(acc.implementation.address),
+          tx: acc.implementation.tx,
+          txUrl: txUrl(acc.implementation.tx),
+          block: acc.implementation.block,
+          blockUrl: blockUrl(acc.implementation.block),
+          gasUsed: acc.implementation.gasUsed,
+          blockscoutVerified: acc.implementation.verified,
+        },
+        factory: {
+          address: acc.factory.address,
+          addressUrl: addrUrl(acc.factory.address),
+          tx: acc.factory.tx,
+          txUrl: txUrl(acc.factory.tx),
+          block: acc.factory.block,
+          blockUrl: blockUrl(acc.factory.block),
+          gasUsed: acc.factory.gasUsed,
+          blockscoutVerified: acc.factory.verified,
+          ...(acc.factory.verificationNote ? { verificationNote: acc.factory.verificationNote } : {}),
+        },
+        radar: {
+          address: acc.radar.address,
+          addressUrl: addrUrl(acc.radar.address),
+          tx: acc.radar.tx,
+          txUrl: txUrl(acc.radar.tx),
+          block: acc.radar.block,
+          blockUrl: blockUrl(acc.radar.block),
+          gasUsed: acc.radar.gasUsed,
+          blockscoutVerified: acc.radar.verified,
+          ...(acc.radar.verificationNote ? { verificationNote: acc.radar.verificationNote } : {}),
+        },
+        batcher: {
+          address: acc.batcher.address,
+          addressUrl: addrUrl(acc.batcher.address),
+          tx: acc.batcher.tx,
+          txUrl: txUrl(acc.batcher.tx),
+          block: acc.batcher.block,
+          blockUrl: blockUrl(acc.batcher.block),
+          gasUsed: acc.batcher.gasUsed,
+          blockscoutVerified: acc.batcher.verified,
+          ...(acc.batcher.verificationNote ? { verificationNote: acc.batcher.verificationNote } : {}),
+        },
+        bytecodeMatch: acc.bytecodeMatch,
+        compiler: acc.compiler,
+        totalGasUsed: acc.totalGasUsed,
+        demo: { status: acc.demo.status, reason: acc.demo.reason },
+        previousDeployment: {
+          date: acc.previous.date,
+          task: acc.previous.task,
+          implementation: acc.previous.implementation.address,
+          factory: acc.previous.factory.address,
+          radar: acc.previous.radar.address,
+          batcher: acc.previous.batcher.address,
+          source: "docs/proof/accounts-2026-11-15.md (task 1.9 record)",
+        },
+      },
     },
     tests: {
       source: "TESTS.json",
@@ -751,14 +901,12 @@ function main() {
       stale: fresh.stale,
       testsStale: fresh.stale,
       staleReason: fresh.stale ? fresh.reason : null,
-      refreshPending: "task/0.8-refresh",
       total: { passed: tests.total.passed, failed: tests.total.failed, skipped: tests.total.skipped },
       nonForkDeclared: tests.reconciliation.nonForkDeclared,
       forkDeclared: tests.reconciliation.forkDeclared,
       passedInclFork,
       distinctDeclared,
-      distinctDeclaredNote:
-        "nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties)",
+      distinctDeclaredNote,
       contracts: contractsTotal,
       suites: Object.fromEntries(tests.suites.map((x) => [x.name, suite(x.name)])),
       reconciliationNote:
@@ -776,18 +924,22 @@ function main() {
         ])
       ),
       reconciliationNote:
-        "NOT a subset of TESTS.json: TESTS.json contracts-account (32 passed / 2 skipped) is the older 0.8 suite slice. " +
-        "The 0.8 refresh (task/0.8-refresh) must reconcile the two counts; until then both are reported with their sources.",
+        "Reconciled against TESTS.json (commit 54ae7a9): TESTS.json contracts-account (unit) 192 passed / 0 failed / 5 skipped = " +
+        "pin unit 162 (57 + 36 + 17 + 25 Factory unit + 27 Batcher unit) + TroveAccountShieldTest unit 27 + TroveAccountFuzzTest unit 3; " +
+        "skipped 5 = pin 3 (Batcher 1 + RadarFork 2) + Shield 1 (testFork_shieldOnLiveMezoPath, fork-gated) + Fork 1 (collapsed setUp skip for 8 testFork_ fns). " +
+        "TESTS.json contracts-fuzz-account 15 = pin fuzz 2 (Factory 1 + Batcher 1) + TroveAccountFuzzTest 12 + Shield 1; " +
+        "contracts-invariant-account 1 = TroveAccountInvariantTest (10 properties, 1 forge entry). " +
+        "Verified from the forge run behind TESTS.json (~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries).",
       staticCheck:
-        "Declared counts re-checked against contracts/test/account/*.sol on every generation (164 declared = 161 passed + 3 skipped).",
-      // J2-F1 scope (P3 docs): 161 is the six on-main suites; the
-      // independent re-execution log also ran the unmerged Shield
-      // suite's 14 tests (full run 175/0/3). The artifact is committed
-      // at judges/forge-account.json.
+        "Declared counts re-checked against contracts/test/account/*.sol on every generation (167 declared = 164 passed + 3 skipped).",
+      // J2-F1 scope (P3 docs): 164 is the six on-main suites (Factory
+      // 26 after the Shield-round +3); the independent pre-merge
+      // re-execution log also ran Shield's then-14 tests (full run
+      // 175/0/3). The artifact is committed at judges/forge-account.json.
       scopeNote:
-        "161 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 23, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent re-execution log also ran the unmerged Shield suite's 14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
+        "164 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 26, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent pre-merge re-execution log also ran Shield's then-14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
       artifact:
-        "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped.",
+        "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped (pre-Factory-+3; current pin is 164/0/3).",
       fullRunWithUnmergedShield: {
         passed: 175,
         failed: 0,
@@ -808,28 +960,46 @@ function main() {
     },
     contracts: {
       troveAccountFactory: {
-        status: "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+        status: "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
         source: "contracts/src/account/TroveAccountFactory.sol",
-        deployedAddress: null,
-        deployTx: null,
+        deployedAddress: acc.factory.address,
+        deployedAddressUrl: addrUrl(acc.factory.address),
+        deployTx: acc.factory.tx,
+        deployTxUrl: txUrl(acc.factory.tx),
+        deployBlock: acc.factory.block,
+        blockscoutVerified: acc.factory.verified,
       },
       troveAccount: {
-        status: "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+        status: "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
         source: "contracts/src/account/TroveAccount.sol",
-        deployedAddress: null,
-        deployTx: null,
+        deployedAddress: acc.implementation.address,
+        deployedAddressUrl: addrUrl(acc.implementation.address),
+        deployTx: acc.implementation.tx,
+        deployTxUrl: txUrl(acc.implementation.tx),
+        deployBlock: acc.implementation.block,
+        blockscoutVerified: acc.implementation.verified,
       },
       batcher: {
-        status: "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+        status: "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
         source: "contracts/src/account/Batcher.sol",
-        deployedAddress: null,
-        deployTx: null,
+        deployedAddress: acc.batcher.address,
+        deployedAddressUrl: addrUrl(acc.batcher.address),
+        deployTx: acc.batcher.tx,
+        deployTxUrl: txUrl(acc.batcher.tx),
+        deployBlock: acc.batcher.block,
+        blockscoutVerified: acc.batcher.verified,
+        ...(acc.batcher.verificationNote ? { verificationNote: acc.batcher.verificationNote } : {}),
       },
       radar: {
-        status: "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+        status: "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
         source: "contracts/src/account/Radar.sol",
-        deployedAddress: null,
-        deployTx: null,
+        deployedAddress: acc.radar.address,
+        deployedAddressUrl: addrUrl(acc.radar.address),
+        deployTx: acc.radar.tx,
+        deployTxUrl: txUrl(acc.radar.tx),
+        deployBlock: acc.radar.block,
+        blockscoutVerified: acc.radar.verified,
+        ...(acc.radar.verificationNote ? { verificationNote: acc.radar.verificationNote } : {}),
       },
     },
     proofTable: PROOF_TABLE,
@@ -951,7 +1121,7 @@ function main() {
   writeFileSync(outPath, out);
   console.log(
     `generate-proof: wrote shared/proof.json (sourceCommit ${String(head).slice(0, 7)}, testsCommit ${proof.tests.testsCommit}, testsStale=${proof.tests.testsStale}, ` +
-      `tests ${proof.tests.total.passed}/${proof.tests.distinctDeclared} declared, accountSuite ${proof.accountSuite.passed}/164, ` +
+      `tests ${proof.tests.total.passed}/${proof.tests.distinctDeclared} declared, accountSuite ${proof.accountSuite.passed}/${proof.accountSuite.passed + proof.accountSuite.failed + proof.accountSuite.skipped}, ` +
       `proofTable ${PROOF_TABLE.filter((r) => r.status === "not evidenced on main").length}/${PROOF_TABLE.length} rows not evidenced on main)`
   );
 }
