@@ -124,11 +124,25 @@ describe("GET /v1/preview-draw", () => {
     expect(r.status).toBe(402);
     expect((await r.json()).accepts[0].amount).toBe("1000000000000000");
   });
-  it("returns 400 for missing params after payment is presented", async () => {
-    const { app } = await testApp({ gateway: gw() });
+  it("returns 400 for missing params before any payment, without settling", async () => {
+    const fetchFn = fac({ isValid: true, payer }, { success: true, transaction: TX });
+    const { app, db } = await testApp({ gateway: gw({ pay: { facilitatorUrl: "https://fac.test", network: "eip155:31611", asset: MUSD, payTo: PAYTO, fetchFn } }) });
+    // Payment signature presented AND params malformed: validation runs before
+    // the paywall, so the facilitator is never called and no receipt is stored.
     const r = await app.request("/v1/preview-draw?account=0x1234", { headers: hdr });
     expect(r.status).toBe(400);
     expect((await r.json()).error).toBe("invalid_params");
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect((await db.query("SELECT count(*)::int AS n FROM receipts")).rows[0].n).toBe(0);
+  });
+  it("returns 400 for missing params with no payment signature at all", async () => {
+    const fetchFn = fac({ isValid: true, payer }, { success: true, transaction: TX });
+    const { app, db } = await testApp({ gateway: gw({ pay: { facilitatorUrl: "https://fac.test", network: "eip155:31611", asset: MUSD, payTo: PAYTO, fetchFn } }) });
+    const r = await app.request("/v1/preview-draw?account=0x1234");
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe("invalid_params");
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect((await db.query("SELECT count(*)::int AS n FROM receipts")).rows[0].n).toBe(0);
   });
   it("serves the preview result after payment", async () => {
     const { app } = await testApp({ gateway: gw() });
@@ -159,11 +173,25 @@ describe("POST /v1/risk-report", () => {
     expect(r.status).toBe(402);
     expect((await r.json()).accepts[0].amount).toBe("10000000000000000");
   });
-  it("returns 400 for a malformed account after payment is presented", async () => {
-    const { app } = await testApp({ gateway: gw() });
+  it("returns 400 for a malformed account before any payment, without settling", async () => {
+    const fetchFn = fac({ isValid: true, payer }, { success: true, transaction: TX });
+    const { app, db } = await testApp({ gateway: gw({ pay: { facilitatorUrl: "https://fac.test", network: "eip155:31611", asset: MUSD, payTo: PAYTO, fetchFn } }) });
+    // Payment signature presented AND body malformed: validation runs before
+    // the paywall, so the facilitator is never called and no receipt is stored.
     const r = await app.request("/v1/risk-report", { ...body, headers: { ...body.headers, ...hdr }, body: JSON.stringify({ account: "nope" }) });
     expect(r.status).toBe(400);
     expect((await r.json()).error).toBe("invalid_params");
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect((await db.query("SELECT count(*)::int AS n FROM receipts")).rows[0].n).toBe(0);
+  });
+  it("returns 400 for a malformed account with no payment signature at all", async () => {
+    const fetchFn = fac({ isValid: true, payer }, { success: true, transaction: TX });
+    const { app, db } = await testApp({ gateway: gw({ pay: { facilitatorUrl: "https://fac.test", network: "eip155:31611", asset: MUSD, payTo: PAYTO, fetchFn } }) });
+    const r = await app.request("/v1/risk-report", { ...body, body: JSON.stringify({ account: "nope" }) });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe("invalid_params");
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect((await db.query("SELECT count(*)::int AS n FROM receipts")).rows[0].n).toBe(0);
   });
   it("serves the risk report after payment", async () => {
     const { app, db } = await testApp({ gateway: gw() });

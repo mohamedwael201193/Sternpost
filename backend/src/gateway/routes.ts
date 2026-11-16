@@ -38,6 +38,43 @@ function requireAddress(param: string) {
   };
 }
 
+/**
+ * Preview-draw query params are validated BEFORE the paywall, mirroring
+ * requireAddress: a malformed request is a 400 and is never charged
+ * (J3 F1, round re-check — the old in-handler check ran after settlement).
+ */
+function requirePreviewParams() {
+  return async (c: Context, next: () => Promise<void>) => {
+    const q = c.req.query();
+    const account = q.account ?? "";
+    const agent = q.agent ?? "";
+    const payee = q.payee ?? "";
+    const amount = q.amount ?? "";
+    if (!ADDR.test(account) || !ADDR.test(agent) || !ADDR.test(payee) || !AMOUNT.test(amount)) {
+      return c.json({ error: "invalid_params", want: "?account=0x..&agent=0x..&payee=0x..&amount=<MUSD wei>" }, 400);
+    }
+    await next();
+  };
+}
+
+/**
+ * Risk-report body is validated BEFORE the paywall, mirroring
+ * requireAddress: a malformed body is a 400 and is never charged
+ * (J3 F1, round re-check). The parsed body is stashed on the context so
+ * the handler does not re-parse it.
+ */
+function requireRiskBody() {
+  return async (c: Context, next: () => Promise<void>) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const account = (body as { account?: unknown } | null)?.account;
+    if (typeof account !== "string" || !ADDR.test(account)) {
+      return c.json({ error: "invalid_params", want: '{ "account": "0x.." }' }, 400);
+    }
+    c.set("riskBody" as never, body);
+    await next();
+  };
+}
+
 export function gatewayRoutes(db: Db, o: GatewayOpts) {
   const r = new Hono();
 
@@ -84,16 +121,14 @@ export function gatewayRoutes(db: Db, o: GatewayOpts) {
 
   r.get(
     "/preview-draw",
+    requirePreviewParams(),
     x402Paywall(db, { ...o.pay, amount: o.amounts.previewDraw, description: GATEWAY_PRICES.previewDraw.description }),
     async (c) => {
       const q = c.req.query();
-      const account = q.account ?? "";
-      const agent = q.agent ?? "";
-      const payee = q.payee ?? "";
-      const amount = q.amount ?? "";
-      if (!ADDR.test(account) || !ADDR.test(agent) || !ADDR.test(payee) || !AMOUNT.test(amount)) {
-        return c.json({ error: "invalid_params", want: "?account=0x..&agent=0x..&payee=0x..&amount=<MUSD wei>" }, 400);
-      }
+      const account = q.account as Address;
+      const agent = q.agent as Address;
+      const payee = q.payee as Address;
+      const amount = q.amount as string;
       const res = await o.reader
         .readPreviewDraw(account as Address, agent as Address, payee as Address, BigInt(amount))
         .catch(() => null);
@@ -119,13 +154,10 @@ export function gatewayRoutes(db: Db, o: GatewayOpts) {
 
   r.post(
     "/risk-report",
+    requireRiskBody(),
     x402Paywall(db, { ...o.pay, amount: o.amounts.riskReport, description: GATEWAY_PRICES.riskReport.description }),
     async (c) => {
-      const body: unknown = await c.req.json().catch(() => null);
-      const account = (body as { account?: unknown } | null)?.account;
-      if (typeof account !== "string" || !ADDR.test(account)) {
-        return c.json({ error: "invalid_params", want: '{ "account": "0x.." }' }, 400);
-      }
+      const account = (c.get("riskBody" as never) as { account: string }).account as Address;
       const risk = await o.reader.readRisk(account as Address).catch(() => null);
       if (!risk) return c.json({ error: "risk_unavailable" }, 502);
       // Recent on-chain activity for this account (indexer) + recent gateway receipts it paid for.
