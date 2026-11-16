@@ -66,8 +66,9 @@ const TEAM = new Set(
 // never silently fall back to the default RPC / output dir. A space-form
 // flag whose next token is missing (last arg) or starts with "--" is
 // treated as missing (default) — that guard is specified and kept.
-// Empty values are NEVER "unset": an empty or whitespace-only value in
-// either form (--rpc=, --out=, --rpc "", --out "", --out " ") is a hard
+// Empty values are NEVER "unset": an empty, whitespace-only, or
+// invisible-character-only value (zero-width chars, NEL) in either form
+// (--rpc=, --out=, --rpc "", --out "", --out " ") is a hard
 // error — reject, never silently trim-and-accept. A value starting
 // with "=" (--rpc==URL, --out==DIR) is a hard error. Any other token
 // (positional, or a single-dash typo such as -rpc) is a hard error:
@@ -83,7 +84,11 @@ function fail(msg) {
   process.exit(1);
 }
 function checkValue(flag, value) {
-  if (value.trim() === "") {
+  // Reject values with no visible character: String trim() misses
+  // zero-width characters (U+200B–U+200D, U+2060, U+FEFF, U+180E) and
+  // NEL (U+0085), which would otherwise pass as a value and create an
+  // invisible directory / nonsense RPC. Reject, never trim-and-accept.
+  if (value.replace(/[\s\u200B-\u200D\u2060\uFEFF\u0085\u180E]/g, "") === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
   }
   if (value.startsWith("=")) {
@@ -129,10 +134,13 @@ const GOVERNOR_BLOCK = DEPLOYMENTS.sternpost.classicRedeploy.governor.block;
 const EXPLORER = DEPLOYMENTS.explorer;
 
 async function rpc(method, params) {
+  // 15 s timeout: without a signal a stalled / unresolvable RPC hangs
+  // forever instead of failing cleanly.
   const res = await fetch(RPC, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`RPC ${method} HTTP ${res.status}`);
   const json = await res.json();
@@ -140,8 +148,38 @@ async function rpc(method, params) {
   return json.result;
 }
 
-const hexToInt = (h) => parseInt(h, 16);
+// A block number must be a 0x hex string. parseInt(null, 16) /
+// parseInt("0x", 16) is NaN, which previously sailed through and
+// published a false "0 outside addresses" report stamped "latest NaN".
+// hexToInt throws on anything else, so callers inside the try fail cleanly.
+const isHex = (h) => typeof h === "string" && /^0x[0-9a-fA-F]+$/.test(h);
+const hexToInt = (h) => {
+  if (!isHex(h)) throw new Error(`invalid hex block number: ${JSON.stringify(h)}`);
+  return parseInt(h, 16);
+};
 const topicAddr = (t) => ("0x" + t.slice(-40)).toLowerCase();
+
+// Every log the RPC returns must carry the fields the report reads:
+// at least 2 topics, a transactionHash and a hex blockNumber. A stub /
+// broken node returning a short or partial log used to crash the row
+// builder with an uncaught TypeError; validate first, fail cleanly.
+function validateLog(l) {
+  if (!l || typeof l !== "object") throw new Error("malformed log: not an object");
+  if (
+    !Array.isArray(l.topics) ||
+    l.topics.length < 2 ||
+    typeof l.topics[0] !== "string" ||
+    typeof l.topics[1] !== "string"
+  ) {
+    throw new Error("malformed log: topics must have at least 2 entries");
+  }
+  if (typeof l.transactionHash !== "string" || l.transactionHash === "") {
+    throw new Error("malformed log: missing transactionHash");
+  }
+  if (!isHex(l.blockNumber)) {
+    throw new Error(`malformed log: missing or invalid blockNumber ${JSON.stringify(l.blockNumber)}`);
+  }
+}
 
 // Windowed eth_getLogs (testnet RPCs cap ranges; 2,000 blocks per call).
 async function getLogs(address, topics, fromBlock, toBlock) {
@@ -157,6 +195,9 @@ async function getLogs(address, topics, fromBlock, toBlock) {
         toBlock: "0x" + to.toString(16),
       },
     ]);
+    if (!Array.isArray(logs)) {
+      throw new Error("RPC eth_getLogs: result is not an array");
+    }
     out.push(...logs);
   }
   return out;
@@ -164,9 +205,20 @@ async function getLogs(address, topics, fromBlock, toBlock) {
 
 const date = new Date().toISOString().slice(0, 10);
 
-// All top-level RPC work is wrapped so a refused / unreachable /
-// erroring RPC fails cleanly (error: RPC request failed: <cause>),
-// never with an uncaught stack trace.
+const rows = []; // {address, kind, tx, block}
+const seen = new Set();
+function add(address, kind, tx, block) {
+  const a = address.toLowerCase();
+  rows.push({ address: a, kind, tx, block, team: TEAM.has(a) });
+  seen.add(a);
+}
+
+// All top-level RPC work AND the row building that reads the RPC
+// results are wrapped, so a refused / unreachable / erroring RPC —
+// or a malformed log (short topics, missing transactionHash or
+// blockNumber) — fails cleanly (error: RPC request failed: <cause>),
+// never with an uncaught stack trace. Previously the try/catch
+// covered only the awaits; processing ran outside it and crashed.
 let latest;
 let creations;
 let draws;
@@ -187,23 +239,18 @@ try {
     GOVERNOR_BLOCK,
     latest
   );
+
+  for (const l of creations) {
+    validateLog(l);
+    const kind = l.topics[0] === TOPICS.GovernorCreated ? "GovernorCreated" : "SpendWalletCreated";
+    add(topicAddr(l.topics[1]), kind, l.transactionHash, hexToInt(l.blockNumber));
+  }
+  for (const l of draws) {
+    validateLog(l);
+    add(topicAddr(l.topics[1]), "Drawn(app)", l.transactionHash, hexToInt(l.blockNumber));
+  }
 } catch (err) {
   fail(`RPC request failed: ${err.message}`);
-}
-
-const rows = []; // {address, kind, tx, block}
-const seen = new Set();
-function add(address, kind, tx, block) {
-  const a = address.toLowerCase();
-  rows.push({ address: a, kind, tx, block, team: TEAM.has(a) });
-  seen.add(a);
-}
-for (const l of creations) {
-  const kind = l.topics[0] === TOPICS.GovernorCreated ? "GovernorCreated" : "SpendWalletCreated";
-  add(topicAddr(l.topics[1]), kind, l.transactionHash, hexToInt(l.blockNumber));
-}
-for (const l of draws) {
-  add(topicAddr(l.topics[1]), "Drawn(app)", l.transactionHash, hexToInt(l.blockNumber));
 }
 
 const outside = [...new Set(rows.filter((r) => !r.team).map((r) => r.address))];
@@ -258,9 +305,13 @@ ${outside.map((a) => `- \`${a}\``).join("\n") || "_(none)_"}
 `;
 
 const outDir = outArg || path.join(ROOT, "docs/proof");
-mkdirSync(outDir, { recursive: true });
 const outPath = path.join(outDir, `users-${date}.md`);
-writeFileSync(outPath, md);
+try {
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(outPath, md);
+} catch (err) {
+  fail(`cannot write report to ${outPath}: ${err.message}`);
+}
 
 console.log(`chain: Mezo testnet 31611 (${RPC})`);
 console.log(`blocks: factory ${FACTORY_BLOCK}, governor ${GOVERNOR_BLOCK}, latest ${latest}`);
