@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-15T11:39:26.721Z",
-  "commit": "7b1ffcde1d814ae4ea64568ffbe374307d43f9da",
+  "generatedAt": "2026-11-16T00:19:07.777Z",
+  "commit": "c5f0a325c82306632c73476b363931d5b5afd69c",
   "inputs": {
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b"
   },
@@ -32,14 +32,22 @@
     {
       "name": "contracts-account",
       "kind": "unit",
-      "passed": 32,
+      "passed": 192,
       "failed": 0,
-      "skipped": 2,
+      "skipped": 5,
       "status": "completed"
     },
     {
       "name": "contracts-fuzz-account",
       "kind": "fuzz",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "status": "completed"
+    },
+    {
+      "name": "contracts-invariant-account",
+      "kind": "invariant",
       "passed": 1,
       "failed": 0,
       "skipped": 0,
@@ -83,7 +91,7 @@
     {
       "name": "sdk",
       "kind": "unit",
-      "passed": 10,
+      "passed": 12,
       "failed": 0,
       "skipped": 0,
       "status": "completed"
@@ -91,7 +99,7 @@
     {
       "name": "backend",
       "kind": "unit",
-      "passed": 74,
+      "passed": 80,
       "failed": 0,
       "skipped": 0,
       "status": "completed"
@@ -107,11 +115,10 @@
     {
       "name": "mcp",
       "kind": "unit",
-      "passed": 0,
+      "passed": 56,
       "failed": 0,
-      "skipped": 0,
-      "status": "missing",
-      "note": "mcp package does not exist yet"
+      "skipped": 19,
+      "status": "completed"
     },
     {
       "name": "keeper",
@@ -124,15 +131,15 @@
     }
   ],
   "total": {
-    "passed": 256,
+    "passed": 495,
     "failed": 0,
-    "skipped": 2
+    "skipped": 24
   },
   "reconciliation": {
-    "nonForkDeclared": 258,
+    "nonForkDeclared": 519,
     "forkDeclared": 10,
-    "passedInclFork": 273,
-    "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties). Do not read total.passed as 'N in total'."
+    "passedInclFork": 512,
+    "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). Do not read total.passed as 'N in total'."
   },
   "forkNote": "fork suites listed separately, never added twice"
 }

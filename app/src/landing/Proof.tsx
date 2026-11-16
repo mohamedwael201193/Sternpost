@@ -1,12 +1,12 @@
 import { PROOFS, txUrl } from '../lib/proofs'
 import { Plate, Reveal } from './Plate'
 
-// Counted by running each suite on 2026-11-15; see README "Tests".
+// Counted by running each suite on 2026-11-16; see README "Tests".
 const COUNTS = [
-  ['137', 'Contract tests: unit, fuzz, invariant'],
+  ['312', 'Contract tests: unit, fuzz, invariant'],
   ['17', 'Fork tests on live Mezo testnet + mainnet'],
-  ['74', 'Backend tests (API, x402, bot)'],
-  ['45', 'SDK + app unit tests'],
+  ['80', 'Backend tests (API, x402, bot)'],
+  ['47', 'SDK + app unit tests'],
   ['16', 'Txs in the live testnet flow'],
 ] as const
 

@@ -10,7 +10,7 @@
 [![sdk](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml)
 [![backend](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml)
 [![CodeQL](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml)
-[![tests](https://img.shields.io/badge/tests-256%20passing-2ea44f)](#tests)
+[![tests](https://img.shields.io/badge/tests-495%20passing-2ea44f)](#tests)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [**Live app**](https://sternpost-pink.vercel.app) · [**Deck**](https://sternpost-deck.vercel.app) · [**Demo video**](https://youtu.be/EyLSaYiIX5M) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
@@ -174,16 +174,16 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Counts are from [`TESTS.json`](TESTS.json) @ [`3374eee`](https://github.com/mohamedwael201193/Sternpost/commit/3374eee7ae2f6d35b88e00fbb5182e9033825551) (generated 2026-11-15 11:39 UTC; refresh pending) — **256 passing (non-fork subtotal; E2E not counted)**, **270 distinct** declared (258 non-fork + 10 fork + 2 invariant properties), **273 incl. fork** (256 + 10 testnet + 7 mainnet). The account suite was re-verified separately (row below) — the **137** and **161** rows are different snapshots, not one run: 137 is the TESTS.json contracts total (account 33 inside it), while 161 is the later account-suite re-verification @ `6c69ab2`. Note on the citation: the `commit` field embedded inside `TESTS.json` still records `7b1ffcd`, the pre-landing run commit, which does not resolve in this repository's history; `3374eee` is the commit that landed the file, and the counts above are from the file as landed at `3374eee`.
+Counts are from [`TESTS.json`](TESTS.json) @ [`c5f0a32`](https://github.com/mohamedwael201193/Sternpost/commit/c5f0a325c82306632c73476b363931d5b5afd69c) (generated 2026-11-16; the `commit` field inside `TESTS.json` records `c5f0a32`) — **495 passing (non-fork subtotal; E2E not counted)**, **540 distinct** declared (519 non-fork + 10 fork + 11 invariant properties), **512 incl. fork** (495 + 10 testnet + 7 mainnet). The account suite was re-verified separately (row below) — the **312** and **161** rows are different snapshots, not one run: 312 is the TESTS.json contracts total (account 208 inside it: 192 unit + 15 fuzz + 1 invariant), while 161 is the later account-suite re-verification @ `6c69ab2`.
 
 | Suite | Command | Result |
 |---|---|---|
-| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **137 passing** ([TESTS.json](TESTS.json) @ `3374eee`; refresh pending) — Governor 31 + 15 branch + 4 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5 (unit), RouterSlippage 8, Reentrancy 1, invariants 2, account 33 (32 + 1 fuzz) |
+| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **312 passing** ([TESTS.json](TESTS.json) @ `3374eee`; refresh pending) — Governor 31 + 15 branch + 4 fuzz, Router 25 + 3 fuzz, SpendWallet 10, Factory 5 (unit), RouterSlippage 8, Reentrancy 1, invariants 2, account 33 (32 + 1 fuzz) |
 | Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **161 passed, 0 failed, 3 skipped** ([`6c69ab2`](https://github.com/mohamedwael201193/Sternpost/commit/6c69ab2bb415fed73db960b768ced0737bfda80b); [artifact](judges/forge-account.json)) — TroveAccountTest 57/57, Draw 36, RadarUnit 17, FactoryTest 23/23, BatcherTest 28 (+1 skipped), RadarFork 2 skipped |
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/10** (3 skipped — Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
-| SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **10/10** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **74 passed of 80 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) was not in the TESTS.json run, so only 74 executed; the 6 pass standalone |
+| SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **12/12** |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **80 passed of 80 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) was not in the TESTS.json run, so only 74 executed; the 6 pass standalone |
 | App unit | `cd app && npx vitest run` | **35/35** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |
