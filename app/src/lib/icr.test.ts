@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WAD, icr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
+import { WAD, icr, icrPct, isNoDebtIcr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
 
 const price = 100_000n * WAD // $100k BTC
 const coll = WAD // 1 BTC
@@ -11,6 +11,14 @@ describe('icr math', () => {
   })
   it('treats zero debt as no debt, not an unexplained infinity', () => {
     expect(pct(icr(coll, price, 0n))).toBe('No debt')
+  })
+  it('icrPct mirrors pct: a zero-debt ICR is null, never 999 (L12)', () => {
+    expect(icrPct(icr(coll, price, 0n))).toBeNull()
+    expect(isNoDebtIcr(icr(coll, price, 0n))).toBe(true)
+    expect(icrPct(icr(coll, price, debt))).toBeCloseTo(400, 9)
+    expect(icrPct(undefined)).toBeNull()
+    expect(icrPct(null)).toBeNull()
+    expect(isNoDebtIcr(icr(coll, price, debt))).toBe(false)
   })
   it('accepts a draw that stays above the floor', () => {
     const v = judgeDraw({ coll, price, debt, amount: 1_000n * WAD, fee: 0n, floor: 3n * WAD })

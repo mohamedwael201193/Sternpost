@@ -5,7 +5,7 @@ import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useViewedAccount } from '../useAccount'
 import { fmt, pct } from '../../lib/icr'
-import { DEMO_ACCOUNT_BADGE } from '../../lib/chain'
+import { DEMO_ACCOUNT_BADGE, LAB_DEMO_ACCOUNT } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -32,7 +32,7 @@ function OpenAccountCard({ address, title, badge, note }: { address: Address; ti
       ) : a ? (
         <div className="text-sm space-y-2">
           <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(address)} target="_blank" rel="noreferrer">{address} ↗</a></div>
-          <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></div>
+          <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : a.troveStatus === null ? 'Unavailable' : 'not active'}</b></div>
           <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
           <p className="text-muted">{note}</p>
         </div>
@@ -48,7 +48,16 @@ export default function Open() {
   // the user's own — show their own account, or the no-account CTA (§6.4.1).
   const preview = viewed.source === 'param'
   const own = useOwnAccount(!viewed.demoMode && isConnected ? walletAddress : undefined)
-  const firstCard = !viewed.demoMode
+  // LOW-3: hold the demo branch while wagmi reconnects on a hard load —
+  // show a skeleton, never demo numbers for a wallet that is coming back.
+  // An explicit ?account= preview shows at once.
+  const firstCard = viewed.reconnecting && !preview
+    ? (
+      <Card title="Your account — live on testnet">
+        <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+      </Card>
+    )
+    : !viewed.demoMode
     ? own.isLoading
       ? (
         <Card title="Your account — live on testnet">
@@ -68,7 +77,7 @@ export default function Open() {
               <p className="text-sm text-muted mt-2">Start with step 1 below — open a trove on Mezo testnet, then create your Governor here.</p>
             </Card>
           )
-          : <OpenAccountCard address={own.data} title="Your account — live on testnet" note="This is your account, read live from Mezo testnet. One-transaction open would create an account like this one for you." />
+          : <OpenAccountCard address={own.data} title="Your account — live on testnet" badge={own.data === LAB_DEMO_ACCOUNT ? DEMO_ACCOUNT_BADGE : null} note="This is your account, read live from Mezo testnet. One-transaction open would create an account like this one for you." />
     : (
       <OpenAccountCard
         address={viewed.address}

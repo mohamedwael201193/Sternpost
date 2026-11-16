@@ -9,19 +9,20 @@ import { Token } from '../../ui/Token'
 import { Skeleton } from '../../ui/Skeleton'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove, TROVE_STATUS_LABEL } from '../useTrove'
-import { RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, pct, WAD } from '../../lib/icr'
+import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useRadar, useViewedAccount } from '../useAccount'
+import { fmt, icrPct, isNoDebtIcr, pct, WAD } from '../../lib/icr'
 import { DEMO_ACCOUNT_BADGE, STERNPOST } from '../../lib/chain'
 import { factoryAbi } from '../../lib/abi'
 import { addrUrl } from '../../lib/proofs'
 import { useApiList } from '../api'
 
-const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
-
 export default function Home() {
   const t = useTrove()
   const viewed = useViewedAccount()
   const demo = viewed.demoMode
+  // J1 LOW-c: a connected wallet without a credit account gets the same
+  // no-account CTA as Close/Open (same text, links to /app/open).
+  const own = useOwnAccount(!demo && t.isConnected ? t.address : undefined)
   // Demo mode: every number below is a live read of the public demo account (plan §6.3).
   const acct = useAccount(demo ? viewed.address : undefined)
   const radar = useRadar('testnet', demo ? viewed.address : undefined)
@@ -36,7 +37,9 @@ export default function Home() {
   // The top error plate covers EITHER failed read: a radar failure must not
   // pass silently (it hides the Recovery banner). The numbers below gate
   // only on the account read — a radar failure leaves them readable.
-  const rpcError = demo ? acct.isError || radar.isError : false
+  // LOW-8: outside demo mode a failed useTrove core read shows this plate
+  // (t.error), never a silent 'No trove'/'No Governor' empty.
+  const rpcError = demo ? acct.isError || radar.isError : t.error
   const acctError = demo ? acct.isError : false
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
   const troveStatus = demo ? a?.troveStatus : t.troveStatus
@@ -91,7 +94,7 @@ export default function Home() {
             {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
-              <Dial value={hasTrove ? toPct(icrV) : null} floor={toPct(floorV) ?? undefined} size={240} />
+              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={isNoDebtIcr(icrV) ? 'No debt' : undefined} />
             )}
           </div>
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
@@ -105,7 +108,7 @@ export default function Home() {
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
               ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
-              : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
+              : t.error ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
                 ? <span className="text-magenta">Floor {pct(a.floorICR)} · shield {pct(a.shieldICR)}</span>
@@ -126,15 +129,18 @@ export default function Home() {
               <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} />
               <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : floorV ? pct(floorV) : 'Not configured'} />
-              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : a?.needed ? (a.needed.repayWanted > 0n || a.needed.collWanted > 0n ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed') : acctError ? 'Unavailable' : 'No policy'} />
+              {/* LOW-5: "No policy" gates on shieldICR (like Watch), never on
+                  `needed` — a failed needed() view slot leaves needed null
+                  even when the policy exists. */}
+              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : acctError ? 'Unavailable' : a?.shieldICR == null ? 'No policy' : a?.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
               <Row k="Account owner" v={loading ? <Skeleton className="h-4 w-32" /> : a?.owner ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(a.owner)} target="_blank" rel="noreferrer">{a.owner.slice(0, 6)}…{a.owner.slice(-4)}</a> : 'Unknown'} />
             </>
           ) : (
             <>
               <Row k="Plotted course" v={t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
-              <Row k="Collateral" v={t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
-              <Row k="Debt" v={t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Collateral" v={t.error ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
+              <Row k="Debt" v={t.error ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
+              <Row k="Floor" v={t.error ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
               <Row k="Standby heal" v={t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
               <Row k="Mezo nonce" v={t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
@@ -162,7 +168,11 @@ export default function Home() {
             </Card>
           ) : (
             <NeedsWallet what="read your trove">
-              {!t.loading && !t.hasTrove && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
+              {!t.loading && !t.hasTrove && !t.error && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
+              {t.error && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
+              {own.data === null && !own.isLoading && !own.isError && (
+                <p className="text-sm leading-relaxed mt-6">You have no credit account yet. Open one in about two minutes. <Link className="pill" to="/app/open">Open a credit account →</Link></p>
+              )}
               {t.hasTrove && (
                 <Card title="Wallet balances">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -187,7 +197,7 @@ export default function Home() {
                 <div className="text-sm space-y-2">
                   <a className="ink-link mono text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address}</a>
                   {viewed.isLabPrototype && DEMO_ACCOUNT_BADGE && <div><span className="caps rounded-sm border border-ink/40 px-2 py-0.5 text-[10px]">{DEMO_ACCOUNT_BADGE}</span></div>}
-                  <div>Status: {a.troveStatus === 1 ? <b className="text-safe">active trove</b> : <b>{TROVE_STATUS_LABEL[a.troveStatus ?? 0] ?? 'unknown'}</b>}</div>
+                  <div>Status: {a.troveStatus === 1 ? <b className="text-safe">active trove</b> : a.troveStatus === null ? <b>Unavailable</b> : <b>{TROVE_STATUS_LABEL[a.troveStatus ?? 0] ?? 'unknown'}</b>}</div>
                   <div>Owner: <a className="ink-link mono text-xs" href={addrUrl(a.owner ?? viewed.address)} target="_blank" rel="noreferrer">{a.owner ? `${a.owner.slice(0, 6)}…${a.owner.slice(-4)}` : 'unknown'}</a></div>
                   <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
                   <div>Bounty {a.bounty !== null ? `${fmt(a.bounty)} MUSD` : 'unknown'} per effective shield</div>
@@ -231,7 +241,10 @@ function DemoHero({ acct, viewed }: { acct: ReturnType<typeof useAccount>; viewe
               <dt className="text-muted">Floor</dt><dd className="mono text-right">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield line</dt><dd className="mono text-right">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield target</dt><dd className="mono text-right">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</dd>
-              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.needed ? (a.needed.repayWanted > 0n || a.needed.collWanted > 0n ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none') : 'No policy'}</dd>
+              {/* LOW-5: "No policy" gates on shieldICR (like Watch), never on
+                  `needed` — a failed needed() view slot leaves needed null
+                  even when the policy exists. */}
+              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.shieldICR == null ? 'No policy' : a.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
             </dl>
             <p className="text-xs text-muted mt-4">Read-only: this account belongs to the demo owner. Drawing, defending and closing need the owner wallet.</p>
           </>

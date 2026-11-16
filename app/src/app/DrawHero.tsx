@@ -12,10 +12,9 @@ import { useLimits } from './useLimits'
 import { Limits } from './Limits'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
 import { MEZO, ROUTER } from '../lib/chain'
-import { REASONS, WAD, fmt, pct, projectedIcr } from '../lib/icr'
+import { REASONS, WAD, fmt, icrPct as toPct, pct, projectedIcr } from '../lib/icr'
 import { DRAW_WINDOW_S } from '../lib/sig'
 
-const toPct = (v?: bigint) => (v === undefined ? undefined : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 const ROUTES: [Route, string, string][] = [
   ['keep', 'Keep', 'MUSD goes to your wallet.'],
   ['save', 'Save', 'MUSD goes into Mezo sMUSD savings; the shares are yours.'],
@@ -23,7 +22,7 @@ const ROUTES: [Route, string, string][] = [
   ['loop', 'Loop', 'MUSD is swapped to BTC (1% max slippage) and added back as collateral. The app asks you to re-arm the standby right after.'],
 ]
 const LO = 100, HI = 500
-const pos = (p?: number) => (p === undefined ? 0 : (Math.min(Math.max(p, LO), HI) - LO) / (HI - LO) * 100)
+const pos = (p?: number | null) => (p === undefined || p === null ? 0 : (Math.min(Math.max(p, LO), HI) - LO) / (HI - LO) * 100)
 
 /** The dashboard hero: a single self-submitted draw with a live ratio preview and one Sign & send. */
 export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero({ t }, ref) {
@@ -79,14 +78,14 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
         <div className="relative mt-2 h-2.5 rounded-full bg-ink/10 overflow-visible" role="img" aria-label={`Current ${cur ?? '—'}%, after draw ${aft ?? '—'}%, floor ${flo ?? '—'}%`}>
           <motion.div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ink via-[#A3204F] to-[#FF4D86]"
             initial={reduce ? false : { width: 0 }} animate={{ width: `${pos(cur)}%` }} transition={{ duration: 1, ease: [.2, .8, .2, 1] }} />
-          {aft !== undefined && cur !== undefined && aft < cur && (
+          {aft != null && cur != null && aft < cur && (
             <motion.div className="absolute inset-y-0 bg-[repeating-linear-gradient(45deg,rgba(23,19,15,.35)_0_3px,transparent_3px_6px)] rounded-r-full"
               animate={{ left: `${pos(aft)}%`, width: `${pos(cur) - pos(aft)}%` }} transition={{ type: 'spring', stiffness: 140, damping: 20 }} />
           )}
-          {flo !== undefined && <div className="absolute -top-1.5 -bottom-1.5 w-[2px] bg-signal" style={{ left: `${pos(flo)}%` }} title="Floor" />}
+          {flo != null && <div className="absolute -top-1.5 -bottom-1.5 w-[2px] bg-signal" style={{ left: `${pos(flo)}%` }} title="Floor" />}
         </div>
         <dl className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 mt-3 text-sm">
-          <dt>Current</dt><dd className="mono text-magenta">{flo !== undefined ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right">{t.icr ? pct(t.icr) : '—'}</dd>
+          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right">{t.icr ? pct(t.icr) : '—'}</dd>
           <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${t.floor && after < t.floor ? ' · below floor' : ''}` : '—'}</dd>
           <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>

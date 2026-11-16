@@ -34,7 +34,7 @@ export default function Pay() {
             : acct.data?.owner ? <Wallets owner={acct.data.owner} demo />
             : <Empty title="No spend wallets">The demo account has no known owner.</Empty>
           ) : (
-            <NeedsWallet what="see your spend wallets"><Wallets owner={t.address!} /></NeedsWallet>
+            <NeedsWallet what="see your spend wallets"><Wallets owner={t.address!} demo={false} /></NeedsWallet>
           )}
           <Receipts payer={demo ? viewed.address : undefined} />
         </div>
@@ -52,7 +52,12 @@ export default function Pay() {
   )
 }
 
-function Wallets({ owner, demo = false }: { owner: Address; demo?: boolean }) {
+/**
+ * LOW-4: `demo` defaults to true (read-only) — a future call site that
+ * forgets the prop silently gets a read-only row, never a live pay button.
+ * A live button needs an explicit `demo={false}` opt-out (see Pay above).
+ */
+function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
   const { data: wallets } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
   const list = (wallets ?? []) as Address[]
   const reads = useReadContracts({
@@ -100,7 +105,8 @@ function Receipts({ payer }: { payer?: string }) {
   )
 }
 
-function PayRow({ wallet, agent, demo = false }: { wallet: Address; agent?: Address; demo?: boolean }) {
+/** Exported for the demo=true-default test (demoFixes.test.tsx). */
+export function PayRow({ wallet, agent, demo = true }: { wallet: Address; agent?: Address; demo?: boolean }) {
   const { address } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()

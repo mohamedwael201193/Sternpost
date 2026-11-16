@@ -94,6 +94,8 @@ export function useTrove() {
     nonce: nonce?.result as bigint | undefined,
     balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined, mezo: mezo?.result as bigint | undefined },
     loading: core.isLoading || gov.isLoading,
+    /** The core trove/Governor read failed (LOW-8): callers must show the RPC error, never a 'No trove'/'No Governor' empty. */
+    error: core.isError || gov.isError,
     /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
     sysLoading: sys.isLoading,
     sysError: sys.isError,

@@ -3,15 +3,13 @@ import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
 import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, pct, WAD } from '../../lib/icr'
+import { fmt, icrPct as toPct, isNoDebtIcr, pct } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
 const DEFEND_TX = deployments.sternpost.classicRedeploy.defendTx
 const DEFEND_CALLER = deployments.sternpost.classicRedeploy.defend.caller
 const GOVERNOR = deployments.sternpost.governor
-
-const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
 export default function Watch() {
   const t = useTrove()
@@ -31,7 +29,9 @@ export default function Watch() {
   const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
   const standbyArmed = standbyKnown && !!t.standby?.[3]
   const loading = demo ? acct.isLoading || radar.isLoading : false
-  const rpcError = demo ? acct.isError || radar.isError : false
+  // LOW-8: outside demo mode a failed useTrove core read shows the RPC
+  // error plate (t.error), never a silent 'No trove' empty.
+  const rpcError = demo ? acct.isError || radar.isError : t.error
   // The TCR value comes from the Radar in demo mode but from useTrove's
   // system-health batch otherwise — gate it on the query that provides it,
   // not on the Radar's state in both modes.
@@ -58,7 +58,7 @@ export default function Watch() {
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
           {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
-            <div className="display text-3xl">{rpcError ? 'Unavailable' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
+            <div className="display text-3xl">{rpcError ? 'Unavailable' : demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
           )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
@@ -81,7 +81,7 @@ export default function Watch() {
                     ? `Shield would repay ${fmt(shield!.repayWanted)} MUSD${shield!.collWanted > 0n ? ` and add ${fmt(shield!.collWanted, 18, 6)} BTC` : ''} to reach the ${a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : ''} target`
                     : a?.shieldICR == null
                       ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
-                      : `ICR ${icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
+                      : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
                 </p>
               </>
             )

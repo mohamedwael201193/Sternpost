@@ -5,7 +5,7 @@ import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useRadar, useViewedAccount } from '../useAccount'
 import { fmt, pct } from '../../lib/icr'
-import { DEMO_ACCOUNT_BADGE } from '../../lib/chain'
+import { DEMO_ACCOUNT_BADGE, LAB_DEMO_ACCOUNT } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -19,6 +19,20 @@ export default function Close() {
   // the user's own — show their own account, or the no-account CTA (§6.4.1).
   const preview = viewed.source === 'param'
   const own = useOwnAccount(!viewed.demoMode && isConnected ? walletAddress : undefined)
+  // LOW-3: on a hard load wagmi is still reconnecting, so isConnected is
+  // false and demoMode is true — but the wallet is about to come back. Hold
+  // the demo branch and show a skeleton instead of flashing demo numbers.
+  // An explicit ?account= preview is the user's choice: show it at once.
+  if (viewed.reconnecting && !preview) {
+    return (
+      <div className="space-y-8">
+        <Card title="Your account — live close position">
+          <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+        </Card>
+        <CloseExplainer />
+      </div>
+    )
+  }
   if (!viewed.demoMode) {
     if (own.isLoading) {
       return (
@@ -53,7 +67,7 @@ export default function Close() {
     }
     return (
       <div className="space-y-8">
-        <ClosePosition address={own.data} title="Your account — live close position" readOnlyNote="Closing is owner-only; only the owner wallet can close this account." />
+        <ClosePosition address={own.data} title="Your account — live close position" badge={own.data === LAB_DEMO_ACCOUNT ? DEMO_ACCOUNT_BADGE : null} readOnlyNote="Closing is owner-only; only the owner wallet can close this account." />
         <CloseExplainer />
       </div>
     )
@@ -96,13 +110,15 @@ function ClosePosition({ address, title, badge, readOnlyNote }: { address: Addre
       ) : a ? (
         <div className="text-sm space-y-2">
           <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(address)} target="_blank" rel="noreferrer">{address} ↗</a></div>
-          <div>Trove <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b> · ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
-          <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'unknown'}</b></div>
+          <div>Trove <b>{a.troveStatus === 1 ? 'active' : a.troveStatus === null ? 'Unavailable' : 'not active'}</b> · ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
+          <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'Unavailable'}</b></div>
           {radar.isError && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
           <p className="text-muted">
             {a.troveStatus === 1
               ? `Closing would repay the full ${fmt(a.debt)} MUSD debt from the account's MUSD + sMUSD and return the ${fmt(a.coll, 18, 6)} BTC collateral to the owner.`
-              : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
+              : a.troveStatus === null
+                ? 'The trove status could not be read, so what closeAccount() would do is unknown — the status read failed, it is not "not active".'
+                : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
             {readOnlyNote}
           </p>
         </div>

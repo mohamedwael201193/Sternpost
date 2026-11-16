@@ -10,14 +10,12 @@ import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
-import { REASONS, WAD, pct, projectedIcr } from '../../lib/icr'
+import { REASONS, WAD, icrPct as toPct, pct, projectedIcr } from '../../lib/icr'
 import { DRAW_WINDOW_S } from '../../lib/sig'
 import { addrUrl } from '../../lib/proofs'
 import { useLimits } from '../useLimits'
 import { Limits } from '../Limits'
 import { fmt } from '../../lib/icr'
-
-const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : Number((v * 10000n) / WAD) / 100)
 
 export default function Draw() {
   const t = useTrove()

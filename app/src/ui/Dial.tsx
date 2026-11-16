@@ -9,7 +9,7 @@ const arc = (a0: number, a1: number, r: number) => {
 }
 
 /** Chartroom collateral-ratio dial: hairline bezel, magenta health arc, spring needle, floor mark. Percentages in. */
-export function Dial({ value, floor, size = 260 }: { value: number | null; floor?: number; size?: number }) {
+export function Dial({ value, floor, size = 260, emptyLabel = 'No trove' }: { value: number | null; floor?: number; size?: number; emptyLabel?: string }) {
   const reduce = useReducedMotion()
   const healthy = value != null && (floor == null || value >= floor + 20)
   // Labelled empty states (plan §6.3): never a bare "—" where a number belongs.
@@ -43,7 +43,7 @@ export function Dial({ value, floor, size = 260 }: { value: number | null; floor
       </svg>
       <div className="absolute inset-x-0 top-[50%] text-center pointer-events-none">
         <div className="display leading-none" style={{ fontSize: size * .2 }} data-testid="dial-value">
-          {value == null ? <span style={{ fontSize: size * .085 }}>No trove</span> : <>{value >= 1000 ? '999+' : value.toFixed(0)}<span className="text-magenta" style={{ fontSize: size * .11 }}>%</span></>}
+          {value == null ? <span style={{ fontSize: size * .085 }}>{emptyLabel}</span> : <>{value >= 1000 ? '999+' : value.toFixed(0)}<span className="text-magenta" style={{ fontSize: size * .11 }}>%</span></>}
         </div>
         {state !== '' && (
         <div className={`mt-1 inline-flex items-center gap-1 text-sm ${healthy || value == null ? 'text-ink' : 'text-signal'}`}>

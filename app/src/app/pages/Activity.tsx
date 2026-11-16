@@ -43,24 +43,37 @@ export function groupByTx(rows: Row[]): Group[] {
   return [...m.values()].sort((a, b) => (a.block === b.block ? 0 : a.block < b.block ? 1 : -1))
 }
 
+/**
+ * L11: a row missing a field must render 'unknown', never throw inside
+ * fmt/pct (which would crash the whole Activity render) and never print an
+ * empty address. fmt/pct take bigint; anything else renders 'unknown'.
+ */
+const safeFmt = (v: unknown, decimals = 18, digits = 2): string => (typeof v === 'bigint' ? fmt(v, decimals, digits) : 'unknown')
+const safePct = (v: unknown, digits = 0): string => (typeof v === 'bigint' ? pct(v, digits) : 'unknown')
+const short = (v: unknown): string => (typeof v === 'string' && v ? `${v.slice(0, 8)}…` : 'unknown')
+
 const describe = (name: string, a: any): string => {
   switch (name) {
     // Two Drawn shapes: the Governor's (app, payee, …) and the TroveAccount's (agent, payee, …) — v2 and v3.
-    case 'Drawn': return a.app
-      ? `App ${a.app.slice(0, 8)}… drew ${fmt(a.amount)} MUSD, ICR after ${pct(a.icrAfter)}`
-      : `Agent ${String(a.agent ?? '').slice(0, 8)}… drew ${fmt(a.amount)} MUSD to ${String(a.payee ?? '').slice(0, 8)}…, ICR after ${pct(a.icrAfter)}`
-    case 'AppAuthorized': return `Approved ${a.app.slice(0, 8)}… for ${fmt(a.budget)} MUSD (${fmt(a.perDrawMax)} per draw)`
-    case 'AppRemoved': return `Removed app ${a.app.slice(0, 8)}…`
+    // Neither shape: plain 'unknown' — never "Agent …" with an empty address.
+    case 'Drawn': {
+      if (!a.app && !a.agent) return 'unknown'
+      return a.app
+        ? `App ${short(a.app)} drew ${safeFmt(a.amount)} MUSD, ICR after ${safePct(a.icrAfter)}`
+        : `Agent ${short(a.agent)} drew ${safeFmt(a.amount)} MUSD to ${short(a.payee)}, ICR after ${safePct(a.icrAfter)}`
+    }
+    case 'AppAuthorized': return `Approved ${short(a.app)} for ${safeFmt(a.budget)} MUSD (${safeFmt(a.perDrawMax)} per draw)`
+    case 'AppRemoved': return `Removed app ${short(a.app)}`
     case 'Revoked': return a.nonceBurned ? `Revoked: nonce burned, now ${a.nonceAfter}` : 'Revoked: Governor frozen'
     case 'Unfrozen': return 'Governor unfrozen'
-    case 'PolicySet': return `Floor set to ${pct(a.floorICR)}`
-    case 'Healed': return `Healed ${fmt(a.amount)} MUSD, ICR ${pct(a.icrBefore)} → ${pct(a.icrAfter)}`
-    case 'GovernorCreated': return `Governor ${String(a.governor ?? '').slice(0, 8)}… created`
-    case 'SpendWalletCreated': return `Spend wallet ${String(a.wallet ?? '').slice(0, 8)}… created for agent ${String(a.agent ?? '').slice(0, 8)}…`
-    case 'Armed': return `standby repay re-armed for ${fmt(a.amount)} MUSD`
-    case 'Shielded': return `Shield by ${String(a.keeper ?? '').slice(0, 8)}… repaid ${fmt(a.repaid)} MUSD${a.collAdded > 0n ? `, added ${fmt(a.collAdded, 18, 6)} BTC` : ''}, ICR ${pct(a.icrBefore)} → ${pct(a.icrAfter)}`
-    case 'SessionOpened': return `Session opened for ${String(a.agent ?? '').slice(0, 8)}…`
-    case 'TroveOpened': return `Trove opened: ${fmt(a.coll, 18, 6)} BTC, ${fmt(a.debt)} MUSD debt, ICR ${pct(a.icr)}`
+    case 'PolicySet': return `Floor set to ${safePct(a.floorICR)}`
+    case 'Healed': return `Healed ${safeFmt(a.amount)} MUSD, ICR ${safePct(a.icrBefore)} → ${safePct(a.icrAfter)}`
+    case 'GovernorCreated': return `Governor ${short(a.governor)} created`
+    case 'SpendWalletCreated': return `Spend wallet ${short(a.wallet)} created for agent ${short(a.agent)}`
+    case 'Armed': return `standby repay re-armed for ${safeFmt(a.amount)} MUSD`
+    case 'Shielded': return `Shield by ${short(a.keeper)} repaid ${safeFmt(a.repaid)} MUSD${a.collAdded > 0n ? `, added ${safeFmt(a.collAdded, 18, 6)} BTC` : ''}, ICR ${safePct(a.icrBefore)} → ${safePct(a.icrAfter)}`
+    case 'SessionOpened': return `Session opened for ${short(a.agent)}`
+    case 'TroveOpened': return `Trove opened: ${safeFmt(a.coll, 18, 6)} BTC, ${safeFmt(a.debt)} MUSD debt, ICR ${safePct(a.icr)}`
     default: return name
   }
 }

@@ -8,9 +8,10 @@ import type { Address } from "viem";
 const ACCOUNT = "0x5A1166eC096e12C0C6187695F82B7F4b285389Df" as Address;
 const OWNER = "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3" as Address;
 
-// Live snapshot of the demo account read from Mezo testnet: debt (principal +
-// interest) as at block 16810513, price as at block 16810514 — the read
-// straddled a PriceFeed update. Verified against rpc.test.mezo.org 2026-11-16.
+// Live snapshot of the demo account read from Mezo testnet @ block 16810643:
+// every fixture value below (debt, price, needed().icr, MUSD/sMUSD balances,
+// status, policy) is from that one block. Verified against rpc.test.mezo.org
+// 2026-11-16.
 
 const ok = <T>(result: T) => ({ status: "success", result }) as const;
 const fail = { status: "failure", error: new Error("revert") } as const;

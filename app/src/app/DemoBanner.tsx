@@ -13,7 +13,11 @@ export function DemoBanner() {
   if (!viewed.demoMode) return null
   return (
     <div role="note" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 border border-brass/60 bg-brass/10 px-4 py-2 text-[13px] leading-relaxed">
-      <span>Read-only demo. These are real testnet values for the public demo account. Connect a wallet to open your own.</span>
+      <span>
+        {viewed.source === 'param'
+          ? 'Read-only demo. These are real testnet values for the previewed account. Connect a wallet to open your own.'
+          : 'Read-only demo. These are real testnet values for the public demo account. Connect a wallet to open your own.'}
+      </span>
       {viewed.isLabPrototype && DEMO_ACCOUNT_BADGE && (
         <span className="caps rounded-sm border border-ink/40 px-2 py-0.5 text-[10px]">{DEMO_ACCOUNT_BADGE}</span>
       )}

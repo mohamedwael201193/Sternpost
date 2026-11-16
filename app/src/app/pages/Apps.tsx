@@ -86,15 +86,22 @@ function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
                 // Two Drawn shapes: the Governor's (app, …) and the
                 // TroveAccount's (agent, …) — v2 and v3. Same rule as
                 // Activity.describe(): prefer `app` when present, else `agent`.
-                const actor = (d.args as { app?: Address; agent?: Address }).app ?? (d.args as { agent?: Address }).agent
-                const label = (d.args as { app?: unknown }).app ? 'App' : 'Agent'
+                // Neither shape: plain 'unknown' — never "Agent unknown"
+                // (J1 LOW-a). Missing amount/icrAfter render 'unknown'
+                // instead of throwing inside fmt/pct (L11).
+                const app = (d.args as { app?: Address }).app
+                const agent = (d.args as { agent?: Address }).agent
+                const actor = app ?? agent
+                const label = app ? 'App' : agent ? 'Agent' : null
+                const amount = typeof d.args.amount === 'bigint' ? fmt(d.args.amount) : 'unknown'
+                const icrAfter = typeof d.args.icrAfter === 'bigint' ? pct(d.args.icrAfter, 1) : 'unknown'
                 return (
                   <li key={`${d.tx}-${d.logIndex}`} className="py-3 border-t border-ink/15 text-sm">
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span>{label} {actor ? <a className="ink-link mono text-xs" href={addrUrl(actor)} target="_blank" rel="noreferrer">{String(actor).slice(0, 6)}…{String(actor).slice(-4)}</a> : 'unknown'}</span>
+                      <span>{label ? <>{label} {actor ? <a className="ink-link mono text-xs" href={addrUrl(actor)} target="_blank" rel="noreferrer">{String(actor).slice(0, 6)}…{String(actor).slice(-4)}</a> : 'unknown'}</> : 'unknown'}</span>
                       <a className="ink-link mono text-xs" href={txUrl(d.tx)} target="_blank" rel="noreferrer">tx {d.tx.slice(0, 8)}… ↗</a>
                     </div>
-                    <div className="mono text-xs mt-1 text-muted">drew {fmt(d.args.amount)} MUSD · ICR after {pct(d.args.icrAfter, 1)} · block {String(d.block)}</div>
+                    <div className="mono text-xs mt-1 text-muted">drew {amount} MUSD · ICR after {icrAfter} · block {String(d.block)}</div>
                   </li>
                 )
               })}

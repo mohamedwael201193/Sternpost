@@ -68,6 +68,24 @@ export const ACCOUNTS: AccountDeployments = {
 export const ACCOUNTS_DEPLOY_BLOCK: bigint = BigInt(d.accounts.implementation.block)
 
 /**
+ * Every known TroveAccount factory, newest first — read from
+ * `shared/deployments/testnet.json` (`accounts.factory` + `accounts.previous.factory`),
+ * so a future redeploy only needs a testnet.json update, never a code change.
+ * fetchOwnAccount scans ALL of them: a redeploy orphans every existing account
+ * into a false "no credit account yet" if only the current factory is scanned.
+ */
+export type AccountFactoryDeployment = { address: Address; deployBlock: bigint }
+const accountFactory = (v: any): AccountFactoryDeployment | null => {
+  const address = at(v)
+  const block = v?.block
+  return address && block !== undefined ? { address, deployBlock: BigInt(block) } : null
+}
+export const ACCOUNT_FACTORIES: AccountFactoryDeployment[] = [
+  accountFactory(d.accounts.factory),
+  accountFactory(d.accounts.previous?.factory),
+].filter((f): f is AccountFactoryDeployment => f !== null)
+
+/**
  * Demo account for read-only demo mode (plan §6.3): `shared/deployments/testnet.json` →
  * `accounts.demo` when it is a deployed account address. It is NOT one yet — the record
  * holds `{status: 'BLOCKED'}` (funding gap, deployer short of the minimum trove) — so the

@@ -57,6 +57,22 @@ export function pct(v: bigint, digits = 0): string {
   return `${n.toFixed(digits)}%`
 }
 
+/** True when an ICR is a zero-debt value (2**255 by construction — see icr() above). */
+export function isNoDebtIcr(v?: bigint | null): boolean {
+  return v !== undefined && v !== null && v >= 2n ** 200n
+}
+
+/**
+ * Gauge percent for a 1e18 ICR, or null when there is no value or no debt.
+ * Mirrors pct()'s "No debt" label: a zero-debt ICR (≥ 2**200) is null here,
+ * never 999 — the dial/gauge renders its empty state ("No debt") instead of
+ * a fake 999%. Callers that show a number as text use pct() / isNoDebtIcr().
+ */
+export function icrPct(v?: bigint | null): number | null {
+  if (v === undefined || v === null || v >= 2n ** 200n) return null
+  return Number((v * 10000n) / WAD) / 100
+}
+
 export function fmt(v: bigint, decimals = 18, digits = 2): string {
   const n = Number(v) / 10 ** decimals
   return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits > 2 ? 0 : digits })

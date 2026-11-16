@@ -6,6 +6,13 @@ import { DEMO_ACCOUNT } from '../../lib/chain'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+// Home renders RouteLines, which measures with ResizeObserver (absent in jsdom).
+;(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 /**
  * Fix-round-1 render tests (judge findings F1–F5 on 39dd453). Hooks are mocked
  * so each test asserts the branch the page renders, not the network; the live
@@ -20,8 +27,8 @@ const SPEND_WALLET = '0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a'
 const OWNER = '0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3'
 
 let walletState: { isConnected: boolean; address?: `0x${string}`; chainId?: number; connector?: { type: string } } = { isConnected: false }
-let viewedState: { address: `0x${string}`; source: 'param' | 'demo'; isDemo: boolean; isLabPrototype: boolean; demoMode: boolean } =
-  { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true }
+let viewedState: { address: `0x${string}`; source: 'param' | 'demo'; isDemo: boolean; isLabPrototype: boolean; demoMode: boolean; reconnecting?: boolean } =
+  { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true, reconnecting: false }
 let acctState: { data?: any; isLoading: boolean; isError: boolean } = { isLoading: false, isError: false }
 let radarState: { data?: any; isLoading: boolean; isError: boolean } = { isLoading: false, isError: false }
 let ownState: { data?: `0x${string}` | null; isLoading: boolean; isError: boolean } = { data: null, isLoading: false, isError: false }
@@ -82,8 +89,9 @@ vi.mock('../api', () => ({ useApiList: () => ({ state: 'off', items: [] }), useS
 import Close from './Close'
 import Open from './Open'
 import Apps from './Apps'
-import Pay from './Pay'
+import Pay, { PayRow } from './Pay'
 import Draw from './Draw'
+import Home from './Home'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -108,7 +116,7 @@ function cleanup() {
 
 beforeEach(() => {
   walletState = { isConnected: false }
-  viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true }
+  viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true, reconnecting: false }
   acctState = { data: SNAP, isLoading: false, isError: false }
   radarState = { data: { recoveryMode: false, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: false }
   ownState = { data: null, isLoading: false, isError: false }
@@ -230,5 +238,85 @@ describe('F5 — Draw demo shows one Current gauge, no fake "After draw"', () =>
     expect(c.textContent).toContain('CURRENT')
     expect(c.textContent).not.toContain('AFTER DRAW')
     expect(c.textContent).not.toContain('After draw')
+  })
+})
+
+describe('LOW-3 — Close/Open hold the demo branch while wagmi reconnects', () => {
+  it('Close shows a skeleton, never demo numbers, while reconnecting', async () => {
+    viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true, reconnecting: true }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('Your account — live close position')
+    expect(c.textContent).not.toContain('Demo account — live close position')
+    expect(c.textContent).not.toContain(DEMO_ACCOUNT)
+  })
+
+  it('Open shows a skeleton, never demo numbers, while reconnecting', async () => {
+    viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: true, reconnecting: true }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('Your account — live on testnet')
+    expect(c.textContent).not.toContain('Demo account — live on testnet')
+    expect(c.textContent).not.toContain(DEMO_ACCOUNT)
+  })
+
+  it('an explicit ?account= preview still renders while reconnecting', async () => {
+    walletState = { isConnected: true, address: OWNER as `0x${string}`, chainId: 31611 }
+    viewedState = { address: PREVIEW as `0x${string}`, source: 'param', isDemo: false, isLabPrototype: false, demoMode: true, reconnecting: true }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('Previewed account — live close position')
+    expect(c.textContent).toContain(PREVIEW)
+  })
+})
+
+describe('LOW-4 — PayRow defaults to demo (read-only)', () => {
+  it('renders the read-only note, not a pay button, when demo is omitted', async () => {
+    walletState = { isConnected: true, address: AGENT as `0x${string}`, chainId: 31611 }
+    const c = await renderPage(<PayRow wallet={SPEND_WALLET} agent={AGENT as `0x${string}`} />)
+    expect(c.textContent).toContain('Read-only demo')
+    expect(c.querySelector('button')).toBeNull()
+    expect(c.textContent).not.toContain('Pay for the desk brief')
+  })
+
+  it('renders the pay button only on an explicit demo={false} opt-out', async () => {
+    walletState = { isConnected: true, address: AGENT as `0x${string}`, chainId: 31611 }
+    const c = await renderPage(<PayRow wallet={SPEND_WALLET} agent={AGENT as `0x${string}`} demo={false} />)
+    expect(c.textContent).toContain('Pay for the desk brief (x402)')
+  })
+})
+
+describe('LOW-5 — Home gates "No policy" on shieldICR, never on needed', () => {
+  it('shows "No shield needed" (not "No policy") when needed() failed but the policy exists', async () => {
+    acctState = { data: { ...SNAP, needed: null }, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No shield needed')
+    expect(c.textContent).not.toContain('No policy')
+  })
+
+  it('shows "No policy" when shieldICR itself is null', async () => {
+    acctState = { data: { ...SNAP, needed: null, shieldICR: null, floorICR: null }, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No policy')
+  })
+})
+
+describe('J1 LOW-c — Home shows the no-account CTA for a connected wallet without a credit account', () => {
+  it('shows "You have no credit account yet" with a link to /app/open', async () => {
+    walletState = { isConnected: true, address: OWNER as `0x${string}`, chainId: 31611 }
+    viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: false, reconnecting: false }
+    ownState = { data: null, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('You have no credit account yet. Open one in about two minutes.')
+    expect(c.querySelector('a[href="/app/open"]')).not.toBeNull()
+  })
+})
+
+describe('H1 — the known lab account is labelled LAB PROTOTYPE as the user’s own account', () => {
+  it('Close badges the lab account when it is the connected owner’s own account', async () => {
+    walletState = { isConnected: true, address: OWNER as `0x${string}`, chainId: 31611 }
+    viewedState = { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: true, demoMode: false, reconnecting: false }
+    ownState = { data: DEMO_ACCOUNT, isLoading: false, isError: false }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('Your account — live close position')
+    expect(c.textContent).toContain(DEMO_ACCOUNT)
+    expect(c.textContent).toContain('LAB PROTOTYPE')
   })
 })
