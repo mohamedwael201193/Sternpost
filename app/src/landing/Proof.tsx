@@ -28,7 +28,7 @@ export function Proof() {
         </div>
       </Reveal>
       <Reveal>
-        <p className="caps mb-4 text-muted">Curated selection of testnet proofs — superseded deployment</p>
+        <p className="caps mb-4 text-muted">Steps from the Wave 1 run (23 Oct 2026) — superseded deployment</p>
         <div className="overflow-x-auto border border-ink/25">
           <table className="w-full min-w-[760px] text-left">
             <thead className="bg-paper2">
@@ -51,7 +51,7 @@ export function Proof() {
         </div>
       </Reveal>
       <p className="mt-6 max-w-2xl text-sm text-muted">
-        Reverted is the expected result for entries 02 and 05 in the table below. The table below is a curated selection of testnet proofs on the superseded deployment — the full 16-step Wave 1 run (23 Oct 2026) is in <a className="ink-link" href="https://github.com/mohamedwael201193/Sternpost/blob/main/judges/TESTNET_TXS.md">judges/TESTNET_TXS.md</a>. On the current 0.9 deployment only defend() has been re-run (the 0.9 proof above); the draw, veto, revoke and x402 entries have not been re-run on 0.9. Not audited. Testnet only; Sternpost is not deployed on mainnet.
+        Reverted is the expected result for entries 01, 02 and 05 in the table below. The table below is steps 7–9, 12–13 and 15 of the 16-step Wave 1 run (23 Oct 2026) on the superseded deployment; the full run is in <a className="ink-link" href="https://github.com/mohamedwael201193/Sternpost/blob/main/judges/TESTNET_TXS.md">judges/TESTNET_TXS.md</a>. On the current 0.9 deployment only defend() has been re-run (the 0.9 proof above); the floor, veto, draw, revoke and x402 entries have not been re-run on 0.9. Not audited. Testnet only; Sternpost is not deployed on mainnet.
         The guarantee covers signatures addressed to your Governor; a Mezo contract upgrade that changed the callback would need a new review.
       </p>
     </Plate>

@@ -1,4 +1,6 @@
-/** Real Mezo testnet (chain 31611) transactions behind every claim on the site. */
+/** Real Mezo testnet (chain 31611) transactions behind every claim on the site.
+ *  Rows are steps 7-9, 12-13, 15 of the 16-step Wave 1 run (23 Oct 2026) in
+ *  judges/TESTNET_TXS.md, on the superseded hardened deployment. */
 export const EXPLORER = 'https://explorer.test.mezo.org'
 export const txUrl = (h: string) => `${EXPLORER}/tx/${h}`
 export const addrUrl = (a: string) => `${EXPLORER}/address/${a}`
@@ -7,45 +9,45 @@ export type Proof = { id: string; title: string; claim: string; status: 'success
 
 export const PROOFS: Proof[] = [
   {
-    id: 'bypass',
-    title: 'The weakness',
-    claim: 'A Governor-addressed withdraw signature sent straight to Mezo drew 50 MUSD and moved ICR from 3.08 to 3.02, past a 3.2 floor.',
-    status: 'success',
-    hash: '0xe87009546e383c3a45ff87596e2ffd61a242ede308e0e9098c6182d997cbf0ce',
+    id: 'floor',
+    title: 'Floor enforced',
+    claim: 'A 900 MUSD draw that would drop ICR below the 2.5 floor reverts as Unsafe — no debt drawn.',
+    status: 'reverted',
+    hash: '0xf3920683b0a0b6a3db2ab9227c747112ecda5aa501ca4c426c3408df7fa19bbf',
   },
   {
     id: 'veto',
     title: 'Bypass vetoed',
     claim: 'The same direct submission against the gated Governor reverts in the same transaction. No debt, nonce unused.',
     status: 'reverted',
-    hash: '0x48144c0725361a09372c8bcdcb2915a7e4ee9e0a180d80002d21d9a33b98416b',
+    hash: '0xfd93314cb952bf5542b76fd4fe69de500f88dd061e482170e11a4cc7f90a36e2',
   },
   {
     id: 'draw',
     title: 'Safe draw',
     claim: 'An in-policy draw routed through the Governor lands and is checked against live ICR.',
     status: 'success',
-    hash: '0xf8aaae5813520b4c8966f6897f3aef868d4f48f7a1bc401811153c42abe4c56c',
+    hash: '0xba4eb1299298aa6ad661cb6ed83accc9ed07ff2a42ec1b4576bb3c5f67c71523',
   },
   {
     id: 'burn',
     title: 'Revoke by nonce burn',
     claim: 'One transaction advances the native Mezo nonce, so every outstanding signature dies.',
     status: 'success',
-    hash: '0xd2ade71f1cb282eab3320f3d1c7a584fd572f00b91ee14c0988a2e061251bcf7',
+    hash: '0xf0763cf43766a93d921e3085f6eaa727c0fa6d09047130388a53297b3b0d72eb',
   },
   {
     id: 'replay',
     title: 'Replay after revoke',
     claim: 'Re-submitting an old signature after the burn fails.',
     status: 'reverted',
-    hash: '0x0ac2f3d40d516207981da48ce45815e8c07ef5f304a5ad579f1e62d148263235',
+    hash: '0x1938e4723094d02f1b36b9e100885b7e4833f462d34b8dd75e023a0827b0be6f',
   },
   {
     id: 'x402',
     title: 'x402 payment settled',
-    claim: '1 MUSD paid from an ERC-1271 spend wallet for an API call; the settlement transaction landed on-chain.',
+    claim: '0.5 MUSD paid from an ERC-1271 spend wallet for an API call; the settlement transaction landed on-chain.',
     status: 'success',
-    hash: '0x5c48fe58a5e0007a8daea716e84bc00621882352cdbe4c71ede2ceef78fe503f',
+    hash: '0x4833c4a878d7efc6a7d7c47baca8a6901b12dfa7e3ca63d9985a5b565f114140',
   },
 ]
