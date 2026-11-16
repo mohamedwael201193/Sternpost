@@ -210,8 +210,9 @@ function freshness(tests) {
     return { stale: true, reason: `TESTS.json commit "${commit ?? "missing"}" is not a full 40-hex SHA — re-run \`make test-all\`` };
   }
   // The recorded commit may be a work-clone HEAD that never landed on
-  // main (TESTS.json on main records 7b1ffcd, which is not in main's
-  // history). Fail closed per the sync-proof rule: unknown commit = stale.
+  // main (an old TESTS.json on main once recorded 7b1ffcd, which was not
+  // in main's history). Fail closed per the sync-proof rule: unknown
+  // commit = stale.
   try {
     execFileSync("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: ROOT, stdio: "ignore" });
   } catch {

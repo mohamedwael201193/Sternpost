@@ -1,0 +1,192 @@
+'forge clean' running (wd: /home/hatch/workspace/mezo-wave2/work/p3-docs/contracts)
+'forge config --json' running
+'forge build --build-info --deny never src/account' running (wd: /home/hatch/workspace/mezo-wave2/work/p3-docs/contracts)
+INFO:Detectors:
+Detector: divide-before-multiply
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) performs a multiplication on the result of a division:
+	- troveNicr = coll * NICR_SCALE / troveDebt (src/account/TroveAccount.sol#966)
+	- troveNicr * price / NICR_SCALE >= MCR (src/account/TroveAccount.sol#971)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+INFO:Detectors:
+Detector: incorrect-equality
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) uses a dangerous strict equality:
+	- repaid == 0 && collAdded == 0 (src/account/TroveAccount.sol#659)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+INFO:Detectors:
+Detector: uninitialized-local
+TroveAccount.shield().reason (src/account/TroveAccount.sol#610) is a local variable never initialized
+TroveAccount.shield().bountyPaid (src/account/TroveAccount.sol#663) is a local variable never initialized
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#uninitialized-local-variables
+INFO:Detectors:
+Detector: unused-return
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) ignores return value by (coll,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(cur) (src/account/Radar.sol#164-165)
+Radar._entireDebt(address) (src/account/Radar.sol#186-189) ignores return value by (None,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(trove) (src/account/Radar.sol#187)
+TroveAccount.initialize(address,Policy,address,uint16) (src/account/TroveAccount.sol#253-264) ignores return value by musd.approve(address(smusd),type()(uint256).max) (src/account/TroveAccount.sol#262)
+TroveAccount.repay(uint256,address,address) (src/account/TroveAccount.sol#311-318) ignores return value by (None,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#312)
+TroveAccount.closeAccount() (src/account/TroveAccount.sol#338-367) ignores return value by (None,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#353)
+TroveAccount.approveToken(address,uint256) (src/account/TroveAccount.sol#482-484) ignores return value by musd.approve(spender,amount) (src/account/TroveAccount.sol#483)
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#605)
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) ignores return value by (collNow,principal2,interest2,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#649)
+TroveAccount.needed() (src/account/TroveAccount.sol#765-776) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#767)
+TroveAccount.previewDraw(address,address,uint256) (src/account/TroveAccount.sol#784-811) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#804)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+INFO:Detectors:
+Detector: shadowing-local
+TroveAccount._collWanted(uint256,uint256,uint256,uint256).repay (src/account/TroveAccount.sol#917) shadows:
+	- TroveAccount.repay(uint256,address,address) (src/account/TroveAccount.sol#311-318) (function)
+ITroveAccount.initialize(address,Policy,address,uint16).owner (src/account/interfaces/ITroveAccount.sol#43) shadows:
+	- ITroveAccount.owner() (src/account/interfaces/ITroveAccount.sol#58) (function)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#local-variable-shadowing
+INFO:Detectors:
+Detector: missing-zero-check
+Batcher.claimCollateralBatch(address[]).account (src/account/Batcher.sol#170) lacks a zero-check on :
+		- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Batcher.claimYieldBatch(address[]).account (src/account/Batcher.sol#196) lacks a zero-check on :
+		- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Batcher.checkpointBatch(address[]).account (src/account/Batcher.sol#214) lacks a zero-check on :
+		- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: calls-loop
+Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122) has external calls inside a loop: (ok,r) = targets[i].call(data[i]) (src/account/Batcher.sol#114)
+Batcher.multiDraw(address[],Batcher.DrawIntent[]) (src/account/Batcher.sol#133-141) has external calls inside a loop: IBatcherAccount(accounts[i]).drawBySig(intent.agent,intent.payee,intent.amount,intent.deadline,intent.sig) (src/account/Batcher.sol#138)
+Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178) has external calls inside a loop: (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202) has external calls inside a loop: (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219) has external calls inside a loop: (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+Radar.rank(address,uint256) (src/account/Radar.sol#115-143) has external calls inside a loop: icr = troveManager.getCurrentICR(cur,price) (src/account/Radar.sol#125)
+Radar._entireDebt(address) (src/account/Radar.sol#186-189) has external calls inside a loop: (None,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(trove) (src/account/Radar.sol#187)
+	Calls stack containing the loop:
+		Radar.rank(address,uint256)
+Radar.rank(address,uint256) (src/account/Radar.sol#115-143) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/Radar.sol#136)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: (coll,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(cur) (src/account/Radar.sol#164-165)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: troveManager.getCurrentICR(cur,price) >= MCR (src/account/Radar.sol#171)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/Radar.sol#174)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.openFor(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.openFor(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.open(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.open(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.shield()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.shield()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.needed()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.needed()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+INFO:Detectors:
+Detector: reentrancy-benign
+Reentrancy in TroveAccount.shield() (src/account/TroveAccount.sol#587-684):
+	External calls:
+	- smusd.withdraw(take) (src/account/TroveAccount.sol#637)
+	- bo.repayMUSD(repaid,up,lo) (src/account/TroveAccount.sol#642)
+	- bo.addColl{value: collAdded}(up,lo) (src/account/TroveAccount.sol#656)
+	External calls sending eth:
+	- bo.addColl{value: collAdded}(up,lo) (src/account/TroveAccount.sol#656)
+	State variables written after the call(s):
+	- totalBountyPaid += bountyDue (src/account/TroveAccount.sol#679)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219):
+	External calls:
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+	Event emitted after the call(s):
+	- CheckpointBatched(account,ok[i]) (src/account/Batcher.sol#217)
+Reentrancy in Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178):
+	External calls:
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+	Event emitted after the call(s):
+	- CollateralClaimBatched(account,ok[i],claimed[i]) (src/account/Batcher.sol#176)
+Reentrancy in Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202):
+	External calls:
+	- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+	Event emitted after the call(s):
+	- YieldClaimBatched(account,ok[i],yields[i]) (src/account/Batcher.sol#200)
+Reentrancy in TroveAccountFactory.createAccount(address,bytes32,Policy) (src/account/TroveAccountFactory.sol#121-135):
+	External calls:
+	- ITroveAccount(account).initialize(owner,p,feeRecipient,feeBps) (src/account/TroveAccountFactory.sol#133)
+	Event emitted after the call(s):
+	- AccountCreated(owner,account,salt,p.floorICR,p.shieldICR,p.targetICR) (src/account/TroveAccountFactory.sol#134)
+Reentrancy in TroveAccount.initialize(address,Policy,address,uint16) (src/account/TroveAccount.sol#253-264):
+	External calls:
+	- musd.approve(address(smusd),type()(uint256).max) (src/account/TroveAccount.sol#262)
+	Event emitted after the call(s):
+	- PolicySet(p.floorICR,p.shieldICR,p.targetICR,p.bounty,p.minDebtAhead) (src/account/TroveAccount.sol#263)
+Reentrancy in Batcher.multiDraw(address[],Batcher.DrawIntent[]) (src/account/Batcher.sol#133-141):
+	External calls:
+	- IBatcherAccount(accounts[i]).drawBySig(intent.agent,intent.payee,intent.amount,intent.deadline,intent.sig) (src/account/Batcher.sol#138)
+	Event emitted after the call(s):
+	- DrawsBatched(accounts.length) (src/account/Batcher.sol#140)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+INFO:Detectors:
+Detector: timestamp
+TroveAccount._setSession(address,uint128,uint128,uint128,uint64,bool,bool) (src/account/TroveAccount.sol#401-428) uses timestamp for comparisons
+	Dangerous comparisons:
+	- expiry <= block.timestamp || expiry > block.timestamp + MAX_SESSION (src/account/TroveAccount.sol#411)
+TroveAccount.drawBySig(address,address,uint256,uint256,bytes) (src/account/TroveAccount.sol#729-745) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > deadline (src/account/TroveAccount.sol#733)
+TroveAccount.previewDraw(address,address,uint256) (src/account/TroveAccount.sol#784-811) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp >= s.dayStart + 86400 (src/account/TroveAccount.sol#798)
+TroveAccount.isValidSignature(bytes32,bytes) (src/account/TroveAccount.sol#826-838) uses timestamp for comparisons
+	Dangerous comparisons:
+	- ! _sessionLive(sess) || ! sess.canSignX402 (src/account/TroveAccount.sol#836)
+TroveAccount._sessionLive(TroveAccount.Session) (src/account/TroveAccount.sol#996-998) uses timestamp for comparisons
+	Dangerous comparisons:
+	- s.active && s.epoch == sessionEpoch && s.expiry >= block.timestamp (src/account/TroveAccount.sol#997)
+TroveAccount._rollDay(TroveAccount.Session) (src/account/TroveAccount.sol#1000-1005) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp >= s.dayStart + 86400 (src/account/TroveAccount.sol#1001)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: assembly
+Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122) uses assembly
+	- INLINE ASM (src/account/Batcher.sol#116-118)
+TroveAccountFactory._clone(address,bytes32) (src/account/TroveAccountFactory.sol#183-188) uses assembly
+	- INLINE ASM (src/account/TroveAccountFactory.sol#185-187)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+INFO:Detectors:
+Detector: cyclomatic-complexity
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) has a high cyclomatic complexity (23).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122):
+	- (ok,r) = targets[i].call(data[i]) (src/account/Batcher.sol#114)
+Low level call in Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178):
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Low level call in Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202):
+	- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Low level call in Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219):
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+Low level call in TroveAccount._sendBtc(address,uint256) (src/account/TroveAccount.sol#1027-1031):
+	- (ok,None) = to.call{value: amount}() (src/account/TroveAccount.sol#1029)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: naming-convention
+Variable TroveAccountMainnet.MAX_SESSION_BUDGET (src/account/TroveAccountMainnet.sol#19) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Slither:src/account analyzed (20 contracts with 101 detectors), 61 result(s) found

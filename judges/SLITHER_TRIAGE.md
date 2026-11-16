@@ -66,6 +66,61 @@ The remaining 95 results are all Medium/Low/Informational and do not trip
 | missing-inheritance | 1 | `SpendWallet` "should inherit from IERC1271" — it implements `isValidSignature` manually with the same signature; inheriting would change nothing functionally. Informational. |
 | too-many-digits | 1 | `SternpostFactory.predictGovernor`: the long literal is the CREATE2 init-code-hash preimage, not a magic number. Informational. |
 
+## Account scope — run 2026-11-16 (P3 docs round 2)
+
+The full-tree run above never had a Slither output for the account
+contracts alone. This section closes that gap with a real run over
+`contracts/src/account` (all five contracts + interfaces:
+`TroveAccount`, `TroveAccountFactory`, `Batcher`, `Radar`,
+`TroveAccountMainnet`).
+
+Command (run from `contracts/`; `forge` 1.8.6 on PATH — crytic-compile
+shells out to it — and solc 0.8.24 from `~/.svm`):
+
+```
+slither src/account --solc ~/.svm/0.8.24/solc-0.8.24 --filter-paths "lib|test|script" --exclude reentrancy-balance --fail-high
+```
+
+- Slither 0.11.6 (venv install; CI installs `slither-analyzer`
+  unpinned, so versions may differ), solc 0.8.24, via_ir, optimizer 200.
+- Result: **20 contracts, 101 detectors, 61 results, exit 0** — zero
+  HIGH findings (`--fail-high` would exit non-zero on any HIGH).
+  Full output saved in [slither-account.txt](slither-account.txt).
+- HIGH confirmation: `reentrancy-eth`, `reentrancy-no-eth`,
+  `arbitrary-send-eth` — **0 hits** in account scope. The 4 fixed HIGHs
+  (`TroveAccount._open`, `shield`, `Factory.createAccount`,
+  `_sendBtc`) are absent from the current tree's account code. Note the
+  run is against SOURCE, not the live deployment — the fixed bytecode is
+  not yet live (see "Deployed bytecode" below).
+- Per-detector counts (they sum to 61: 0 High, 15 Medium, 37 Low,
+  9 Informational). Every detector type here is already triaged in the
+  "Accepted, with reasons" table above — the account-scope counts are
+  subsets of the full-tree counts, with the same dispositions:
+
+| Detector | Impact | Account count | Full-tree count |
+|---|---|---|---|
+| calls-loop | Low | 19 | 26 |
+| unused-return | Medium | 11 | 13 |
+| timestamp | Low | 6 | 13 |
+| reentrancy-events | Low | 6 | 9 |
+| low-level-calls | Informational | 5 | 6 |
+| missing-zero-check | Low | 3 | 9 |
+| uninitialized-local | Medium | 2 | 2 |
+| assembly | Informational | 2 | 2 |
+| shadowing-local | Low | 2 | 2 |
+| reentrancy-benign | Low | 1 | 3 |
+| divide-before-multiply | Medium | 1 | 1 |
+| incorrect-equality | Medium | 1 | 1 |
+| cyclomatic-complexity | Informational | 1 | 2 |
+| naming-convention | Informational | 1 | 2 |
+
+Detectors in the full-tree table but absent from account scope are all
+non-account code: `costly-loop` (Router), `missing-inheritance`
+(SpendWallet), `too-many-digits` (Classic Factory). The account scope is
+now covered; the 0.9 deployment cannot be called Slither-triaged on this
+run alone — it still needs the fresh deploy + bytecode re-match in
+"Deployed bytecode" below.
+
 ## Excluded detector
 
 `reentrancy-balance` is excluded from the CI command, as before. The
