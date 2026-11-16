@@ -7,7 +7,7 @@ const COUNTS = [
   ['10', 'Fork tests on live Mezo testnet + mainnet'],
   ['124', 'Backend tests (API, x402, bot)'],
   ['47', 'SDK + app unit tests'],
-  ['16', 'Txs in the Wave 1 testnet flow (23 Oct)']
+  ['16', 'Steps in the full Wave 1 testnet run (23 Oct)']
 ] as const
 
 export function Proof() {
@@ -28,7 +28,7 @@ export function Proof() {
         </div>
       </Reveal>
       <Reveal>
-        <p className="caps mb-4 text-muted">Wave 1 · 23 Oct 2026 — superseded deployment</p>
+        <p className="caps mb-4 text-muted">Curated selection of testnet proofs — superseded deployment</p>
         <div className="overflow-x-auto border border-ink/25">
           <table className="w-full min-w-[760px] text-left">
             <thead className="bg-paper2">
@@ -51,7 +51,7 @@ export function Proof() {
         </div>
       </Reveal>
       <p className="mt-6 max-w-2xl text-sm text-muted">
-        Reverted is the expected result for entries 02 and 05 in the table below. The table is the Wave 1 run (23 Oct 2026) on the superseded deployment — the full 16-step run is in <a className="ink-link" href="https://github.com/mohamedwael201193/Sternpost/blob/main/judges/TESTNET_TXS.md">judges/TESTNET_TXS.md</a>. On the current 0.9 deployment only defend() has been re-run (the 0.9 proof above); the draw, veto, revoke and x402 entries have not been re-run on 0.9. Not audited. Testnet only; Sternpost is not deployed on mainnet.
+        Reverted is the expected result for entries 02 and 05 in the table below. The table below is a curated selection of testnet proofs on the superseded deployment — the full 16-step Wave 1 run (23 Oct 2026) is in <a className="ink-link" href="https://github.com/mohamedwael201193/Sternpost/blob/main/judges/TESTNET_TXS.md">judges/TESTNET_TXS.md</a>. On the current 0.9 deployment only defend() has been re-run (the 0.9 proof above); the draw, veto, revoke and x402 entries have not been re-run on 0.9. Not audited. Testnet only; Sternpost is not deployed on mainnet.
         The guarantee covers signatures addressed to your Governor; a Mezo contract upgrade that changed the callback would need a new review.
       </p>
     </Plate>

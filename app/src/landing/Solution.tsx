@@ -4,7 +4,7 @@ const PARTS = [
   { k: 'Floor', t: 'ICR checked on chain', d: 'After every draw the Governor reads your trove from TroveManager and the BTC price from Mezo. Below your floor — 250% on the live Governor — the whole transaction reverts with Unsafe().' },
   { k: 'Gate', t: 'No way around it', d: 'Withdraw signatures name the Governor as recipient. Mezo calls back into the Governor during the withdraw, and the Governor accepts that call only inside its own draw(). A signature sent straight to Mezo reverts.' },
   { k: 'Defend', t: 'The account heals itself in a storm', d: 'Each draw comes with a repay signature for the next nonce. If ICR falls under your defend line, anyone can call defend() to repay from a buffer that can earn in sMUSD while it waits. Verified on testnet: defend() repaid 30 MUSD and lifted ICR from 2.3791 to 2.4081 (block 16794538).' },
-  { k: 'Exit', t: 'One transaction stops everything', d: 'revoke() freezes draws and burns your Mezo nonce, so every signature you handed out stops working. That is the live exit today. A one-call closeAccount is in design on the TroveAccount contracts — not deployed.' },
+  { k: 'Exit', t: 'One transaction stops everything', d: 'revoke() freezes draws and burns your Mezo nonce, so every signature you handed out stops working. That is the live exit today. A one-call closeAccount is deployed on the TroveAccount contracts but never run on a production account yet.' },
 ]
 
 export function Solution() {
@@ -20,7 +20,7 @@ export function Solution() {
         ))}
       </div>
       <Reveal className="mt-10 max-w-3xl text-ink/75">
-        Each app gets its own budget, a per-draw cap, an expiry and an optional payee lock. <span className="mono">previewDraw()</span> tells you the reason a draw would fail before you sign anything. The Governor takes 10 bps per agent draw — immutable, capped at 50 bps. Redemption surplus recovery (claimCollateral) is in design on the TroveAccount contracts — not deployed: the lab's V3 account had no claimCollateral wrapper, so its redemption surplus stayed in Mezo's CollSurplusPool.
+        Each app gets its own budget, a per-draw cap, an expiry and an optional payee lock. <span className="mono">previewDraw()</span> tells you the reason a draw would fail before you sign anything. The Governor takes 10 bps per agent draw — immutable, capped at 50 bps. Redemption surplus recovery (claimCollateral) is deployed on the TroveAccount contracts but never run on a production account yet: the lab's V3 account had no claimCollateral wrapper, so its redemption surplus stayed in Mezo's CollSurplusPool.
       </Reveal>
     </Plate>
   )

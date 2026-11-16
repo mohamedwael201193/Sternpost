@@ -1,7 +1,7 @@
 import { Plate, Reveal } from './Plate'
 
 const MILES = [
-  { d: 'Wave 2 · November 2026', s: 'Live on testnet', t: '0.9 contracts, and a guard that heals', b: 'Factory, Governor, SpendWallet and Router redeployed on Mezo testnet 31611, Blockscout-verified. defend() repaid 30 MUSD in a live re-run, lifting ICR from 2.3791 to 2.4081. Shield by a stranger is in progress on the production contracts.' },
+  { d: 'Wave 2 · November 2026', s: 'Live on testnet', t: '0.9 contracts, and a guard that heals', b: 'Factory, Governor, SpendWallet and Router redeployed on Mezo testnet 31611, Blockscout-verified. defend() repaid 30 MUSD in a live re-run, lifting ICR from 2.3791 to 2.4081. Shield by a stranger is deployed in the TroveAccount implementation (Blockscout-verified), never yet called on a live production account.' },
   { d: 'Next', s: 'Planned', t: 'Mezo mainnet launch', b: 'Governor, Router and SpendWallet on Mezo mainnet with capped limits and source-verified contracts.' },
   { d: 'Then', s: 'Planned', t: 'Audit, then higher caps', b: 'External audit of the Governor and Router, then higher limits.' },
 ]
