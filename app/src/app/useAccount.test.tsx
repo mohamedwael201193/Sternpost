@@ -46,6 +46,7 @@ const SNAP: AccountSnapshot = {
   cooldownBlocks: null,
   needed: { icr: 1_602_234_950_480_101_128n, repayWanted: 0n, collWanted: 0n, reason: null },
   pendingYield: null,
+  policyError: false,
   balances: { btc: 0n, musd: 2_433_090_442_561_969_120n, smusd: 61_554_608_535_561_276_641n },
 }
 

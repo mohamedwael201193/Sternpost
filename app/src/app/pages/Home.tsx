@@ -53,11 +53,21 @@ export default function Home() {
   // 'Unavailable' (that is what t.govError is for, below).
   const acctError = demo ? acct.isError : !!t.coreError
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
+  // Round 7 (J1 L1): TanStack Query v5 RETAINS data on error — on a sys
+  // failure recoveryMode keeps its last good value, so the ON/OFF banners
+  // keyed off it would render stale claims beside (or instead of)
+  // "Unavailable". Derive the banner state from the error: unknown
+  // whenever the sys batch failed (transport OR a per-slot failure,
+  // LOW-6) — the ON/OFF banners only render for a KNOWN state.
+  const sysUnknown = !demo && (t.sysError || t.sysSlotError)
+  const recoveryKnown = sysUnknown ? undefined : recoveryMode
   const troveStatus = demo ? a?.troveStatus : t.troveStatus
   // A closed trove (status 2/3/4, not 0 = never existed) blocks draws. The
   // old condition required hasTrove, which is false exactly when the trove
-  // is closed — the banner could never render in demo mode.
-  const troveClosed = troveStatus !== undefined && troveStatus !== null && troveStatus !== 1 && troveStatus !== 0
+  // is closed — the banner could never render in demo mode. A future
+  // status (> 4) is UNKNOWN, not closed — never claim the trove no longer
+  // exists for a status this code does not understand.
+  const troveClosed = troveStatus !== undefined && troveStatus !== null && troveStatus >= 2 && troveStatus <= 4
   const host = useRef<HTMLDivElement>(null)
   const ship = useRef<HTMLDivElement>(null), dial = useRef<HTMLDivElement>(null), form = useRef<HTMLElement>(null)
   const sColl = useRef<HTMLDivElement>(null), sDebt = useRef<HTMLDivElement>(null), sRoute = useRef<HTMLDivElement>(null)
@@ -75,14 +85,15 @@ export default function Home() {
       {rpcError && (
         <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">{RPC_ERROR_TEXT}</div>
       )}
-      {recoveryMode === true && (
+      {recoveryKnown === true && (
         <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
           <b>Recovery Mode</b> — Mezo system health is below 150%, so draws are paused on-chain. Repay or add collateral to continue; the guard cannot draw until the system recovers.
         </div>
       )}
-      {/* L-b (round 4): a failed system-health batch leaves the recovery
-          state unknown — say so explicitly instead of rendering no banner. */}
-      {!demo && t.sysError && recoveryMode !== true && (
+      {/* L-b (round 4) + round 7 (J1 L1): a failed system-health batch leaves the recovery
+          state unknown — say so explicitly instead of rendering no banner.
+          The banner keys off recoveryKnown, never retained recoveryMode. */}
+      {sysUnknown && (
         <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
           Recovery Mode: <b>Unavailable</b> — the system-health read failed, so this page cannot say whether Recovery Mode is on.
         </div>
@@ -119,11 +130,21 @@ export default function Home() {
                 zero-debt trove whose getTroveStatus read is still pending
                 or failed would assert "No debt" on an unknown status.
                 Gate the label on troveStatus === 1: unknown renders
-                "Unavailable" instead. */}
+                "Unavailable" instead.
+                LOW-1 (round 7): the Dial is a FIFTH ungated hasTrove
+                consumer — the round-6 gate above only applies when
+                hasTrove is true, so a demo/?account= preview of a
+                zero-debt address with a failed getTroveStatus
+                (troveStatus null, icr 2**255) or any zero-debt trove with
+                a future status 5 has hasTrove false, value null and an
+                undefined emptyLabel — and the Dial falls through to its
+                default "No trove" while the same state renders
+                "Unavailable" everywhere else. Pass an explicit label for
+                the unknown case. */}
             {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
-              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={hasTrove && isNoDebtIcr(icrV) ? (troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} />
+              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={troveStatus == null || troveStatus > 4 ? 'Unavailable' : hasTrove && isNoDebtIcr(icrV) ? (troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} />
             )}
           </div>
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
@@ -137,11 +158,11 @@ export default function Home() {
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
               ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
-              : t.govError || t.gvError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
+              : t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
                 ? <span className="text-magenta">Floor {pct(a.floorICR)} · shield {pct(a.shieldICR)}</span>
-                : loading ? 'Loading policy…' : a ? 'No policy on this account' : 'Policy not readable')
+                : loading ? 'Loading policy…' : a?.policyError ? 'Unavailable' : a ? 'No policy on this account' : 'Policy not readable')
               : t.governor ? <span className="text-magenta">Trove → Governor → Payee</span> : 'Create a Governor to set a floor'} />
         </div>
         {/* Hero form / demo hero */}
@@ -160,14 +181,17 @@ export default function Home() {
               {/* MED-2 (round 6), demo branch: same lie as the own-account rows
                   below — on a failed demo-account read floorV is undefined
                   and the row would claim "Not configured" about an unknown
-                  policy. Gate on the account error like the Shield row. */}
-              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : acctError ? 'Unavailable' : floorV ? pct(floorV) : 'Not configured'} />
+                  policy. Gate on the account error like the Shield row.
+                  Round 7: a failed policy read (policyError) is the same
+                  unknown, not "Not configured". */}
+              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : acctError || a?.policyError ? 'Unavailable' : floorV ? pct(floorV) : 'Not configured'} />
               {/* J1 LOW-2: when needed() itself failed (null) but the policy
                   exists, the shield state is UNKNOWN — asserting "No shield
                   needed" would be wrong if the ICR were below the shield
                   line. LOW-5 still applies: "No policy" gates on shieldICR,
-                  never on needed. */}
-              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : acctError ? 'Unavailable' : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
+                  never on needed. Round 7: a failed policy read
+                  (policyError) is likewise "Unavailable", never "No policy". */}
+              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : acctError || a?.policyError ? 'Unavailable' : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
               <Row k="Account owner" v={loading ? <Skeleton className="h-4 w-32" /> : a?.owner ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(a.owner)} target="_blank" rel="noreferrer">{a.owner.slice(0, 6)}…{a.owner.slice(-4)}</a> : 'Unknown'} />
             </>
           ) : (
@@ -180,10 +204,12 @@ export default function Home() {
                   it NEVER runs — gvError stays false and floor/standby stay
                   undefined. Gating only on gvError would render "Not
                   configured" / "DISARMED" about an UNKNOWN Governor. Gate
-                  both rows on govError || gvError, matching the Spend route
-                  (:140) and Watch standby (:104-105). */}
-              <Row k="Floor" v={t.govError || t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
-              <Row k="Standby heal" v={t.govError || t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
+                  both rows on govError || gvError (plus gvSlotError in
+                  round 7: a reverted slot inside the batch is the same
+                  unknown), matching the Spend route (Home:161) and Watch
+                  standby (Watch:139–140). */}
+              <Row k="Floor" v={t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Standby heal" v={t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
               <Row k="Mezo nonce" v={acctError ? 'Unavailable' : t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
           )}
@@ -210,7 +236,12 @@ export default function Home() {
             </Card>
           ) : (
             <NeedsWallet what="read your trove">
-              {!t.loading && !t.hasTrove && !t.error && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
+              {/* Round 7 (hasTrove definition): hasTrove is false while the
+                  trove status is unknown — the "No trove" empty must not
+                  flash for a real zero-debt trove whose sys batch is still
+                  in flight. It renders only once the status is known, or
+                  once the core read proves coll 0 (a real empty trove). */}
+              {!t.loading && !t.hasTrove && !t.error && (t.troveStatusKnown || t.coll === 0n) && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
               {t.error && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
               {own.data === null && !own.isLoading && !own.isError && (
                 <p className="text-sm leading-relaxed mt-6">You have no credit account yet. Open one in about two minutes. <Link className="pill" to="/app/open">Open a credit account →</Link></p>
@@ -257,7 +288,10 @@ export default function Home() {
                 ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
                 : t.governor
                 ? <div className="text-sm space-y-2"><a className="ink-link mono text-xs break-all" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">{t.governor}</a>
-                    <div>Status: {t.gvError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
+                    {/* Round 7 (LOW-6): a reverted Governor-batch slot leaves
+                        frozen undefined — "active" would be a claim about an
+                        unknown batch. Gate on gvSlotError like gvError. */}
+                    <div>Status: {t.gvError || t.gvSlotError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
                 : <p className="text-sm text-muted">None yet. Create one to set a floor and hand out bounded budgets.</p>}
             </Card>
           )}
@@ -294,8 +328,9 @@ function DemoHero({ acct, viewed }: { acct: ReturnType<typeof useAccount>; viewe
               <dt className="text-muted">Shield line</dt><dd className="mono text-right">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield target</dt><dd className="mono text-right">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</dd>
               {/* J1 LOW-2: a null needed() is "unknown", never "none" — see the
-                  Shield row above. */}
-              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.shieldICR == null ? 'No policy' : a.needed == null ? 'unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
+                  Shield row above. Round 7: a failed policy read is
+                  likewise "unknown", never "No policy". */}
+              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.policyError ? 'unknown' : a.shieldICR == null ? 'No policy' : a.needed == null ? 'unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
             </dl>
             <p className="text-xs text-muted mt-4">Read-only: this account belongs to the demo owner. Drawing, defending and closing need the owner wallet.</p>
           </>

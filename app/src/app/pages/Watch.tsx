@@ -3,7 +3,7 @@ import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
 import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, icrPct as toPct, isNoDebtIcr, pct } from '../../lib/icr'
+import { fmt, icrPct as toPct, isNoDebtIcr, pct, demoIcrLabel } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -24,6 +24,14 @@ export default function Watch() {
   const tcrPct = demo ? toPct(radar.data?.tcr) : toPct(t.tcr)
   const mainnetTcrPct = toPct(radarMainnet.data?.tcr)
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
+  // Round 7 (J1 L1): TanStack Query v5 RETAINS data on error — on a sys
+  // failure recoveryMode keeps its last good value, so the ON/OFF banners
+  // keyed off it would render stale claims beside (or instead of)
+  // "Unavailable". Derive the banner state from the error: unknown
+  // whenever the sys batch failed (transport OR a per-slot failure,
+  // LOW-6) — the ON/OFF banners only render for a KNOWN state.
+  const sysUnknown = !demo && (t.sysError || t.sysSlotError)
+  const recoveryKnown = sysUnknown ? undefined : recoveryMode
   // Standby state is UNKNOWN until a wallet is connected, a Governor exists, and the read returns —
   // unknown must never render as "Disarmed".
   const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
@@ -49,41 +57,42 @@ export default function Watch() {
   // troveStatus === 1, mirroring demo hasTrove on Home.
   const demoHasTrove = demo && !!a && a.troveStatus === 1
   const hasTrove = demo ? demoHasTrove : t.hasTrove
-  // LOW-3 (round 6): the non-demo ICR card must not assert "No debt" on an
-  // unknown status — hasTrove counts statusNum === undefined as active
-  // (useTrove), so a zero-debt own trove whose sys batch is pending/failed
-  // claimed "No debt". Gate the no-debt label on troveStatus === 1;
-  // unknown renders "Unavailable" (matching DemoHero), a known non-active
-  // status renders "No trove". The demo branch was already status-1-gated
-  // via demoHasTrove and is unchanged by this.
+  // LOW-3 (round 6) + round 7: route the label through demoIcrLabel —
+  // the inline version had no > 4 guard, so a future status 5 rendered
+  // "No trove" while demoIcrLabel said "Unavailable". An undefined ICR
+  // (no trove) still reads "No trove", as before; a zero-debt ICR with a
+  // known status 1 is "No debt" via pct(). The demo branch was already
+  // status-1-gated via demoHasTrove and is unchanged by this.
   const icrVal = demo ? a?.icr : t.icr
   const icrStatus = demo ? a?.troveStatus : t.troveStatus
   const icrLabel = rpcError ? 'Unavailable'
-    : isNoDebtIcr(icrVal)
-      ? icrStatus === 1 ? 'No debt' : icrStatus === null || icrStatus === undefined ? 'Unavailable' : 'No trove'
-      : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`
+    : icrVal === undefined ? 'No trove'
+    : isNoDebtIcr(icrVal) ? demoIcrLabel(icrVal, icrStatus)
+    : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`
   return (
     <div className="space-y-8">
       {rpcError && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">{RPC_ERROR_TEXT}</div>
       )}
-      {recoveryMode === true && (
+      {recoveryKnown === true && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
           <b>Recovery Mode is ON</b> — Mezo system health (TCR) is below 150%, so draws are paused on-chain. Repay or add collateral to continue.
         </div>
       )}
-      {/* LOW-6 (round 6): the connected sys batch (getTroveStatus /
+      {/* LOW-6 (round 6) + round 7 (J1 L1): the connected sys batch (getTroveStatus /
           checkRecoveryMode / getTCR) failed, so recoveryMode is unknown —
           say so explicitly, mirroring the Home banner (round 4, L-b).
           Without this the page renders no Recovery banner at all and the
           failure passes silently; the TCR card already shows
-          "Unavailable" on tcrError. */}
-      {!demo && t.sysError && recoveryMode !== true && (
+          "Unavailable" on tcrError. The banner keys off recoveryKnown,
+          never retained recoveryMode: on a sys failure the ON/OFF banners
+          are suppressed even when they retain a last good value. */}
+      {sysUnknown && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
           Recovery Mode: <b>Unavailable</b> — the system-health read failed, so this page cannot say whether Recovery Mode is on.
         </div>
       )}
-      {recoveryMode === false && (
+      {recoveryKnown === false && (
         <div className="plate rounded-xl p-4 text-sm">
           <b>Recovery Mode is off.</b> Mezo system health (TCR){tcrPct !== null ? ` is ${tcrPct.toFixed(1)}%` : ''} — above the 150% line, so draws are live.
         </div>
@@ -109,11 +118,13 @@ export default function Watch() {
           {demo ? (
             loading ? <Skeleton className="h-9 w-28" label="Loading shield state" /> : (
               <>
-                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : 'None'}</div>
+                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : a?.policyError ? 'Unknown' : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : 'None'}</div>
                 <p className="text-xs text-muted mt-1">
                   {rpcError ? RPC_ERROR_TEXT : shieldNeeded
                     ? `Shield would repay ${fmt(shield!.repayWanted)} MUSD${shield!.collWanted > 0n ? ` and add ${fmt(shield!.collWanted, 18, 6)} BTC` : ''} to reach the ${a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : ''} target`
-                    : a?.shieldICR == null
+                    : a?.policyError
+                      ? 'Shield line unknown — the policy read failed, so this page cannot say where the shield line is.'
+                      : a?.shieldICR == null
                       ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
                       : a?.needed == null
                         ? 'Shield need unknown — the needed() read failed, so this page cannot say whether the shield would fire.'
@@ -125,8 +136,8 @@ export default function Watch() {
             )
           ) : (
             <>
-              <div className="display text-3xl">{t.govError || t.gvError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-              <p className="text-xs text-muted mt-1">{t.govError || t.gvError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+              <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+              <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}
         </Card>
@@ -176,9 +187,19 @@ export default function Watch() {
               <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address}</a>
               {' '}— floor {a?.floorICR !== null && a?.floorICR !== undefined ? pct(a.floorICR) : 'unknown'} · shield line {a?.shieldICR !== null && a?.shieldICR !== undefined ? pct(a.shieldICR) : 'unknown'} · target {a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : 'unknown'}.</>
           ) : (
-            <>Policy on the live 0.9 Governor:{' '}
-              <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(GOVERNOR)} target="_blank" rel="noreferrer">{GOVERNOR}</a>
-              {' '}— floor {t.floor ? pct(t.floor) : '250% (policy)'} · defend line {t.defend ? pct(t.defend) : '160% (policy)'}.</>
+            // Round 7 (LOW-10): the floor/defend below are the CONNECTED
+            // USER's Governor policy, not the pinned 0.9 Governor's — the
+            // old line labelled them "Policy on the live 0.9 Governor" with
+            // hardcoded 250%/160% fallbacks and no error gate, so a user
+            // whose own floor is 400% saw their 400% attributed to the 0.9
+            // Governor, and a failed Governor batch rendered the fallback
+            // as if it were a live read. Label the user's Governor, link
+            // to it, and render "unknown" when the batch is unreadable.
+            <>Policy on your Governor:{' '}
+              {t.governor
+                ? <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">{t.governor}</a>
+                : 'no Governor yet'}
+              {' '}— floor {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.floor ? pct(t.floor) : 'unknown'} · defend line {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.defend ? pct(t.defend) : 'unknown'}.</>
           )}
         </p>
       </Card>

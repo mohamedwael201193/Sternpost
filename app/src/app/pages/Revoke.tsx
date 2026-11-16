@@ -45,13 +45,23 @@ export default function Revoke() {
               <TxStatus tx={revoke} />
             </Card>
             <Card title="Unfreeze">
-              <p className="text-sm">Status: {t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}. While frozen, no app can draw.</p>
+              {/* Round 7 (MED-1): with a Governor present but the Governor
+                  batch failed, frozen is undefined — rendering "active"
+                  would claim the Governor is unfrozen about an unknown
+                  batch. Gate on the Governor errors, mirroring Watch
+                  standby (:128-129). The Unfreeze button stays gated on
+                  !t.frozen, so an unknown state can never unfreeze. */}
+              <p className="text-sm">Status: {t.govError || t.gvError || t.gvSlotError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}. While frozen, no app can draw.</p>
               <button className="pill-ghost mt-4" disabled={!t.frozen || busy(unfreeze)} onClick={async () => { await unfreeze.run(() => writeContractAsync({ address: t.governor!, abi: governorAbi, functionName: 'unfreeze' })); t.refetch() }}>Unfreeze</button>
               <TxStatus tx={unfreeze} />
             </Card>
             <Card title="Re-arm standby">
               <p className="text-sm">After a revoke the standby repay is cleared. Sign a fresh one at the new nonce so defend() can protect you again.</p>
-              <p className="text-xs text-muted mt-2">Buffer available: {buffer.data !== undefined ? `${fmt(buffer.data)} MUSD` : '—'} · standby {t.standby?.[3] ? 'live' : 'not armed'}</p>
+              {/* Round 7 (MED-1): same gate as the Status line above — a
+                  failed Governor batch leaves standby undefined, which must
+                  render "unknown", never "not armed". The re-arm button
+                  stays gated on buffer.data. */}
+              <p className="text-xs text-muted mt-2">Buffer available: {buffer.data !== undefined ? `${fmt(buffer.data)} MUSD` : '—'} · standby {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.standby?.[3] ? 'live' : 'not armed'}</p>
               <input aria-label="Re-arm amount" className="mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full mt-3" placeholder="MUSD amount" value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" />
               <button className="pill mt-3" disabled={!amt || !buffer.data || busy(rearm)} onClick={doRearm}>Sign and re-arm</button>
               <TxStatus tx={rearm} />

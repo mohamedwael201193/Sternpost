@@ -79,16 +79,46 @@ export function useTrove() {
   })
   const [troveStatus, recoveryMode, tcr] = sys.data ?? []
   const statusNum = troveStatus?.result as number | undefined
-  // L8: a zero-debt trove is still a trove — collateral with debt 0 and an
-  // active status (or a status read still in flight) counts as hasTrove, with
-  // icr() = 2**255 rendering as "No debt". A closed trove has coll 0, so the
-  // coll > 0 requirement keeps "No trove" correct for never-opened wallets.
-  const hasTrove = coll !== undefined && debt !== undefined && coll > 0n && (debt > 0n || statusNum === 1 || statusNum === undefined)
+  // Round 7 — hasTrove DEFINITION (fixes the round-5 carried item). The old
+  // rule counted statusNum === undefined as active, so a zero-debt trove
+  // whose getTroveStatus read was still pending or had failed claimed
+  // "active" (and "No debt") on an unknown status. Only a KNOWN-active
+  // status (1) counts now; the unknown case is exported separately
+  // (troveStatusKnown) so render sites hold on a neutral state instead of
+  // flashing "No trove" — Home/Draw/DrawHero gate their "No trove" claims
+  // on it, and icr below no longer depends on hasTrove either.
+  // The coll > 0 requirement does NOT exclude closed troves: a closed
+  // trove CAN still report coll > 0 / debt 0 — after a full redemption the
+  // debt is cleared but the remaining collateral stays in the contracts
+  // until the borrower claims it (Mezo docs, "How To Claim Your Collateral
+  // After a Full Redemption", verified 2026-11-16; Home's status-4 banner
+  // says the same: "Claim your collateral"). The old comment ("a closed
+  // trove has coll 0") was wrong as a general invariant — the status check
+  // is what excludes closed troves, and the round-4 CLOSED_SNAP fixture
+  // (status 2, coll > 0, debt 0) is a state the UI must render correctly,
+  // not an impossible one.
+  const troveStatusKnown = statusNum !== undefined
+  const hasTrove = coll !== undefined && debt !== undefined && coll > 0n && (debt > 0n || statusNum === 1)
   const [floor, frozen, standby, defend] = gv.data ?? []
+  // Round 7 (LOW-6): with allowFailure: true the batch query never sets
+  // isError — a reverted slot reports status 'failure' on its own entry
+  // while the batch resolves. Every gvError/sysError gate is transport-only
+  // without these: a failed frozen/standby slot would render "active" /
+  // "DISARMED" and a failed checkRecoveryMode slot would render no Recovery
+  // banner at all. Surface the per-slot failures so callers can OR them
+  // into the same gates.
+  const gvSlotError = (gv.data ?? []).some((e) => e?.status === 'failure')
+  const sysSlotError = (sys.data ?? []).some((e) => e?.status === 'failure')
   return {
-    address, isConnected, governor, hasTrove,
+    address, isConnected, governor, hasTrove, troveStatusKnown,
     coll, debt, price: p,
-    icr: hasTrove && p ? icr(coll!, p, debt!) : undefined,
+    // ICR is a function of coll/debt/price, not of the status read: a
+    // zero-debt trove whose status is unknown still has ICR 2**255, and
+    // the render sites translate it via demoIcrLabel (unknown status ->
+    // "Unavailable") instead of via an undefined ICR ("No trove"). Gating
+    // icr on hasTrove would reintroduce the false-inactive flash the
+    // definition change removes.
+    icr: coll !== undefined && debt !== undefined && p && coll > 0n ? icr(coll, p, debt) : undefined,
     troveStatus: statusNum,
     recoveryMode: recoveryMode?.result as boolean | undefined,
     tcr: tcr?.result as bigint | undefined,
@@ -107,9 +137,13 @@ export function useTrove() {
     govError: gov.isError,
     /** The Governor view batch (floor/frozen/standby/defend) failed (L3): floor/standby rows gate on this — an unknown batch must never render as 'Not configured' / 'DISARMED'. */
     gvError: gv.isError,
+    /** Round 7 (LOW-6): a single Governor-batch slot reverted (allowFailure) while the batch itself resolved — OR into every gvError gate (Home Floor/Standby/Spend route/Governor card, Watch standby/Shield, Revoke). */
+    gvSlotError,
     /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
     sysLoading: sys.isLoading,
     sysError: sys.isError,
+    /** Round 7 (LOW-6): a single sys-batch slot reverted (allowFailure) while the batch resolved — OR into the Recovery-banner state (Home/Watch) alongside sysError. */
+    sysSlotError,
     refetch: () => { core.refetch(); gv.refetch(); gov.refetch(); btc.refetch(); sys.refetch() },
   }
 }

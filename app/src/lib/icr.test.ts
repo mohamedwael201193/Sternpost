@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WAD, demoIcrLabel, icr, icrPct, isNoDebtIcr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
+import { WAD, demoIcrLabel, icr, icrPct, isNoDebtIcr, judgeDraw, maxSafeDraw, pct, safeDraw, troveStatusText, troveStatusUnknown } from './icr'
 
 const price = 100_000n * WAD // $100k BTC
 const coll = WAD // 1 BTC
@@ -73,5 +73,24 @@ describe('demoIcrLabel (LOW-3, round 6)', () => {
   it('a future status this code does not understand (e.g. 5) is "Unavailable", not "No trove"', () => {
     expect(demoIcrLabel(noDebt, 5)).toBe('Unavailable')
     expect(demoIcrLabel(noDebt, 99)).toBe('Unavailable')
+  })
+})
+
+describe('troveStatusText / troveStatusUnknown (round 7)', () => {
+  it('"active" only for status 1; a known non-active status is "not active"', () => {
+    expect(troveStatusText(1)).toBe('active')
+    expect(troveStatusText(0)).toBe('not active')
+    expect(troveStatusText(2)).toBe('not active')
+    expect(troveStatusText(4)).toBe('not active')
+  })
+  it('an unreadable or future status is "Unavailable", never "not active"', () => {
+    expect(troveStatusText(null)).toBe('Unavailable')
+    expect(troveStatusText(undefined)).toBe('Unavailable')
+    expect(troveStatusText(5)).toBe('Unavailable')
+    expect(troveStatusText(99)).toBe('Unavailable')
+    expect(troveStatusUnknown(5)).toBe(true)
+    expect(troveStatusUnknown(null)).toBe(true)
+    expect(troveStatusUnknown(1)).toBe(false)
+    expect(troveStatusUnknown(4)).toBe(false)
   })
 })

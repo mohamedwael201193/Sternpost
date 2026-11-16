@@ -40,8 +40,12 @@ export default function Draw() {
   // with fee 0 — on a fee-read failure `fee.data ?? 0n` understates the fee
   // and overstates the after-draw ICR. A failed fee read fails the local
   // projection (the on-chain preview, when it returns, still rules).
+  // Round 7 (J2 F3): a fee read still LOADING is the same unknown — while
+  // fee.data is undefined the per-amount getBorrowingFee query has not
+  // answered, so the local path waits instead of pricing the draw with
+  // fee 0 for ~one RPC round-trip per keystroke.
   const feeError = fee.isError
-  const local = !feeError && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
+  const local = !feeError && fee.data !== undefined && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data) : undefined
   // MED-2 (round 4): TanStack Query v5 RETAINS data on error, so after one
   // successful preview a failed 15 s refetch would leave the stale success
   // in preview.data — the verdict would keep saying "Safe." and the Sign
@@ -54,6 +58,18 @@ export default function Draw() {
   const previewError = preview.isError
   const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
   const projected = previewError ? undefined : icrAfter ?? local
+  // Round 7 (LOW-4): the After-draw gauge headlines the CURRENT ICR while
+  // the adjacent number is blanked on a preview/fee error — needle, centre
+  // text and aria-label all assert a number the page just said it does not
+  // know. Blank the gauge exactly when the After-draw number is blank
+  // (an amount entered and no projection), mirroring the number cell.
+  const afterBlank = wei > 0n && projected === undefined
+  // Round 7 (hasTrove definition): hasTrove is false while the trove
+  // status is unknown — the "No trove" empty must not flash for a real
+  // zero-debt trove whose sys batch is still in flight. It renders only
+  // once the status is known, or once the core read proves coll 0; until
+  // then the page holds on a skeleton.
+  const noTroveKnown = !t.hasTrove && (t.troveStatusKnown || t.coll === 0n)
   const lim = useLimits(t, appAddr)
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const pick = (v: string) => { setTouched(true); setAmount(v) }
@@ -69,7 +85,9 @@ export default function Draw() {
       ) : <DemoDraw acct={acct} viewed={viewed} />) : (
       <NeedsWallet what="draw MUSD">
         {t.error ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
-          : !t.hasTrove ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
+          : !t.hasTrove ? (noTroveKnown
+            ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
+            : <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading trove position" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>)
           : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty> : (
           <div className="grid lg:grid-cols-[1fr_420px] gap-8">
             <Card>
@@ -82,7 +100,7 @@ export default function Draw() {
                     mirroring the Home Dial (round 5); unknown renders
                     "Unavailable" instead. */}
                 <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
-                <div className="text-center"><Gauge value={toPct(t.icr)} projected={toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+                <div className="text-center"><Gauge value={afterBlank ? null : toPct(t.icr)} projected={afterBlank ? undefined : toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={afterBlank ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
               </div>
               <div className="grid grid-cols-2 text-center mt-4">
                 <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</div></div>
@@ -117,9 +135,13 @@ function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; v
                   zero-debt ICR, so without an emptyLabel it showed "—"
                   while "Now" next to it said "No debt" for a known
                   status-1 zero-debt trove — gauge and text now agree.
-                  Any other status keeps the "—" default (the "Now" text
-                  already says "No trove" / "Unavailable" there). */}
-              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" emptyLabel={a.troveStatus === 1 && isNoDebtIcr(a.icr) ? 'No debt' : undefined} /></div>
+                  Round 7 (LOW-2 + J2 F1 sub-note): the same agreement must
+                  hold for the UNKNOWN cases — an unreadable status (null)
+                  or a future status (5) renders "Unavailable" in "Now"
+                  (demoIcrLabel), so the gauge must say "Unavailable" too,
+                  never the "—" default (whose aria-label maps to "no
+                  trove"). Only a known non-active status keeps "No trove". */}
+              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(a.icr) ? (a.troveStatus === 1 ? 'No debt' : a.troveStatus == null || a.troveStatus > 4 ? 'Unavailable' : 'No trove') : undefined} /></div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 text-center mt-4 gap-4">
               {/* MED-1 (round 4) + LOW-2 (round 5): the "Now" number must

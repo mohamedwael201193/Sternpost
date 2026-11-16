@@ -31,7 +31,16 @@ export function useLimits(t: Trove, app?: Address) {
   const feePerWad = (fee?.result as bigint | undefined) ?? 0n
   const perDraw = authorized ? p![2] : undefined
   const remaining = authorized ? (rem?.result as bigint | undefined) : undefined
+  // Round 7 (J2 F2): the same allowFailure hole the fee slot had applies to
+  // the other two slots. If the appPolicy slot fails, q.data is still
+  // truthy and p is undefined, so authorized is false — but safeDraw would
+  // still compute a floor-only max, and the "Max safe" chip + prefill would
+  // suggest an amount the per-draw cap or budget would refuse. A failed
+  // appPolicy OR remainingBudget slot fails the safe draw, exactly like a
+  // failed fee slot. loaded is likewise false while any slot has failed:
+  // q.data is truthy when all three slots failed.
+  const polError = pol?.status === 'failure' || rem?.status === 'failure'
   // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
-  const safe = floorRoom !== undefined && q.data && !feeError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
-  return { loaded: !!q.data, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, safe }
+  const safe = floorRoom !== undefined && q.data && !feeError && !polError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
+  return { loaded: !!q.data && !feeError && !polError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
 }

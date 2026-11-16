@@ -14,7 +14,7 @@ const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38' as const
 const PRICE = 64_608_796_300_000_000_000_000n
 const NO_DEBT_ICR = (2n ** 255n).toString()
 
-type Batch = { data?: { result?: unknown }[]; isLoading?: boolean; isError?: boolean }
+type Batch = { data?: { result?: unknown; status?: string }[]; isLoading?: boolean; isError?: boolean }
 const mockState = vi.hoisted(() => ({
   gov: { data: undefined, isLoading: false, isError: false } as { data?: unknown; isLoading: boolean; isError: boolean },
   core: { data: undefined, isLoading: false, isError: false } as Batch,
@@ -63,11 +63,15 @@ async function renderTrove() {
       <div
         data-trove={JSON.stringify({
           hasTrove: t.hasTrove,
+          troveStatusKnown: t.troveStatusKnown,
+          troveStatus: t.troveStatus ?? null,
           icr: t.icr?.toString() ?? null,
           error: t.error,
           coreError: t.coreError,
           govError: t.govError,
           gvError: t.gvError,
+          gvSlotError: t.gvSlotError,
+          sysSlotError: t.sysSlotError,
           governor: t.governor ?? null,
         })}
       />
@@ -83,11 +87,15 @@ async function renderTrove() {
   container.remove()
   return out as {
     hasTrove: boolean
+    troveStatusKnown: boolean
+    troveStatus: number | null
     icr: string | null
     error: boolean
     coreError: boolean
     govError: boolean
     gvError: boolean
+    gvSlotError: boolean
+    sysSlotError: boolean
     governor: string | null
   }
 }
@@ -118,11 +126,42 @@ describe('useTrove hasTrove (L8)', () => {
     expect(t.icr).toBe(NO_DEBT_ICR)
   })
 
-  it('a zero-debt trove with the status read still in flight counts (no "No trove" flash)', async () => {
+  it('a zero-debt trove with the status read still in flight does NOT count (round 7 definition): hasTrove is false and the status is unknown, but the ICR is still 2**255 so pages render "Unavailable", never a "No trove" flash', async () => {
     mockState.core = { data: coreData(50_000_000_000_000_000n, 0n, 0n), isLoading: false, isError: false }
     mockState.sys = { data: undefined, isLoading: true, isError: false }
     const t = await renderTrove()
-    expect(t.hasTrove).toBe(true)
+    expect(t.hasTrove).toBe(false)
+    expect(t.troveStatusKnown).toBe(false)
+    expect(t.troveStatus).toBeNull()
+    expect(t.icr).toBe(NO_DEBT_ICR)
+  })
+
+  it('a zero-debt trove with a failed status read does not count either', async () => {
+    mockState.core = { data: coreData(50_000_000_000_000_000n, 0n, 0n), isLoading: false, isError: false }
+    mockState.sys = { data: undefined, isLoading: false, isError: true }
+    const t = await renderTrove()
+    expect(t.hasTrove).toBe(false)
+    expect(t.troveStatusKnown).toBe(false)
+    expect(t.icr).toBe(NO_DEBT_ICR)
+  })
+
+  it('a closed trove with coll > 0 / debt 0 does not count, but its ICR is still exposed (round 7 invariant: a redemption-closed trove keeps claimable surplus collateral, so coll > 0 never proves "active")', async () => {
+    mockState.core = { data: coreData(10_000_000_000_000_000n, 0n, 0n), isLoading: false, isError: false }
+    mockState.sys = { data: sysData(2), isLoading: false, isError: false }
+    const t = await renderTrove()
+    expect(t.hasTrove).toBe(false)
+    expect(t.troveStatusKnown).toBe(true)
+    expect(t.troveStatus).toBe(2)
+    expect(t.icr).toBe(NO_DEBT_ICR)
+  })
+
+  it('a future status 5 with debt 0 does not count', async () => {
+    mockState.core = { data: coreData(50_000_000_000_000_000n, 0n, 0n), isLoading: false, isError: false }
+    mockState.sys = { data: sysData(5), isLoading: false, isError: false }
+    const t = await renderTrove()
+    expect(t.hasTrove).toBe(false)
+    expect(t.troveStatusKnown).toBe(true)
+    expect(t.troveStatus).toBe(5)
     expect(t.icr).toBe(NO_DEBT_ICR)
   })
 
@@ -164,5 +203,44 @@ describe('useTrove error split (L1/L2/L3/L5)', () => {
     expect(t.coreError).toBe(false)
     expect(t.govError).toBe(false)
     expect(t.hasTrove).toBe(true)
+  })
+})
+
+describe('useTrove per-slot failures (round 7, LOW-6)', () => {
+  it('a reverted Governor-batch slot sets gvSlotError while gvError stays false', async () => {
+    mockState.gv = {
+      data: [
+        { status: 'success', result: 2_500_000_000_000_000_000n },
+        { status: 'failure' },
+        { status: 'success', result: [0n, 0n, 0n, false] },
+        { status: 'success', result: 1_600_000_000_000_000_000n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.gvSlotError).toBe(true)
+    expect(t.gvError).toBe(false)
+    expect(t.error).toBe(false)
+  })
+
+  it('a reverted sys-batch slot sets sysSlotError while sysError stays false', async () => {
+    mockState.sys = {
+      data: [
+        { status: 'success', result: 1 },
+        { status: 'failure' },
+        { status: 'success', result: 2_320_369_306_368_630_978n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.sysSlotError).toBe(true)
+  })
+
+  it('no slot error when every slot succeeds', async () => {
+    const t = await renderTrove()
+    expect(t.gvSlotError).toBe(false)
+    expect(t.sysSlotError).toBe(false)
   })
 })

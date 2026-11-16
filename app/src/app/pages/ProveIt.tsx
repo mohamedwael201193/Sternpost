@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import { DEMO_ACCOUNT, DEMO_ACCOUNT_BADGE } from '../../lib/chain'
-import { fmt, pct, demoIcrLabel } from '../../lib/icr'
+import { fmt, pct, demoIcrLabel, troveStatusText } from '../../lib/icr'
 import { Skeleton } from '../../ui/Skeleton'
 import { RPC_ERROR_TEXT, useAccount } from '../useAccount'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -85,7 +85,7 @@ function ProveIt() {
                 for any zero-debt ICR, and a null status is "Unavailable",
                 never "not active". The lab account is live status 1 with
                 debt, so this only changes the failure-mode rendering. */}
-            <p>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : a.troveStatus === null ? 'Unavailable' : 'not active'}</b></p>
+            <p>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{troveStatusText(a.troveStatus)}</b></p>
             <p>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'} · MUSD on the account {fmt(a.balances.musd)} · sMUSD {fmt(a.balances.smusd)}</p>
             <p className="text-muted">Read live from Mezo testnet with one Multicall3 batch; refreshes every 12 s. The same demo account demo mode shows on every app page — unless you preview another account with ?account=, which shows that account instead.</p>
           </div>

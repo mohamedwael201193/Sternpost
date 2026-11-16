@@ -48,18 +48,29 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const previewError = preview.isError && wei > 0n
   const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
   const feeError = fee.isError
-  const local = !feeError && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
+  // Round 7 (J2 F3): a fee read still LOADING is the same unknown as a
+  // failed one — while fee.data is undefined the per-amount getBorrowingFee
+  // query has not answered, so the local projection and the debt-after
+  // figure wait instead of pricing the draw with fee 0 for ~one RPC
+  // round-trip per keystroke. The on-chain icrAfter still rules once the
+  // preview returns.
+  const local = !feeError && fee.data !== undefined && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data) : undefined
   const after = previewError ? undefined : icrAfter ?? local
   const lim = useLimits(t, t.address)
   // Start from a value the Governor will accept instead of a fixed number that may exceed the cap.
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const over = lim.safe && wei > lim.safe.max ? wei - lim.safe.max : 0n
-  const debtAfter = !feeError && t.debt !== undefined && wei > 0n ? t.debt + wei + (fee.data ?? 0n) : undefined
+  const debtAfter = !feeError && fee.data !== undefined && t.debt !== undefined && wei > 0n ? t.debt + wei + fee.data : undefined
   const d = useDrawSend(t)
   const routesReady = useRoutesReady(t)
   const blocked = route !== 'keep' && !routesReady.ready
   const btcAcct = useIsBtcAccount()
   const ready = t.isConnected && t.hasTrove && !!t.governor
+  // Round 7 (hasTrove definition): hasTrove is false while the trove
+  // status is unknown — the "Open a trove" link would flash for a real
+  // zero-debt trove whose sys batch is still in flight. Hold on a disabled
+  // button until the status is known or the core read proves coll 0.
+  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n
   const cur = toPct(t.icr), aft = wei > 0n ? toPct(after) : cur, flo = toPct(t.floor)
 
   return (
@@ -140,7 +151,9 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
 
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />
-            : !ready ? <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>
+            : !ready ? (troveUnknown
+              ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Checking your trove…</button>
+              : <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>)
             : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct || blocked} onClick={() => d.go(wei, self, self, route)}>
                 {d.busy ? 'Signing…' : 'Sign & send'} <span aria-hidden>→</span>
               </button>}

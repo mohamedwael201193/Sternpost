@@ -84,6 +84,7 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(snap.cooldownBlocks).toBe(20);
     expect(snap.needed).toEqual({ icr: 1_562_000_000_000_000_000n, repayWanted: 0n, collWanted: 0n, reason: 0 });
     expect(snap.pendingYield).toBe(5_000_000_000_000_000n);
+    expect(snap.policyError).toBe(false);
     expect(snap.balances.musd).toBe(2_433_090_442_561_969_120n);
     expect(snap.balances.smusd).toBe(61_554_608_535_561_276_641n);
   });
@@ -104,6 +105,20 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(snap.minDebtAhead).toBeNull();
     expect(snap.needed).toEqual({ icr: 1_602_234_950_480_101_128n, repayWanted: 0n, collWanted: 0n, reason: null });
     expect(snap.pendingYield).toBeNull();
+    expect(snap.policyError).toBe(false);
+  });
+
+  it("flags a policy-read error when owner() answers but every policy slot fails: version null, policyError true (not 'no policy')", async () => {
+    // base() already has owner() ok and all nine policy slots (v3 policy +
+    // v2 floor/shield/target/bounty/needed) failing — a v2 account's v3
+    // slots failing is expected, but NO policy source answering at all is a
+    // failed read, not an absent policy.
+    const snap = await readAccount(mockClient(base()), ACCOUNT);
+    expect(snap.version).toBeNull();
+    expect(snap.owner).toBe(OWNER);
+    expect(snap.policyError).toBe(true);
+    expect(snap.floorICR).toBeNull();
+    expect(snap.shieldICR).toBeNull();
   });
 
   it("reads a plain trove (not an account contract): version null, trove numbers still present", async () => {
@@ -112,6 +127,7 @@ describe("readAccount (Multicall3 batch)", () => {
     const snap = await readAccount(mockClient(slots), OWNER);
     expect(snap.version).toBeNull();
     expect(snap.owner).toBeNull();
+    expect(snap.policyError).toBe(false);
     expect(snap.coll).toBe(50_000_000_000_000_000n);
     expect(snap.debt).toBeGreaterThan(0n);
   });

@@ -4,7 +4,7 @@ import type { Address } from 'viem'
 import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useViewedAccount } from '../useAccount'
-import { fmt, pct, demoIcrLabel } from '../../lib/icr'
+import { fmt, pct, demoIcrLabel, troveStatusText } from '../../lib/icr'
 import { DEMO_ACCOUNT_BADGE, LAB_DEMO_ACCOUNT } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -35,7 +35,7 @@ function OpenAccountCard({ address, title, badge, note }: { address: Address; ti
           {/* MED-1 (round 5): pct() says "No debt" for any zero-debt ICR —
               never pair "not active" with "No debt": a known non-active
               trove reads "No trove", an unreadable status "Unavailable". */}
-          <div>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : a.troveStatus === null ? 'Unavailable' : 'not active'}</b></div>
+          <div>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{troveStatusText(a.troveStatus)}</b></div>
           <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
           <p className="text-muted">{note}</p>
         </div>

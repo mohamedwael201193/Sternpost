@@ -70,6 +70,15 @@ export type AccountSnapshot = {
   needed: ShieldNeed | null;
   pendingYield: bigint | null;
   /**
+   * Round 7: true when the address IS an account contract (owner() answered)
+   * but NO policy source answered — the v3 policy() tuple and all four v2
+   * getters failed. Without this flag the UI renders "Not configured" /
+   * "No policy" about an unknown policy. A plain trove (owner() reverts)
+   * is not an error: it simply has no policy, so policyError is false
+   * there. A v2 account's failing v3 slots are expected, not an error.
+   */
+  policyError: boolean;
+  /**
    * Token balances. BTC is `null` when the balance read itself fails — a failed
    * read must render as "unreadable" in the UI, never as 0 (a 0 BTC balance on
    * a funded account would be a fake fact). MUSD/sMUSD fall back to 0n only
@@ -151,6 +160,17 @@ export async function readAccount(
   const policy = ok(policyR);
   const floorV2 = ok(floorV2R);
   const version: AccountSnapshot["version"] = policy !== undefined ? "v3" : floorV2 !== undefined ? "v2" : null;
+  // Round 7: owner() answering proves this is an account contract, so a
+  // policy that answers from NO source is a failed read, not an absent
+  // policy. (A v2 account's v3 slots failing is expected — version is v2
+  // then — and a plain trove's owner() failing means no policy exists.)
+  const policyError =
+    ok(ownerR) !== undefined &&
+    policy === undefined &&
+    floorV2 === undefined &&
+    ok(shieldV2R) === undefined &&
+    ok(targetV2R) === undefined &&
+    ok(bountyV2R) === undefined;
 
   const neededV3 = ok(neededV3R);
   const neededV2 = ok(neededV2R);
@@ -183,6 +203,7 @@ export async function readAccount(
     cooldownBlocks: policy?.[5] ?? null,
     needed,
     pendingYield: ok(yieldR) ?? null,
+    policyError,
     balances: { btc, musd: ok(musdR) ?? 0n, smusd: ok(smusdR) ?? 0n },
   };
 }

@@ -29,7 +29,12 @@ export default function Apps() {
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Apps</h1><p className="text-muted mt-2 max-w-2xl">Give an app a budget it can draw from your trove. It can never take more than the budget, more than one draw cap, or anything below your floor.</p></header>
       <NeedsWallet what="manage app budgets">
-        {!t.governor ? <Empty title="No Governor yet">Create your Governor on Home first. Budgets live on it.</Empty> : (
+        {/* Round 7 (LOW-8): a connected wallet WITH a Governor whose
+            governorOf (or core) read failed has t.governor undefined — the
+            live branch below would render a false "No Governor yet" with a
+            wrong CTA. An error is an error plate, never a false empty. */}
+        {t.error || t.govError ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+          : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home first. Budgets live on it.</Empty> : (
           <div className="grid lg:grid-cols-2 gap-8">
             <Authorize governor={t.governor} preset={params.get('app') ?? ''} presetAmount={params.get('amount')} requestId={params.get('request')} />
             <div className="space-y-6">
@@ -120,9 +125,12 @@ function DemoCrew({ viewed, holding = false }: { viewed: ReturnType<typeof useVi
 }
 
 function Policy({ governor, app }: { governor: Address; app: Address }) {
-  const { data, refetch } = useReadContract({ address: governor, abi: governorAbi, functionName: 'appPolicy', args: [app] })
+  const { data, isError, refetch } = useReadContract({ address: governor, abi: governorAbi, functionName: 'appPolicy', args: [app] })
   const { writeContractAsync } = useWriteContract()
   const tx = useTx()
+  // Round 7 (LOW-8): a failed appPolicy read used to return null — a silent
+  // omission of the budget row. Surface the error instead.
+  if (isError) return <p className="text-sm text-signal mt-4" role="alert">{RPC_ERROR_TEXT}</p>
   if (!data) return null
   const [budget, spent, perDraw, expiry, payee] = data
   if (expiry === 0n) return <p className="text-sm text-muted mt-4">No budget for this app.</p>

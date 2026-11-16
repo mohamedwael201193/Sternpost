@@ -82,6 +82,18 @@ export function demoIcrLabel(icr: bigint, troveStatus: number | null | undefined
   return 'No trove'
 }
 
+/** True when a trove status is unreadable (null/undefined — the read failed) or outside the known 0–4 enum (a future status this code does not understand): the trove's state is UNKNOWN, never "not active" and never "No trove". */
+export function troveStatusUnknown(status: number | null | undefined): boolean {
+  return status === null || status === undefined || status < 0 || status > 4
+}
+
+/** Short status word for the demo/preview account lines (Close/Open/ProveIt): 'active' for 1, 'Unavailable' for an unknown status, 'not active' for a known non-active status (0/2/3/4). */
+export function troveStatusText(status: number | null | undefined): string {
+  if (status === 1) return 'active'
+  if (troveStatusUnknown(status)) return 'Unavailable'
+  return 'not active'
+}
+
 /**
  * Gauge percent for a 1e18 ICR, or null when there is no value or no debt.
  * Mirrors pct()'s "No debt" label: a zero-debt ICR (≥ 2**200) is null here,

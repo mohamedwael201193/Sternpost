@@ -63,7 +63,7 @@ export default function Pay() {
  * A live button needs an explicit `demo={false}` opt-out (see Pay above).
  */
 function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
-  const { data: wallets } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
+  const { data: wallets, isError: walletsError } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
   const list = (wallets ?? []) as Address[]
   const reads = useReadContracts({
     allowFailure: true,
@@ -74,17 +74,22 @@ function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
     ] as const),
     query: { enabled: list.length > 0 },
   })
+  // Round 7 (LOW-9): a failed walletsOf read is an error, never "No spend
+  // wallets" — the user may already have wallets. A failed balance/agent
+  // slot is "unreadable", never perpetual "Loading…" or a false "no agent".
+  if (walletsError) return <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
   if (!list.length) return <Empty title="No spend wallets">Create one from the SDK with factory.createSpendWallet(agent, expiry), then draw into it.</Empty>
   return (
     <Card title="Spend wallets">
       {list.map((w, i) => {
         const [bal, agent, exp] = (reads.data ?? []).slice(i * 3, i * 3 + 3)
         const a = agent?.result as Address | undefined
+        const agentUnreadable = agent?.status === 'failure' || exp?.status === 'failure'
         return (
           <div key={w} className="py-3 border-t border-ink/15 grid sm:grid-cols-3 gap-2 text-sm items-center">
             <a className="ink-link mono text-xs" href={addrUrl(w)} target="_blank" rel="noreferrer">{w.slice(0, 10)}…{w.slice(-4)}</a>
-            <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : 'Loading…'}</b> MUSD</span>
-            <span className="text-xs">{!a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
+            <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : reads.isError || bal?.status === 'failure' ? 'unreadable' : 'Loading…'}</b> MUSD</span>
+            <span className="text-xs">{agentUnreadable ? 'agent unreadable' : !a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
             <PayRow wallet={w} agent={a} demo={demo} />
           </div>
         )

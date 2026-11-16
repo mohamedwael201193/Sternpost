@@ -4,7 +4,7 @@ import type { Address } from 'viem'
 import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, pct, demoIcrLabel } from '../../lib/icr'
+import { fmt, pct, demoIcrLabel, troveStatusText, troveStatusUnknown } from '../../lib/icr'
 import { DEMO_ACCOUNT_BADGE, LAB_DEMO_ACCOUNT } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -113,13 +113,13 @@ function ClosePosition({ address, title, badge, readOnlyNote }: { address: Addre
           {/* MED-1 (round 4): pct() says "No debt" for any zero-debt ICR —
               never pair "not active" with "No debt": a known non-active
               trove reads "No trove", an unreadable status "Unavailable". */}
-          <div>Trove <b>{a.troveStatus === 1 ? 'active' : a.troveStatus === null ? 'Unavailable' : 'not active'}</b> · ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
+          <div>Trove <b>{troveStatusText(a.troveStatus)}</b> · ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
           <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'Unavailable'}</b></div>
           {radar.isError && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
           <p className="text-muted">
             {a.troveStatus === 1
               ? `Closing would repay the full ${fmt(a.debt)} MUSD debt from the account's MUSD + sMUSD and return the ${fmt(a.coll, 18, 6)} BTC collateral to the owner.`
-              : a.troveStatus === null
+              : troveStatusUnknown(a.troveStatus)
                 ? 'The trove status could not be read, so what closeAccount() would do is unknown — the status read failed, it is not "not active".'
                 : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
             {readOnlyNote}
