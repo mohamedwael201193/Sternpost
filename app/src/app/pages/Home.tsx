@@ -33,14 +33,22 @@ export default function Home() {
   const icrV = demo ? a?.icr : t.icr
   const floorV = demo ? (a?.floorICR ?? undefined) : t.floor
   const hasTrove = demo ? !!a && a.troveStatus === 1 : t.hasTrove
-  const loading = demo ? acct.isLoading : t.loading
+  // L6: while wagmi reconnects on a hard load the demo numbers are not
+  // settled yet — hold the page on skeletons, exactly like Close/Open hold
+  // their first card. An explicit ?account= preview is the user's choice and
+  // shows at once.
+  const holdDemo = demo && viewed.reconnecting && viewed.source !== 'param'
+  const loading = demo ? acct.isLoading || holdDemo : t.loading
   // The top error plate covers EITHER failed read: a radar failure must not
   // pass silently (it hides the Recovery banner). The numbers below gate
   // only on the account read — a radar failure leaves them readable.
   // LOW-8: outside demo mode a failed useTrove core read shows this plate
   // (t.error), never a silent 'No trove'/'No Governor' empty.
   const rpcError = demo ? acct.isError || radar.isError : t.error
-  const acctError = demo ? acct.isError : false
+  // L1/L5: the dial + trove numbers gate on the CORE read only — a
+  // governorOf-only failure must not mask readable trove numbers as
+  // 'Unavailable' (that is what t.govError is for, below).
+  const acctError = demo ? acct.isError : !!t.coreError
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
   const troveStatus = demo ? a?.troveStatus : t.troveStatus
   // A closed trove (status 2/3/4, not 0 = never existed) blocks draws. The
@@ -108,7 +116,7 @@ export default function Home() {
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
               ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
-              : t.error ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
+              : t.error || t.gvError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
                 ? <span className="text-magenta">Floor {pct(a.floorICR)} · shield {pct(a.shieldICR)}</span>
@@ -129,20 +137,22 @@ export default function Home() {
               <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} />
               <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : floorV ? pct(floorV) : 'Not configured'} />
-              {/* LOW-5: "No policy" gates on shieldICR (like Watch), never on
-                  `needed` — a failed needed() view slot leaves needed null
-                  even when the policy exists. */}
-              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : acctError ? 'Unavailable' : a?.shieldICR == null ? 'No policy' : a?.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
+              {/* J1 LOW-2: when needed() itself failed (null) but the policy
+                  exists, the shield state is UNKNOWN — asserting "No shield
+                  needed" would be wrong if the ICR were below the shield
+                  line. LOW-5 still applies: "No policy" gates on shieldICR,
+                  never on needed. */}
+              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : acctError ? 'Unavailable' : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
               <Row k="Account owner" v={loading ? <Skeleton className="h-4 w-32" /> : a?.owner ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(a.owner)} target="_blank" rel="noreferrer">{a.owner.slice(0, 6)}…{a.owner.slice(-4)}</a> : 'Unknown'} />
             </>
           ) : (
             <>
-              <Row k="Plotted course" v={t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
-              <Row k="Collateral" v={t.error ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
-              <Row k="Debt" v={t.error ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={t.error ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
-              <Row k="Standby heal" v={t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
-              <Row k="Mezo nonce" v={t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
+              <Row k="Plotted course" v={t.govError ? 'Unavailable' : t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
+              <Row k="Collateral" v={acctError ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
+              <Row k="Debt" v={acctError ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
+              <Row k="Floor" v={t.error || t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Standby heal" v={t.error || t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
+              <Row k="Mezo nonce" v={acctError ? 'Unavailable' : t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
           )}
         </aside>
@@ -182,7 +192,7 @@ export default function Home() {
                   </div>
                 </Card>
               )}
-              {t.hasTrove && !t.governor && <CreateGovernor onDone={t.refetch} />}
+              {t.hasTrove && !t.governor && !t.govError && <CreateGovernor onDone={t.refetch} />}
             </NeedsWallet>
           )}
         </div>
@@ -206,9 +216,11 @@ export default function Home() {
             </Card>
           ) : (
             <Card title="Governor">
-              {t.governor
+              {t.govError
+                ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+                : t.governor
                 ? <div className="text-sm space-y-2"><a className="ink-link mono text-xs break-all" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">{t.governor}</a>
-                    <div>Status: {t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
+                    <div>Status: {t.gvError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
                 : <p className="text-sm text-muted">None yet. Create one to set a floor and hand out bounded budgets.</p>}
             </Card>
           )}
@@ -241,10 +253,9 @@ function DemoHero({ acct, viewed }: { acct: ReturnType<typeof useAccount>; viewe
               <dt className="text-muted">Floor</dt><dd className="mono text-right">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield line</dt><dd className="mono text-right">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield target</dt><dd className="mono text-right">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</dd>
-              {/* LOW-5: "No policy" gates on shieldICR (like Watch), never on
-                  `needed` — a failed needed() view slot leaves needed null
-                  even when the policy exists. */}
-              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.shieldICR == null ? 'No policy' : a.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
+              {/* J1 LOW-2: a null needed() is "unknown", never "none" — see the
+                  Shield row above. */}
+              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.shieldICR == null ? 'No policy' : a.needed == null ? 'unknown' : (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
             </dl>
             <p className="text-xs text-muted mt-4">Read-only: this account belongs to the demo owner. Drawing, defending and closing need the owner wallet.</p>
           </>

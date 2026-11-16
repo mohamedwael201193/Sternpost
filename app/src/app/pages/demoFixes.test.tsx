@@ -34,6 +34,9 @@ let radarState: { data?: any; isLoading: boolean; isError: boolean } = { isLoadi
 let ownState: { data?: `0x${string}` | null; isLoading: boolean; isError: boolean } = { data: null, isLoading: false, isError: false }
 let logsState: { data?: { rows: any[]; fromBlock: bigint }; isLoading: boolean; isError: boolean } = { isLoading: false, isError: false }
 let readsState: { result: unknown }[] = []
+let troveState: Record<string, unknown> = {}
+
+const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38' as const
 
 const SNAP = {
   account: DEMO_ACCOUNT,
@@ -81,7 +84,12 @@ vi.mock('../useAccount', () => ({
 vi.mock('../useLogs', () => ({ useAccountLogs: () => logsState }))
 vi.mock('../useTrove', () => ({
   TROVE_STATUS_LABEL: { 0: 'No trove', 1: 'Active', 2: 'Closed by owner', 3: 'Liquidated', 4: 'Closed by redemption' },
-  useTrove: () => ({ address: walletState.address, isConnected: walletState.isConnected, hasTrove: false, governor: undefined, loading: false, sysLoading: false, sysError: false }),
+  useTrove: () => ({
+    address: walletState.address, isConnected: walletState.isConnected, hasTrove: false, governor: undefined,
+    loading: false, sysLoading: false, sysError: false, error: false, coreError: false, govError: false, gvError: false,
+    balances: { btc: undefined, musd: undefined, smusd: undefined, mezo: undefined },
+    ...troveState,
+  }),
 }))
 vi.mock('../useLimits', () => ({ useLimits: () => ({}) }))
 vi.mock('../api', () => ({ useApiList: () => ({ state: 'off', items: [] }), useSetRequestStatus: () => vi.fn() }))
@@ -92,6 +100,7 @@ import Apps from './Apps'
 import Pay, { PayRow } from './Pay'
 import Draw from './Draw'
 import Home from './Home'
+import Watch from './Watch'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -122,6 +131,7 @@ beforeEach(() => {
   ownState = { data: null, isLoading: false, isError: false }
   logsState = { isLoading: false, isError: false }
   readsState = []
+  troveState = {}
   cleanup()
 })
 
@@ -284,11 +294,12 @@ describe('LOW-4 — PayRow defaults to demo (read-only)', () => {
 })
 
 describe('LOW-5 — Home gates "No policy" on shieldICR, never on needed', () => {
-  it('shows "No shield needed" (not "No policy") when needed() failed but the policy exists', async () => {
+  it('shows "Unknown" (not "No policy", not "No shield needed") when needed() failed but the policy exists (J1 LOW-2)', async () => {
     acctState = { data: { ...SNAP, needed: null }, isLoading: false, isError: false }
     const c = await renderPage(<Home />)
-    expect(c.textContent).toContain('No shield needed')
+    expect(c.textContent).toContain('Unknown')
     expect(c.textContent).not.toContain('No policy')
+    expect(c.textContent).not.toContain('No shield needed')
   })
 
   it('shows "No policy" when shieldICR itself is null', async () => {
@@ -318,5 +329,165 @@ describe('H1 — the known lab account is labelled LAB PROTOTYPE as the user’s
     expect(c.textContent).toContain('Your account — live close position')
     expect(c.textContent).toContain(DEMO_ACCOUNT)
     expect(c.textContent).toContain('LAB PROTOTYPE')
+  })
+})
+
+const LIVE = { isConnected: true, address: OWNER as `0x${string}`, chainId: 31611 }
+const LIVE_VIEWED = { address: DEMO_ACCOUNT, source: 'demo' as const, isDemo: true, isLabPrototype: true, demoMode: false, reconnecting: false }
+const TROVE_NUMBERS = {
+  hasTrove: true,
+  coll: 50_000_000_000_000_000n,
+  debt: 2_016_208_555_450_632_253_551n,
+  price: 64_608_796_300_000_000_000_000n,
+  icr: 1_602_234_950_480_101_128n,
+  troveStatus: 1,
+  floor: 2_500_000_000_000_000_000n,
+  nonce: 5n,
+}
+
+describe('L1 — Home dial gates on the core read, never a bare "No trove"', () => {
+  it('shows "Unavailable" (not "No trove") when the core trove read fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: true, coreError: true, govError: false, gvError: false, hasTrove: false, governor: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No trove')
+  })
+})
+
+describe('L2 — "No Governor yet" rows gate on the governor read error', () => {
+  it('shows "Unavailable" (not "No Governor yet") when governorOf fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: true, coreError: false, govError: true, gvError: false, governor: undefined, ...TROVE_NUMBERS }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No Governor yet')
+    expect(c.textContent).not.toContain('Deploys your own Governor')
+  })
+})
+
+describe('L3 — Governor batch (floor/frozen/standby) gates on gvError', () => {
+  it('shows "Unavailable" (not "Not configured" / "DISARMED") when the Governor batch fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: false, coreError: false, govError: false, gvError: true, governor: GOVERNOR, ...TROVE_NUMBERS, floor: undefined, standby: undefined, frozen: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Not configured')
+    expect(c.textContent).not.toContain('DISARMED')
+  })
+
+  it('Watch shows "Unavailable" (not "No Governor yet") when the Governor batch fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: false, coreError: false, govError: false, gvError: true, governor: GOVERNOR, standby: undefined, ...TROVE_NUMBERS }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No Governor yet')
+  })
+})
+
+describe('L5 — a governor-only failure does not mask readable trove numbers', () => {
+  it('still shows the live collateral/debt numbers when governorOf fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: true, coreError: false, govError: true, gvError: false, governor: undefined, ...TROVE_NUMBERS }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('0.05 BTC')
+    expect(c.textContent).toContain('2,016.21')
+    expect(c.textContent).not.toContain('No trove')
+  })
+})
+
+describe('L6 — the reconnecting hold covers Home/Watch/Draw/Pay/Apps', () => {
+  const HOLD_VIEWED = { address: DEMO_ACCOUNT, source: 'demo' as const, isDemo: true, isLabPrototype: true, demoMode: true, reconnecting: true }
+
+  it('Home shows skeletons, never demo numbers, while reconnecting', async () => {
+    viewedState = { ...HOLD_VIEWED }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Collateral ratio')
+    expect(c.textContent).not.toContain(DEMO_ACCOUNT)
+    expect(c.textContent).not.toContain('No shield needed')
+  })
+
+  it('Watch shows skeletons, never the shield verdict, while reconnecting', async () => {
+    viewedState = { ...HOLD_VIEWED }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Shield need')
+    expect(c.textContent).not.toContain('NothingToDo')
+    expect(c.textContent).not.toContain('is above the shield line')
+    expect(c.textContent).not.toContain('of 277')
+  })
+
+  it('Draw shows a skeleton, never the demo gauge, while reconnecting', async () => {
+    viewedState = { ...HOLD_VIEWED }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Draw')
+    expect(c.textContent).not.toContain('CURRENT')
+    expect(c.textContent).not.toContain('160.2%')
+  })
+
+  it('Pay shows a skeleton, never the demo spend wallets, while reconnecting', async () => {
+    viewedState = { ...HOLD_VIEWED }
+    const c = await renderPage(<Pay />)
+    expect(c.textContent).toContain('Pay')
+    expect(c.textContent).not.toContain(SPEND_WALLET)
+  })
+
+  it('Apps shows skeletons, never the demo policy/draws, while reconnecting', async () => {
+    viewedState = { ...HOLD_VIEWED }
+    const c = await renderPage(<Apps />)
+    expect(c.textContent).toContain('Demo account policy')
+    expect(c.textContent).not.toContain('Bounty')
+    expect(c.textContent).not.toContain('No draws yet')
+  })
+})
+
+describe('L8 — a zero-debt trove renders "No debt", never "No trove"', () => {
+  const ZERO_DEBT = {
+    hasTrove: true,
+    coll: 50_000_000_000_000_000n,
+    debt: 0n,
+    price: 64_608_796_300_000_000_000_000n,
+    icr: 2n ** 255n,
+    troveStatus: 1,
+    error: false, coreError: false, govError: false, gvError: false,
+  }
+
+  it('Home dial shows "No debt" for a zero-debt trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT, governor: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No debt')
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('Watch ICR card shows "No debt" for a zero-debt trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT, governor: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('No debt')
+  })
+
+  it('Draw gauges + "Now" show "No debt" for a zero-debt trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT, governor: GOVERNOR, floor: 2_500_000_000_000_000_000n }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('No debt')
+    expect(c.textContent).not.toContain('No trove')
+  })
+})
+
+describe('J1 LOW-2 — Watch never asserts "None" without a needed() read', () => {
+  it('shows "Unknown" (not "None") when needed() failed but the policy exists', async () => {
+    acctState = { data: { ...SNAP, needed: null }, isLoading: false, isError: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unknown')
+    expect(c.textContent).not.toContain('NothingToDo')
   })
 })

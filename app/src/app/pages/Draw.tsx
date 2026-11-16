@@ -10,7 +10,7 @@ import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
-import { REASONS, WAD, icrPct as toPct, pct, projectedIcr } from '../../lib/icr'
+import { REASONS, WAD, icrPct as toPct, isNoDebtIcr, pct, projectedIcr } from '../../lib/icr'
 import { DRAW_WINDOW_S } from '../../lib/sig'
 import { addrUrl } from '../../lib/proofs'
 import { useLimits } from '../useLimits'
@@ -21,6 +21,10 @@ export default function Draw() {
   const t = useTrove()
   const viewed = useViewedAccount()
   const demo = viewed.demoMode
+  // L6: hold the demo preview on a skeleton while wagmi reconnects — the
+  // demo numbers are not settled yet. An explicit ?account= preview shows
+  // at once.
+  const holdDemo = demo && viewed.reconnecting && viewed.source !== 'param'
   const acct = useAccountData(demo ? viewed.address : undefined)
   const [amount, setAmount] = useState('')
   const [touched, setTouched] = useState(false)
@@ -43,15 +47,20 @@ export default function Draw() {
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Draw</h1><p className="text-muted mt-2 max-w-2xl">See exactly where a draw leaves your trove before you sign. The Governor runs the same check on-chain and reverts anything below your floor.</p></header>
       <BtcSignNote className="max-w-2xl" />
-      {demo ? <DemoDraw acct={acct} viewed={viewed} /> : (
+      {demo ? (holdDemo ? (
+        <Card>
+          <div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading trove position" /><Skeleton className="h-4 w-2/3 mx-auto" /></div>
+        </Card>
+      ) : <DemoDraw acct={acct} viewed={viewed} />) : (
       <NeedsWallet what="draw MUSD">
-        {!t.hasTrove ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
+        {t.error ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+          : !t.hasTrove ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
           : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty> : (
           <div className="grid lg:grid-cols-[1fr_420px] gap-8">
             <Card>
               <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
-                <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" /></div>
-                <div className="text-center"><Gauge value={toPct(t.icr)} projected={toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" /></div>
+                <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(t.icr) ? 'No debt' : undefined} /></div>
+                <div className="text-center"><Gauge value={toPct(t.icr)} projected={toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={isNoDebtIcr(t.icr) ? 'No debt' : undefined} /></div>
               </div>
               <div className="grid grid-cols-2 text-center mt-4">
                 <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr ? pct(t.icr) : '—'}</div></div>

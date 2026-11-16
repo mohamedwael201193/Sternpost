@@ -69,21 +69,41 @@ export const ACCOUNTS_DEPLOY_BLOCK: bigint = BigInt(d.accounts.implementation.bl
 
 /**
  * Every known TroveAccount factory, newest first — read from
- * `shared/deployments/testnet.json` (`accounts.factory` + `accounts.previous.factory`),
- * so a future redeploy only needs a testnet.json update, never a code change.
- * fetchOwnAccount scans ALL of them: a redeploy orphans every existing account
- * into a false "no credit account yet" if only the current factory is scanned.
+ * `shared/deployments/testnet.json` `accounts.factories[]`, the full history
+ * array (oldest first in the file; reversed here so the newest factory scans
+ * first). A future redeploy appends ONE entry to that array — `factory` /
+ * `previous` are NOT the history: `previous` holds only the single last
+ * factory, so a second redeploy would overwrite it and orphan every account
+ * created through the factory it replaced. fetchOwnAccount scans ALL of
+ * them: a redeploy must not orphan existing accounts into a false "no credit
+ * account yet". When the array is absent (older deployments file) the reader
+ * falls back to `[factory, previous.factory]`.
  */
 export type AccountFactoryDeployment = { address: Address; deployBlock: bigint }
 const accountFactory = (v: any): AccountFactoryDeployment | null => {
   const address = at(v)
   const block = v?.block
-  return address && block !== undefined ? { address, deployBlock: BigInt(block) } : null
+  const blockOk = typeof block === 'number' || (typeof block === 'string' && /^\d+$/.test(block))
+  return address && blockOk ? { address, deployBlock: BigInt(block) } : null
 }
-export const ACCOUNT_FACTORIES: AccountFactoryDeployment[] = [
-  accountFactory(d.accounts.factory),
-  accountFactory(d.accounts.previous?.factory),
-].filter((f): f is AccountFactoryDeployment => f !== null)
+const factoriesFromArray = (v: any): AccountFactoryDeployment[] | null => {
+  if (!Array.isArray(v)) return null
+  const out: AccountFactoryDeployment[] = []
+  for (const entry of v) {
+    const f = accountFactory(entry)
+    if (f) out.push(f)
+    else console.warn(`[chain] ignoring malformed accounts.factories entry (needs an address and a numeric block): ${JSON.stringify(entry)}`)
+  }
+  return out
+}
+export const ACCOUNT_FACTORIES: AccountFactoryDeployment[] = (() => {
+  const fromArray = factoriesFromArray((d.accounts as any)?.factories)
+  if (fromArray && fromArray.length > 0) return [...fromArray].reverse()
+  return [
+    accountFactory(d.accounts.factory),
+    accountFactory(d.accounts.previous?.factory),
+  ].filter((f): f is AccountFactoryDeployment => f !== null)
+})()
 
 /**
  * Demo account for read-only demo mode (plan §6.3): `shared/deployments/testnet.json` →

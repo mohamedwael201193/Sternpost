@@ -66,7 +66,6 @@ export function useTrove() {
   const coll = totals?.coll
   const debt = totals?.debt
   const p = price?.result as bigint | undefined
-  const hasTrove = !!coll && !!debt && debt > 0n
   // Trove status + system health need the live price, so they run as a second batch once it is known.
   // A closed trove reports a max ICR (zero debt), so the status must be read explicitly (C7).
   const sys = useReadContracts({
@@ -79,12 +78,18 @@ export function useTrove() {
     query: { enabled: enabled && p !== undefined, ...live },
   })
   const [troveStatus, recoveryMode, tcr] = sys.data ?? []
+  const statusNum = troveStatus?.result as number | undefined
+  // L8: a zero-debt trove is still a trove — collateral with debt 0 and an
+  // active status (or a status read still in flight) counts as hasTrove, with
+  // icr() = 2**255 rendering as "No debt". A closed trove has coll 0, so the
+  // coll > 0 requirement keeps "No trove" correct for never-opened wallets.
+  const hasTrove = coll !== undefined && debt !== undefined && coll > 0n && (debt > 0n || statusNum === 1 || statusNum === undefined)
   const [floor, frozen, standby, defend] = gv.data ?? []
   return {
     address, isConnected, governor, hasTrove,
     coll, debt, price: p,
     icr: hasTrove && p ? icr(coll!, p, debt!) : undefined,
-    troveStatus: troveStatus?.result as number | undefined,
+    troveStatus: statusNum,
     recoveryMode: recoveryMode?.result as boolean | undefined,
     tcr: tcr?.result as bigint | undefined,
     floor: floor?.result as bigint | undefined,
@@ -96,6 +101,12 @@ export function useTrove() {
     loading: core.isLoading || gov.isLoading,
     /** The core trove/Governor read failed (LOW-8): callers must show the RPC error, never a 'No trove'/'No Governor' empty. */
     error: core.isError || gov.isError,
+    /** The core trove read alone failed (L5): the trove numbers (coll/debt/ICR) gate on this, never on the Governor read — a gov-only failure must not mask readable trove numbers as 'Unavailable'. */
+    coreError: core.isError,
+    /** The governorOf read alone failed (L2): Governor rows gate on this, never on the trove numbers. */
+    govError: gov.isError,
+    /** The Governor view batch (floor/frozen/standby/defend) failed (L3): floor/standby rows gate on this — an unknown batch must never render as 'Not configured' / 'DISARMED'. */
+    gvError: gv.isError,
     /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
     sysLoading: sys.isLoading,
     sysError: sys.isError,

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAccount as useWagmiAccount } from 'wagmi'
@@ -35,6 +36,13 @@ export type ViewedAccount = {
    * reconnect (LOW-3).
    */
   reconnecting: boolean
+  /**
+   * True once the reconnect hold has timed out (RECONNECT_HOLD_TIMEOUT_MS):
+   * the wallet is (probably) not coming back, so the hold falls back to the
+   * demo numbers and the DemoBanner says so — the hold must never hang the
+   * page forever on a wallet that never reconnects (L6).
+   */
+  reconnectTimedOut: boolean
 }
 
 /**
@@ -42,6 +50,9 @@ export type ViewedAccount = {
  * account, otherwise the public demo account from `shared/deployments/testnet.json`
  * (lab fallback while `accounts.demo` is BLOCKED — see lib/chain.ts).
  */
+/** How long the reconnect hold waits for wagmi before falling back to demo (L6). */
+export const RECONNECT_HOLD_TIMEOUT_MS = 10_000
+
 export function useViewedAccount(): ViewedAccount {
   const [params] = useSearchParams()
   const { isConnected, status } = useWagmiAccount()
@@ -50,9 +61,20 @@ export function useViewedAccount(): ViewedAccount {
   const demoMode = !isConnected || !!preview
   // 'connecting' (first connect) and 'reconnecting' (hard-load restore) both
   // leave isConnected false while a wallet is on its way back.
-  const reconnecting = status === 'reconnecting' || status === 'connecting'
-  if (preview) return { address: preview, source: 'param', isDemo: false, isLabPrototype: false, demoMode, reconnecting }
-  return { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: DEMO_ACCOUNT_SOURCE === 'lab', demoMode, reconnecting }
+  const rawReconnecting = status === 'reconnecting' || status === 'connecting'
+  // L6: the hold must not hang forever — after the timeout the wallet is
+  // (probably) not coming back, so the hold releases and the page falls back
+  // to the demo numbers with a note in the DemoBanner.
+  const [timedOut, setTimedOut] = useState(false)
+  useEffect(() => {
+    if (!rawReconnecting) { setTimedOut(false); return }
+    const id = setTimeout(() => setTimedOut(true), RECONNECT_HOLD_TIMEOUT_MS)
+    return () => clearTimeout(id)
+  }, [rawReconnecting])
+  const reconnecting = rawReconnecting && !timedOut
+  const reconnectTimedOut = timedOut
+  if (preview) return { address: preview, source: 'param', isDemo: false, isLabPrototype: false, demoMode, reconnecting, reconnectTimedOut }
+  return { address: DEMO_ACCOUNT, source: 'demo', isDemo: true, isLabPrototype: DEMO_ACCOUNT_SOURCE === 'lab', demoMode, reconnecting, reconnectTimedOut }
 }
 
 /**
@@ -86,7 +108,9 @@ export function useAccount(address?: Address) {
  *     deployer's account (live owner() + active trove). It is included ONLY
  *     when a live owner() eth_call on the lab account returns this owner
  *     (never a hardcoded owner address), and it competes on the same
- *     newest-active ordering as factory accounts (ordered at its open block).
+ *     newest-active ordering as factory accounts (ordered at the
+ *     LAB_ACCOUNT_LOGS_FROM_BLOCK anchor, 16790000 — an ordering anchor
+ *     before all factory blocks, NOT at its open block).
  * Chunked in 9,500-block walks like useLogs: the RPC caps one eth_getLogs
  * call at 10,000 blocks.
  *
@@ -122,6 +146,8 @@ export type FetchOwnAccountOpts = {
 
 export type OwnAccountClient = Pick<typeof testnetClient, 'getBlockNumber' | 'getContractEvents'> & {
   readContract?: typeof testnetClient.readContract
+  /** Optional eth_getCode: when the client supports it, a factory entry with no code is skipped with a warning (MED). */
+  getCode?: (args: { address: Address }) => Promise<string | undefined>
 }
 
 const troveManagerStatusAbi = [
@@ -171,25 +197,80 @@ export async function scanOwnAccounts(
   const latest = await client.getBlockNumber()
   const key = owner.toLowerCase()
   let entry = ownScanCache.get(key)
+  // L7 (reorg signal): the chain came back BELOW a block we already scanned —
+  // logs we recorded may have been reorged away, so drop the cache and rescan
+  // from the deploy blocks instead of trusting the stale candidates.
+  if (entry) {
+    for (const scanned of entry.scannedTo.values()) {
+      if (scanned > latest) {
+        console.warn(`[scanOwnAccounts] latest block ${latest} is below previously scanned ${scanned} (reorg?) — clearing the scan cache for ${owner}`)
+        ownScanCache.delete(key)
+        entry = undefined
+        break
+      }
+    }
+  }
   if (!entry) {
     entry = { candidates: [], scannedTo: new Map() }
     ownScanCache.set(key, entry)
   }
-  for (const f of ACCOUNT_FACTORIES) {
-    const scanned = entry.scannedTo.get(f.address)
-    const from0 = scanned !== undefined ? scanned + 1n : f.deployBlock
-    if (from0 > latest) continue
-    for (let from = from0; from <= latest; from += CHUNK + 1n) {
-      const to = from + CHUNK > latest ? latest : from + CHUNK
-      const logs = await client.getContractEvents({
-        address: f.address, abi: troveAccountFactoryAbi, eventName: 'AccountCreated',
-        args: { owner }, fromBlock: from, toBlock: to,
-      })
-      for (const l of logs as unknown as { blockNumber: bigint; logIndex: number; args: { account: Address } }[]) {
-        entry.candidates.push({ account: l.args.account, block: l.blockNumber, logIndex: l.logIndex, source: 'factory', factory: f.address })
+  try {
+    for (const f of ACCOUNT_FACTORIES) {
+      // MED: a bad factory entry must never fail silently — skip it AND warn,
+      // with the address and the reason, so a bad testnet.json entry (or a
+      // redeploy that left a stale address) shows up instead of silently
+      // dropping that factory's accounts into "no credit account yet".
+      const addr = (f as { address?: unknown } | null)?.address
+      if (typeof addr !== 'string' || !isAddress(addr)) {
+        console.warn(`[scanOwnAccounts] skipping factory entry with an invalid address: ${String(addr)}`)
+        continue
       }
+      const deployBlock = (f as { deployBlock?: unknown }).deployBlock
+      if (typeof deployBlock !== 'bigint') {
+        console.warn(`[scanOwnAccounts] skipping factory ${addr}: missing deploy block`)
+        continue
+      }
+      const scanned = entry.scannedTo.get(f.address)
+      const from0 = scanned !== undefined ? scanned + 1n : deployBlock
+      // A never-scanned factory whose deploy block is in the future is bad
+      // data, not an empty result — warn. (An already-scanned factory with
+      // from0 > latest is the normal forward-only case: no new blocks yet.)
+      if (from0 > latest) {
+        if (scanned === undefined) console.warn(`[scanOwnAccounts] skipping factory ${addr}: deploy block ${deployBlock} is after latest block ${latest}`)
+        continue
+      }
+      // A factory address with no code on testnet cannot have emitted logs.
+      if (typeof client.getCode === 'function') {
+        let code: string | undefined
+        try {
+          code = await client.getCode({ address: f.address })
+        } catch {
+          code = undefined // unverifiable: let the log scan decide below
+        }
+        if (code !== undefined && code === '0x') {
+          console.warn(`[scanOwnAccounts] skipping factory ${addr}: no code at that address on testnet`)
+          continue
+        }
+      }
+      for (let from = from0; from <= latest; from += CHUNK + 1n) {
+        const to = from + CHUNK > latest ? latest : from + CHUNK
+        const logs = await client.getContractEvents({
+          address: f.address, abi: troveAccountFactoryAbi, eventName: 'AccountCreated',
+          args: { owner }, fromBlock: from, toBlock: to,
+        })
+        for (const l of logs as unknown as { blockNumber: bigint; logIndex: number; args: { account: Address } }[]) {
+          entry.candidates.push({ account: l.args.account, block: l.blockNumber, logIndex: l.logIndex, source: 'factory', factory: f.address })
+        }
+      }
+      entry.scannedTo.set(f.address, latest)
     }
-    entry.scannedTo.set(f.address, latest)
+  } catch (e) {
+    // L7: a failed scan must not leave a half-advanced cache behind — a
+    // truncated RPC response that advanced scannedTo would keep the missed
+    // events missed for the whole session. Drop the entry so the next call
+    // rescans from the deploy blocks.
+    ownScanCache.delete(key)
+    throw e
   }
   const all = [...entry.candidates]
   // H1 lab allowance: verified live per call (owner() can only be trusted

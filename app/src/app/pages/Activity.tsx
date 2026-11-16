@@ -64,7 +64,7 @@ const describe = (name: string, a: any): string => {
     }
     case 'AppAuthorized': return `Approved ${short(a.app)} for ${safeFmt(a.budget)} MUSD (${safeFmt(a.perDrawMax)} per draw)`
     case 'AppRemoved': return `Removed app ${short(a.app)}`
-    case 'Revoked': return a.nonceBurned ? `Revoked: nonce burned, now ${a.nonceAfter}` : 'Revoked: Governor frozen'
+    case 'Revoked': return a.nonceBurned ? `Revoked: nonce burned, now ${a.nonceAfter ?? 'unknown'}` : 'Revoked: Governor frozen'
     case 'Unfrozen': return 'Governor unfrozen'
     case 'PolicySet': return `Floor set to ${safePct(a.floorICR)}`
     case 'Healed': return `Healed ${safeFmt(a.amount)} MUSD, ICR ${safePct(a.icrBefore)} → ${safePct(a.icrAfter)}`

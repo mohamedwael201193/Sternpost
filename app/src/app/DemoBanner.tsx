@@ -18,6 +18,9 @@ export function DemoBanner() {
           ? 'Read-only demo. These are real testnet values for the previewed account. Connect a wallet to open your own.'
           : 'Read-only demo. These are real testnet values for the public demo account. Connect a wallet to open your own.'}
       </span>
+      {viewed.reconnectTimedOut && viewed.source === 'demo' && (
+        <span className="text-muted">Wallet reconnect timed out — showing the public demo account.</span>
+      )}
       {viewed.isLabPrototype && DEMO_ACCOUNT_BADGE && (
         <span className="caps rounded-sm border border-ink/40 px-2 py-0.5 text-[10px]">{DEMO_ACCOUNT_BADGE}</span>
       )}

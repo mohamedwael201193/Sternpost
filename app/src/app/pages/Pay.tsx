@@ -21,6 +21,10 @@ export default function Pay() {
   const t = useTrove()
   const viewed = useViewedAccount()
   const demo = viewed.demoMode
+  // L6: hold the demo wallets on a skeleton while wagmi reconnects — the
+  // demo owner is not settled yet. An explicit ?account= preview shows at
+  // once.
+  const holdDemo = demo && viewed.reconnecting && viewed.source !== 'param'
   const acct = useAccountData(demo ? viewed.address : undefined)
   const proof = PROOFS.find((p) => p.id === 'x402')!
   return (
@@ -29,7 +33,8 @@ export default function Pay() {
       <div className="grid lg:grid-cols-[1fr_360px] gap-8">
         <div className="space-y-6">
           {demo ? (
-            acct.isLoading ? <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+            holdDemo ? <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+            : acct.isLoading ? <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
             : acct.isError ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
             : acct.data?.owner ? <Wallets owner={acct.data.owner} demo />
             : <Empty title="No spend wallets">The demo account has no known owner.</Empty>

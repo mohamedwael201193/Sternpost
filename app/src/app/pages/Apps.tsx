@@ -21,7 +21,10 @@ export default function Apps() {
   const demo = viewed.demoMode
   const [params] = useSearchParams()
   const [lookup, setLookup] = useState(params.get('app') ?? '')
-  if (demo) return <DemoCrew viewed={viewed} />
+  // L6: hold the demo crew on skeletons while wagmi reconnects — the demo
+  // numbers are not settled yet. An explicit ?account= preview shows at
+  // once (DemoCrew reads it from the hook's `holding` prop).
+  if (demo) return <DemoCrew viewed={viewed} holding={viewed.reconnecting && viewed.source !== 'param'} />
   return (
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Apps</h1><p className="text-muted mt-2 max-w-2xl">Give an app a budget it can draw from your trove. It can never take more than the budget, more than one draw cap, or anything below your floor.</p></header>
@@ -50,7 +53,7 @@ export default function Apps() {
  * cannot be enumerated on-chain — the mapping has no list — so the page says
  * what it shows (draws) and does not pretend to list sessions.
  */
-function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
+function DemoCrew({ viewed, holding = false }: { viewed: ReturnType<typeof useViewedAccount>; holding?: boolean }) {
   const acct = useAccount(viewed.address)
   const logs = useAccountLogs(viewed.address, acct.data?.version)
   const a = acct.data
@@ -60,7 +63,7 @@ function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
       <header><h1 className="display text-4xl">Apps</h1><p className="text-muted mt-2 max-w-2xl">Give an app a budget it can draw from your trove. It can never take more than the budget, more than one draw cap, or anything below your floor.</p></header>
       <div className="grid lg:grid-cols-2 gap-8">
         <Card title="Demo account policy">
-          {acct.isLoading ? (
+          {acct.isLoading || holding ? (
             <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
           ) : acct.isError ? (
             <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
@@ -74,7 +77,7 @@ function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
           ) : <p className="text-sm text-muted">Account not readable.</p>}
         </Card>
         <Card title="Agents that drew" aside={<span className="caps text-[10px] text-muted">from Drawn logs</span>}>
-          {logs.isLoading ? (
+          {logs.isLoading || holding ? (
             <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
           ) : logs.isError ? (
             <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>

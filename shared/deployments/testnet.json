@@ -365,6 +365,10 @@
       "verified": true,
       "verificationNote": "Blockscout v2 reports is_verified: true; it also classifies the factory as proxy_type basic_implementation pointing at the verified TroveAccount implementation (its proxy-detector misfiring on the ERC-1167 clone bytecode, same as 1.9). The factory is NOT a proxy functionally; its deployed bytecode independently MATCHes the local forge build."
     },
+    "factories": [
+      { "address": "0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3", "block": 16803285 },
+      { "address": "0x46442898c022e1fAa2BD05a23600C1Ec89DcA200", "block": 16804466 }
+    ],
     "radar": {
       "address": "0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
       "tx": "0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",

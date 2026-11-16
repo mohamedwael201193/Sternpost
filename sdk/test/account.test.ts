@@ -8,10 +8,19 @@ import type { Address } from "viem";
 const ACCOUNT = "0x5A1166eC096e12C0C6187695F82B7F4b285389Df" as Address;
 const OWNER = "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3" as Address;
 
-// Live snapshot of the demo account read from Mezo testnet @ block 16810643:
-// every fixture value below (debt, price, needed().icr, MUSD/sMUSD balances,
-// status, policy) is from that one block. Verified against rpc.test.mezo.org
-// 2026-11-16.
+// Live snapshot of the lab demo account read from Mezo testnet @ block 16810643
+// (rpc.test.mezo.org, read 2026-11-16 with viem readContract + blockNumber):
+// coll 0.05 BTC, principal 2016156232562500000000, interest 52322888132253551,
+// price 64608796300000000000000, status 1, MUSD 2433090442561969120, sMUSD
+// 61554608535561276641, owner 0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3,
+// v2 policy floor/shield/target 1.2/1.5/1.6, bounty 1.0e18, v2 needed()
+// [1602234950480101128, 0, 0]. The v3 slots below (policy tuple, status,
+// 4-value needed, pendingYield) are SYNTHETIC — logic-test values only, NOT
+// live reads: no v3 account exists on testnet at this block (zero
+// AccountCreated logs on either factory through 16810643, and the lab
+// account's policy()/status()/pendingYield() calls revert at this block), so
+// the v3 test exercises the parse branch with invented numbers. Never cite
+// them as a live snapshot.
 
 const ok = <T>(result: T) => ({ status: "success", result }) as const;
 const fail = { status: "failure", error: new Error("revert") } as const;
@@ -27,10 +36,10 @@ function mockClient(slots: unknown[], btc = 0n): ReadClient {
 const TROVE: readonly [bigint, bigint, bigint, bigint, bigint, bigint] = [
   50_000_000_000_000_000n, // coll 0.05 BTC
   2_016_156_232_562_500_000_000n, // principal
-  51_977_885_114_983_774n, // interest
+  52_322_888_132_253_551n, // interest @16810643 (live read)
   0n, 0n, 0n, // pending (already folded in by Mezo — must NOT be added again)
 ];
-const PRICE = 64_622_256_350_000_000_000_000n; // $64,622.25635
+const PRICE = 64_608_796_300_000_000_000_000n; // $64,608.7963 @16810643 (live read)
 
 function base(): unknown[] {
   return [
@@ -53,17 +62,17 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(MULTICALL3_ADDRESS).toBe("0xcA11bde05977b3631167028862bE2a173976CA11");
   });
 
-  it("reads a v3 production account: policy tuple wins, 4-value needed, debt = principal + interest only", async () => {
+  it("reads a v3 production account: policy tuple wins, 4-value needed, debt = principal + interest only (SYNTHETIC v3 slots — no v3 account exists on testnet @16810643; branch coverage only, see header)", async () => {
     const slots = base();
-    slots[6] = ok([2_500_000_000_000_000_000n, 1_600_000_000_000_000_000n, 2_000_000_000_000_000_000n, 1_000_000_000_000_000_000n, 0n, 20]); // policy
-    slots[7] = ok(1); // status
-    slots[8] = ok([1_562_000_000_000_000_000n, 0n, 0n, 0]); // needed v3
-    slots[9] = ok(5_000_000_000_000_000n); // pendingYield
+    slots[6] = ok([2_500_000_000_000_000_000n, 1_600_000_000_000_000_000n, 2_000_000_000_000_000_000n, 1_000_000_000_000_000_000n, 0n, 20]); // policy (SYNTHETIC)
+    slots[7] = ok(1); // status (SYNTHETIC)
+    slots[8] = ok([1_562_000_000_000_000_000n, 0n, 0n, 0]); // needed v3 (SYNTHETIC)
+    slots[9] = ok(5_000_000_000_000_000n); // pendingYield (SYNTHETIC)
     const snap: AccountSnapshot = await readAccount(mockClient(slots), ACCOUNT);
     expect(snap.version).toBe("v3");
     expect(snap.owner).toBe(OWNER);
     expect(snap.coll).toBe(50_000_000_000_000_000n);
-    expect(snap.debt).toBe(2_016_156_232_562_500_000_000n + 51_977_885_114_983_774n);
+    expect(snap.debt).toBe(2_016_156_232_562_500_000_000n + 52_322_888_132_253_551n);
     expect(snap.price).toBe(PRICE);
     expect(snap.icr).toBe((snap.coll * PRICE) / snap.debt);
     expect(snap.troveStatus).toBe(1);
@@ -85,7 +94,7 @@ describe("readAccount (Multicall3 batch)", () => {
     slots[11] = ok(1_500_000_000_000_000_000n); // shieldICR
     slots[12] = ok(1_600_000_000_000_000_000n); // targetICR
     slots[13] = ok(1_000_000_000_000_000_000n); // bounty
-    slots[14] = ok([1_562_000_000_000_000_000n, 185_900_000_000_000_000_000n, 0n]); // needed v2
+    slots[14] = ok([1_602_234_950_480_101_128n, 0n, 0n]); // needed v2 @16810643 (live read)
     const snap = await readAccount(mockClient(slots), ACCOUNT);
     expect(snap.version).toBe("v2");
     expect(snap.floorICR).toBe(1_200_000_000_000_000_000n);
@@ -93,7 +102,7 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(snap.targetICR).toBe(1_600_000_000_000_000_000n);
     expect(snap.bounty).toBe(1_000_000_000_000_000_000n);
     expect(snap.minDebtAhead).toBeNull();
-    expect(snap.needed).toEqual({ icr: 1_562_000_000_000_000_000n, repayWanted: 185_900_000_000_000_000_000n, collWanted: 0n, reason: null });
+    expect(snap.needed).toEqual({ icr: 1_602_234_950_480_101_128n, repayWanted: 0n, collWanted: 0n, reason: null });
     expect(snap.pendingYield).toBeNull();
   });
 

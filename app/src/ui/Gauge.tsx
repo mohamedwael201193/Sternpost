@@ -12,15 +12,15 @@ const arc = (a0: number, a1: number, r: number) => {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`
 }
 
-/** Compass-style ICR dial. `value`/`floor`/`projected` are percentages (e.g. 312). `value` null = no trove. */
-export function Gauge({ value, floor, projected, size = 320, label = 'Collateral ratio' }: {
-  value: number | null; floor?: number; projected?: number | null; size?: number; label?: string
+/** Compass-style ICR dial. `value`/`floor`/`projected` are percentages (e.g. 312). `value` null = no trove (or a zero-debt trove, labelled via `emptyLabel`). */
+export function Gauge({ value, floor, projected, size = 320, label = 'Collateral ratio', emptyLabel = '—' }: {
+  value: number | null; floor?: number; projected?: number | null; size?: number; label?: string; emptyLabel?: string
 }) {
   const reduce = useReducedMotion()
   const ticks = Array.from({ length: 41 }, (_, i) => i)
   const unsafe = projected != null && floor != null && projected < floor
   return (
-    <figure className="relative select-none" style={{ width: size }} aria-label={`${label}: ${value == null ? 'no trove' : value.toFixed(0) + '%'}`}>
+    <figure className="relative select-none" style={{ width: size }} aria-label={`${label}: ${value == null ? (emptyLabel === '—' ? 'no trove' : emptyLabel) : value.toFixed(0) + '%'}`}>
       <svg viewBox="0 0 200 214" className="w-full overflow-visible">
         {/* bow + crown like a pocket compass */}
         <circle cx="100" cy="-4" r="9" fill="none" stroke="#17130F" strokeWidth="1.4" />
@@ -59,7 +59,7 @@ export function Gauge({ value, floor, projected, size = 320, label = 'Collateral
         )}
         {floor != null && <text x="100" y="176" textAnchor="middle" className="display" fontStyle="italic" fontSize="9" fill="#A3204F">Floor {floor.toFixed(0)}%</text>}
         <circle cx="100" cy="100" r="7" fill="#EFE5D3" stroke="#17130F" strokeWidth="1.6" />
-        <text x="100" y="146" textAnchor="middle" className="display" fontSize="25" fill="#17130F">{value == null ? '—' : `${value >= 1000 ? '999+' : value.toFixed(0)}%`}</text>
+        <text x="100" y="146" textAnchor="middle" className="display" fontSize={value == null && emptyLabel !== '—' ? 16 : 25} fill="#17130F">{value == null ? emptyLabel : `${value >= 1000 ? '999+' : value.toFixed(0)}%`}</text>
         <text x="100" y="160" textAnchor="middle" fontSize="5.6" letterSpacing="1.4" fill="#6B6153">{label.toUpperCase()}</text>
       </svg>
     </figure>

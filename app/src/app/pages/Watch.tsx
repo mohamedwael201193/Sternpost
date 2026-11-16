@@ -28,10 +28,14 @@ export default function Watch() {
   // unknown must never render as "Disarmed".
   const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
   const standbyArmed = standbyKnown && !!t.standby?.[3]
-  const loading = demo ? acct.isLoading || radar.isLoading : false
+  const loading = demo ? acct.isLoading || radar.isLoading || (viewed.reconnecting && viewed.source !== 'param') : false
   // LOW-8: outside demo mode a failed useTrove core read shows the RPC
   // error plate (t.error), never a silent 'No trove' empty.
   const rpcError = demo ? acct.isError || radar.isError : t.error
+  // L6: the demo numbers are not settled while wagmi reconnects — hold the
+  // demo cards on skeletons (Close/Open hold their first card the same way).
+  // An explicit ?account= preview is the user's choice and shows at once.
+  const holdDemo = demo && viewed.reconnecting && viewed.source !== 'param'
   // The TCR value comes from the Radar in demo mode but from useTrove's
   // system-health batch otherwise — gate it on the query that provides it,
   // not on the Radar's state in both modes.
@@ -58,7 +62,7 @@ export default function Watch() {
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
           {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
-            <div className="display text-3xl">{rpcError ? 'Unavailable' : demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
+            <div className="display text-3xl">{rpcError ? 'Unavailable' : isNoDebtIcr(demo ? a?.icr : t.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
           )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
@@ -75,20 +79,22 @@ export default function Watch() {
           {demo ? (
             loading ? <Skeleton className="h-9 w-28" label="Loading shield state" /> : (
               <>
-                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : a?.shieldICR == null ? 'No policy' : 'None'}</div>
+                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : a?.shieldICR == null ? 'No policy' : a?.needed == null ? 'Unknown' : 'None'}</div>
                 <p className="text-xs text-muted mt-1">
                   {rpcError ? RPC_ERROR_TEXT : shieldNeeded
                     ? `Shield would repay ${fmt(shield!.repayWanted)} MUSD${shield!.collWanted > 0n ? ` and add ${fmt(shield!.collWanted, 18, 6)} BTC` : ''} to reach the ${a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : ''} target`
                     : a?.shieldICR == null
                       ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
-                      : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
+                      : a?.needed == null
+                        ? 'Shield need unknown — the needed() read failed, so this page cannot say whether the shield would fire.'
+                        : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
                 </p>
               </>
             )
           ) : (
             <>
-              <div className="display text-3xl">{!standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-              <p className="text-xs text-muted mt-1">{!standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+              <div className="display text-3xl">{t.error || t.gvError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+              <p className="text-xs text-muted mt-1">{t.error || t.gvError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}
         </Card>
@@ -96,7 +102,7 @@ export default function Watch() {
 
       {demo && (
         <Card title="Sonar — redemption order (live)">
-          {radar.isLoading ? (
+          {radar.isLoading || holdDemo ? (
             <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
           ) : radar.isError ? (
             <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
