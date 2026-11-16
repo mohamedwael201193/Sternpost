@@ -6,8 +6,10 @@ Command (workflow-exact, run from `contracts/`):
 slither . --filter-paths "lib|test|script" --exclude reentrancy-balance --fail-high
 ```
 
-Slither 0.11.6, 34 contracts, 101 detectors. Full output is in
-[slither.txt](slither.txt) in this directory.
+Slither, 34 contracts, 101 detectors (per the `INFO:Slither:` summary
+line in [slither.txt](slither.txt)). No version is claimed here: the
+output records no version string, and CI installs `slither-analyzer`
+unpinned, so no version is citable from this repo.
 
 ## Status: PASS
 
@@ -18,6 +20,13 @@ Slither 0.11.6, 34 contracts, 101 detectors. Full output is in
   `reentrancy-benign` (`_open`'s `policy.minDebtAhead` write, cleared by the
   same CEI reorder).
 
+Note on the "before" numbers: no pre-fix slither output is preserved in
+the repo — the committed `judges/slither.txt` at base `5872e51` is stale
+(its summary line reads "analyzed (9 contracts with 102 detectors), 20
+result(s) found"). The 100 results / 4 HIGH / exit 255 figures come from
+a fresh slither run on base source; the exit 255 is corroborated by the
+CI task brief, which reported the `--fail-high` failure.
+
 Correction to the pre-classification: the real run had **no separate
 `shield()` reentrancy-no-eth** — `shield()` appeared only under
 `reentrancy-eth` (`lastShieldBlock`) and `reentrancy-benign`
@@ -27,10 +36,10 @@ Correction to the pre-classification: the real run had **no separate
 
 | Detector | Where | Fix |
 |---|---|---|
-| reentrancy-eth | `TroveAccount._open` (`src/account/TroveAccount.sol#864-886`): `bo.openTrove{value: msg.value}` at L881, then `opened = true` (L882) and `policy.minDebtAhead = …` (L883) | CEI reorder: both writes now precede the `openTrove` call. A re-entrant `open()` hits `AlreadyOpened` instead of re-entering; if `openTrove` reverts the writes roll back with the tx, so no half-opened state can persist. Pinned by `test/unit/Reentrancy.t.sol` and the `test_shield_readOnce_openRankWalk` / factory `createAndOpen` tests. |
+| reentrancy-eth | `TroveAccount._open` (`src/account/TroveAccount.sol#869-895`): `opened = true` (L891) and `policy.minDebtAhead = …` (L892) now precede `bo.openTrove{value: msg.value}` (L893) | CEI reorder: both writes now precede the `openTrove` call. A re-entrant `open()` hits `AlreadyOpened` instead of re-entering; if `openTrove` reverts the writes roll back with the tx, so no half-opened state can persist. No dedicated reentrancy test pins this reorder: `test/unit/Reentrancy.t.sol` covers only `test_reentrantDraw_blocked` (draw, not `_open`), and `test_readOnce_openRankWalk` (`contracts/test/account/TroveAccountShield.t.sol:591`) tests the read-once price fetch, not reentrancy. The reorder is verified by the `reentrancy-eth` finding disappearing from the after-run plus code reading. |
 | reentrancy-eth | `TroveAccount.shield` (`src/account/TroveAccount.sol#587-679`): `lastShieldBlock = uint64(block.number)` at L677, after `smusd.withdraw` (L631), `bo.repayMUSD` (L636), `bo.addColl{value: …}` (L650) and the bounty `_safeTransfer` (L674) | `lastShieldBlock` moved to just after the cooldown check, before the legs. It still advances only on success: any revert below rolls the write back with the tx (pinned by `test_shield_reentrancy_blocked`, which asserts `lastShieldBlock == 0` after a reverted shield, and `test_crashDuringCooldown_stateSurvives`, which asserts a failed shield never sets it). `totalBountyPaid` stays after the legs — it needs the post-leg `icrAfter` — see Accepted below. |
-| reentrancy-no-eth | `TroveAccountFactory.createAccount` (`src/account/TroveAccountFactory.sol#121-131`): `ITroveAccount(account).initialize(…)` at L128, then `isAccount[account] = true` (L129) | CEI reorder: `isAccount[account] = true` now precedes `initialize`. A re-entrant `createAccount` for the same address hits `AlreadyCreated`; an `initialize` revert rolls the write back. Pinned by `test/account/Factory.t.sol`. |
-| arbitrary-send-eth | `TroveAccount._sendBtc` (`src/account/TroveAccount.sol#1015-1018`) | Inline `// slither-disable-next-line arbitrary-send-eth`, same precedent as `SternpostRouter._sendBtc` (`src/routes/SternpostRouter.sol#315`). All 3 callers pass `owner` only (`withdrawColl`, `closeAccount`, `sweepBtc`) — `to` is never caller input. |
+| reentrancy-no-eth | `TroveAccountFactory.createAccount` (`src/account/TroveAccountFactory.sol#121-135`): `isAccount[account] = true` (L132) now precedes `ITroveAccount(account).initialize(…)` (L133) | CEI reorder: `isAccount[account] = true` now precedes `initialize`. A re-entrant `createAccount` for the same address hits `AlreadyCreated`; an `initialize` revert rolls the write back. `test/account/Factory.t.sol` (`test_secondCreateWithSameOwnerAndSaltReverts`) pins plain double-create, not reentrancy during `initialize`; the reorder is verified by the `reentrancy-no-eth` finding disappearing from the after-run plus code reading. |
+| arbitrary-send-eth | `TroveAccount._sendBtc` (`src/account/TroveAccount.sol#1027-1031`) | Inline `// slither-disable-next-line arbitrary-send-eth`, same precedent as `SternpostRouter._sendBtc` (`src/routes/SternpostRouter.sol#315`). All 3 callers pass `owner` only (`withdrawColl`, `closeAccount`, `sweepBtc`) — `to` is never caller input. |
 
 ## Accepted, with reasons
 

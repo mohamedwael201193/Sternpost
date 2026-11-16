@@ -246,7 +246,7 @@ function checkInvariantNames(byContract, names, file) {
   return null;
 }
 
-function checkUnitNames(byContract, entries, file) {
+function checkUnitNames(byContract, entries, file, spec) {
   const executed = entries.filter((e) => e.name !== "setUp").map((e) => e.name);
   const skippedSetUps = entries.filter((e) => e.name === "setUp" && e.status === "Skipped").length;
   const declaredByContract = [...byContract.entries()]
@@ -333,9 +333,9 @@ function checkForgeAgainstSource(file, entries) {
       .map((e) => e.name);
     const invError = checkInvariantNames(byContract, invNames, file);
     if (invError) return invError;
-    return checkUnitNames(byContract, entries.filter((e) => e.kindKey !== "Invariant"), file);
+    return checkUnitNames(byContract, entries.filter((e) => e.kindKey !== "Invariant"), file, spec);
   }
-  return checkUnitNames(byContract, entries, file);
+  return checkUnitNames(byContract, entries, file, spec);
 }
 
 // sha256 over a directory tree (sorted relative paths + contents), for
@@ -642,24 +642,27 @@ function main() {
   // times, counted once here via the testnet run. Example on the
   // pre-merge tree: 186 non-fork declared + 10 fork + 2 invariant
   // properties = 198 distinct declared (C12) vs 179 passed non-fork.
+  // passedInclFork counts each distinct fork test ONCE, via the testnet
+  // run: the mainnet run's 7 passed test names are a strict subset of
+  // the testnet run's 10 (mainnet − {setUp} ⊆ testnet), so adding
+  // mainnet.passed as well double-counts 7 tests — the old formula gave
+  // 512 (495 + 10 + 7); the honest distinct count is 505 (495 + 10).
   const nonForkDeclared = suites
     .filter((s) => s.kind !== "fork" && s.status === "completed")
     .reduce((n, s) => n + s.passed + s.failed + s.skipped, 0);
   const forkTestnetSuite = suites.find((s) => s.name === "contracts-fork-testnet");
-  const forkMainnetSuite = suites.find((s) => s.name === "contracts-fork-mainnet");
   const forkDeclared =
     forkTestnetSuite?.status === "completed"
       ? forkTestnetSuite.passed + forkTestnetSuite.failed + forkTestnetSuite.skipped
       : null;
   const passedInclFork =
     total.passed +
-    (forkTestnetSuite?.status === "completed" ? forkTestnetSuite.passed : 0) +
-    (forkMainnetSuite?.status === "completed" ? forkMainnetSuite.passed : 0);
+    (forkTestnetSuite?.status === "completed" ? forkTestnetSuite.passed : 0);
   const reconciliation = {
     nonForkDeclared,
     forkDeclared,
     passedInclFork,
-    note: "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). Do not read total.passed as 'N in total'.",
+    note: "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). passedInclFork counts each distinct fork test once, via the testnet run — the mainnet run's passed tests are a subset of the testnet run's, so they are not added again. Do not read total.passed as 'N in total'.",
   };
 
   const result = {

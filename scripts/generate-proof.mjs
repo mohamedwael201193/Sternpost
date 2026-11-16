@@ -147,17 +147,19 @@ function validateTests(tests) {
     if (rec.nonForkDeclared !== declared)
       problems.push(`reconciliation.nonForkDeclared=${rec.nonForkDeclared} != completed non-fork declared=${declared}`);
     const testnet = tests.suites.find((s) => s.name === "contracts-fork-testnet");
-    const mainnet = tests.suites.find((s) => s.name === "contracts-fork-mainnet");
     if (testnet?.status === "completed") {
       const testnetDeclared = testnet.passed + testnet.failed + testnet.skipped;
       if (rec.forkDeclared !== testnetDeclared)
         problems.push(`reconciliation.forkDeclared=${rec.forkDeclared} != testnet fork declared=${testnetDeclared}`);
+      // Distinct fork tests counted ONCE, via the testnet run: the
+      // mainnet run's 7 passed names are a strict subset of the
+      // testnet run's 10, so adding mainnet.passed double-counts 7
+      // (the old formula gave 512; the honest distinct count is 505).
       const inclFork =
         (tests.total?.passed ?? 0) +
-        testnet.passed +
-        (mainnet?.status === "completed" ? mainnet.passed : 0);
+        testnet.passed;
       if (rec.passedInclFork !== inclFork)
-        problems.push(`reconciliation.passedInclFork=${rec.passedInclFork} != total + fork passed=${inclFork}`);
+        problems.push(`reconciliation.passedInclFork=${rec.passedInclFork} != total + testnet fork passed=${inclFork}`);
     }
   }
   if (problems.length > 0) {

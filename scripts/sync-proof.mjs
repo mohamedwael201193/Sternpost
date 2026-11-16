@@ -242,7 +242,10 @@ function main() {
   const forkTestnet = passed(tests, "contracts-fork-testnet");
   const forkMainnet = passed(tests, "contracts-fork-mainnet");
   const forkKnown = forkTestnet !== null && forkMainnet !== null;
-  const forkTotal = forkKnown ? forkTestnet + forkMainnet : null;
+  // Distinct fork tests, counted ONCE (testnet run): mainnet's 7 passed
+  // names are a strict subset of testnet's 10, so testnet+mainnet (17)
+  // double-counts 7. Proof.tsx shows the distinct count (10).
+  const forkTotal = forkKnown ? forkTestnet : null;
   // Fork DECLARED count (J3-F7): the testnet suite ran all 10 fork tests,
   // so its passed+failed+skipped is the declared total the mainnet row
   // is rendered against (7/10, not 7/7).
@@ -289,18 +292,20 @@ function main() {
         problems.push(`reconciliation.nonForkDeclared=${rec.nonForkDeclared} != completed non-fork declared=${declared}`);
       }
       const testnet = suite(tests, "contracts-fork-testnet");
-      const mainnet = suite(tests, "contracts-fork-mainnet");
       if (testnet?.status === "completed") {
         const testnetDeclared = testnet.passed + testnet.failed + testnet.skipped;
         if (rec.forkDeclared !== testnetDeclared) {
           problems.push(`reconciliation.forkDeclared=${rec.forkDeclared} != testnet fork declared=${testnetDeclared}`);
         }
+        // Distinct fork tests counted ONCE, via the testnet run: the
+        // mainnet run's 7 passed names are a strict subset of the
+        // testnet run's 10, so adding mainnet.passed double-counts 7
+        // (the old formula gave 512; the honest distinct count is 505).
         const inclFork =
           (tests.total?.passed ?? 0) +
-          testnet.passed +
-          (mainnet?.status === "completed" ? mainnet.passed : 0);
+          testnet.passed;
         if (rec.passedInclFork !== inclFork) {
-          problems.push(`reconciliation.passedInclFork=${rec.passedInclFork} != total + fork passed=${inclFork}`);
+          problems.push(`reconciliation.passedInclFork=${rec.passedInclFork} != total + testnet fork passed=${inclFork}`);
         }
       }
     }
@@ -391,12 +396,14 @@ function main() {
     `$1**${sdk}/${sdk}**`,
     `sdk row -> ${sdk}/${sdk}`
   );
-  // Backend row renders passed/DECLARED (5417bb0): `**74/74**` was false —
-  // only 74 of the 80 declared backend tests executed in the TESTS.json
-  // run (`test/config.test.ts`, 6 tests, was not in it). The script syncs
-  // only the passed number from TESTS.json; the declared number is hand
-  // prose counted by word-boundary `it(` (see the row's own parenthetical),
-  // like the parenthetical breakdowns this script deliberately does not touch.
+  // Backend row renders passed/DECLARED (5417bb0): an earlier run
+  // executed only 74 of the 80 declared backend tests
+  // (`test/config.test.ts`, 6 tests, was not in it). The current
+  // TESTS.json run includes `config.test.ts` — 80 executed, 80 passed.
+  // The script syncs only the passed number from TESTS.json; the
+  // declared number is hand prose counted by word-boundary `it(` (see
+  // the row's own parenthetical), like the parenthetical breakdowns
+  // this script deliberately does not touch.
   add(
     "README.md",
     /(\| Backend \(x402 API, indexer\) \|[^\n]*?)\*\*(\d+) passed of (\d+) declared\*\*/,
