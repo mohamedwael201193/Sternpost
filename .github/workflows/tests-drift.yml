@@ -28,7 +28,15 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 is REQUIRED, not optional: sync-proof --check runs
+      # `git diff <TESTS.json commit> HEAD` over the source paths, and a
+      # depth-1 checkout does not contain the recorded commit — CI failed
+      # on main c167b5e with "fatal: bad object e929cfc…" even though the
+      # numbers were also genuinely stale. Without full history the drift
+      # gate can never go green after any merge.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T04:35:57.686Z",
-  "commit": "e929cfc821f0e7f7c0d2b65df53fd20206f5f05e",
+  "generatedAt": "2026-11-16T11:15:16.859Z",
+  "commit": "c167b5e6ea19b336711bdd271b131cd51c877677",
   "inputs": {
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b"
   },
@@ -91,7 +91,7 @@
     {
       "name": "sdk",
       "kind": "unit",
-      "passed": 12,
+      "passed": 72,
       "failed": 0,
       "skipped": 0,
       "status": "completed"
@@ -99,7 +99,7 @@
     {
       "name": "backend",
       "kind": "unit",
-      "passed": 148,
+      "passed": 165,
       "failed": 0,
       "skipped": 1,
       "status": "completed"
@@ -107,7 +107,7 @@
     {
       "name": "app",
       "kind": "unit",
-      "passed": 35,
+      "passed": 303,
       "failed": 0,
       "skipped": 0,
       "status": "completed"
@@ -131,14 +131,14 @@
     }
   ],
   "total": {
-    "passed": 563,
+    "passed": 908,
     "failed": 0,
     "skipped": 25
   },
   "reconciliation": {
-    "nonForkDeclared": 588,
+    "nonForkDeclared": 933,
     "forkDeclared": 10,
-    "passedInclFork": 573,
+    "passedInclFork": 918,
     "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). passedInclFork counts each distinct fork test once, via the testnet run — the mainnet run's passed tests are a subset of the testnet run's, so they are not added again. Do not read total.passed as 'N in total'."
   },
   "forkNote": "fork suites listed separately, never added twice"

@@ -15,7 +15,7 @@ git clone https://github.com/mohamedwael201193/Sternpost && cd Sternpost/contrac
 | Fork tests against the real Mezo testnet | `cd contracts && ./script/fork.sh testnet` | 10/10 pass ([log](logs/fork_testnet.txt)) |
 | Fork tests against the real Mezo mainnet | `cd contracts && ./script/fork.sh mainnet` | 7/10 pass (3 skipped — Router fork skipped: no router on mainnet) ([log](logs/fork_mainnet.txt)) |
 | Live bytecode equals this repo's build | `cd contracts && forge build && python3 script/bytecode-match.py` | 3/3 MATCH ([why not explorer-verified](VERIFY.md)) |
-| SDK tests (EIP-712 parity with Solidity, nonce coordination) | `cd sdk && npm ci && npm test` | 12 pass |
+| SDK tests (EIP-712 parity with Solidity, nonce coordination) | `cd sdk && npm ci && npm test` | 72 pass |
 | Live testnet flow | `cd sdk && MEZO_TESTNET_PK=0x… npm run e2e` | 16 txs, [table](TESTNET_TXS.md) |
 | Paid API over x402, paid from the SpendWallet | `cd backend && AGENT_PK=0x… SPEND_WALLET=0x… node scripts/pay-brief.mjs` | HTTP 200 + settlement tx |
 
