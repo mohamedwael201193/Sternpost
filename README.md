@@ -10,7 +10,7 @@
 [![sdk](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/sdk.yml)
 [![backend](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/backend.yml)
 [![CodeQL](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml/badge.svg)](https://github.com/mohamedwael201193/Sternpost/actions/workflows/codeql.yml)
-[![tests](https://img.shields.io/badge/tests-495%20passing-2ea44f)](#tests)
+[![tests](https://img.shields.io/badge/tests-539%20passing-2ea44f)](#tests)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [**Live app**](https://sternpost-pink.vercel.app) · [**Deck**](https://sternpost-deck.vercel.app) · [**Demo video**](https://youtu.be/EyLSaYiIX5M) · [**API**](https://sternpost-api.vercel.app) · [**Telegram bot**](https://t.me/sternpost_bot) · [For judges](judges/JUDGES.md) · [All testnet txs](judges/TESTNET_TXS.md) · [Threat model](docs/THREAT_MODEL.md)
@@ -174,16 +174,16 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Counts are from [`TESTS.json`](TESTS.json) @ [`54ae7a9`](https://github.com/mohamedwael201193/Sternpost/commit/54ae7a982a27015744c0271a4023cea9284002d5) (generated 2026-11-16; the `commit` field inside `TESTS.json` records `54ae7a9`) — **495 passing (non-fork subtotal; E2E not counted)**, **540 distinct** declared (519 non-fork + 10 fork + 11 invariant properties), **505 incl. fork** (495 + 10 testnet; the 7 mainnet passes are the same 10 fork tests, counted once). The account row below is the TESTS.json account split (account 192 unit + 15 fuzz + 1 invariant = 208).
+Counts are from [`TESTS.json`](TESTS.json) @ [`a234c22`](https://github.com/mohamedwael201193/Sternpost/commit/a234c228390e52d66fbb14b777c590cda50dec9a) (generated 2026-11-16; the `commit` field inside `TESTS.json` records `a234c22`) — **539 passing (non-fork subtotal; E2E not counted)**, **584 distinct** declared (563 non-fork + 10 fork + 11 invariant properties), **549 incl. fork** (539 + 10 testnet; the 7 mainnet passes are the same 10 fork tests, counted once). The account row below is the TESTS.json account split (account 192 unit + 15 fuzz + 1 invariant = 208).
 
 | Suite | Command | Result |
 |---|---|---|
-| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **312 passing** ([TESTS.json](TESTS.json) @ `54ae7a9`) — unit 87 + fuzz 7 + invariant 2 + account 192 + fuzz-account 15 + invariant-account 1 + routes 8 = 312 |
-| Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **208 passed, 0 failed, 5 skipped** ([TESTS.json](TESTS.json) @ `54ae7a9`) — account 192 unit + 15 fuzz + 1 invariant |
+| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **312 passing** ([TESTS.json](TESTS.json) @ `a234c22`) — unit 87 + fuzz 7 + invariant 2 + account 192 + fuzz-account 15 + invariant-account 1 + routes 8 = 312 |
+| Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **208 passed, 0 failed, 5 skipped** ([TESTS.json](TESTS.json) @ `a234c22`) — account 192 unit + 15 fuzz + 1 invariant |
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/10** (3 skipped — Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
 | SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **12/12** |
-| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **80 passed of 80 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (6 tests) ran in this run: 11 files, 80 executed, 80 passed |
+| Backend (x402 API, indexer) | `cd backend && npm ci && npm test` | **124 passed of 124 declared** (word-boundary `it(` declarations; API, indexer, x402, Telegram bot) — `test/config.test.ts` (11 tests) ran in this run: 16 files, 124 executed, 124 passed |
 | App unit | `cd app && npx vitest run` | **35/35** |
 | App E2E (Playwright) | `cd app && npx playwright test` | 6 passing; 3 live-draw specs need `MEZO_TESTNET_PK` |
 | Coverage (contracts) | `forge coverage` | Factory and SpendWallet 100%; Governor 100% lines, 93.6% branches ([report](judges/coverage.txt)) |

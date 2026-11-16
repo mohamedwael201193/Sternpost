@@ -5,7 +5,7 @@ import { Plate, Reveal } from './Plate'
 const COUNTS = [
   ['312', 'Contract tests: unit, fuzz, invariant'],
   ['10', 'Fork tests on live Mezo testnet + mainnet'],
-  ['80', 'Backend tests (API, x402, bot)'],
+  ['124', 'Backend tests (API, x402, bot)'],
   ['47', 'SDK + app unit tests'],
   ['16', 'Txs in the live testnet flow'],
 ] as const
