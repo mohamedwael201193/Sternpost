@@ -17,11 +17,18 @@ const deployment = JSON.parse(
   sternpost: { SternpostFactory: { address: string } };
   mezo: {
     BorrowerOperationsSignatures: string;
+    BorrowerOperations: string;
     TroveManager: string;
     PriceFeed: string;
     MUSD: string;
     sMUSD: string;
     Permit2: string;
+  };
+  accounts: {
+    implementation: { address: string };
+    factory: { address: string };
+    radar: { address: string };
+    batcher: { address: string };
   };
 };
 
@@ -48,5 +55,42 @@ describe("SDK default addresses match the deployment record", () => {
     expect(testnetAddresses.musd.toLowerCase()).toBe(deployment.mezo.MUSD.toLowerCase());
     expect(testnetAddresses.smusd.toLowerCase()).toBe(deployment.mezo.sMUSD.toLowerCase());
     expect(testnetAddresses.permit2.toLowerCase()).toBe(deployment.mezo.Permit2.toLowerCase());
+  });
+
+  it("account (2.2) addresses match the Shield-redeploy record in testnet.json accounts.*", () => {
+    expect(testnetAddresses.accountImplementation.toLowerCase()).toBe(
+      deployment.accounts.implementation.address.toLowerCase(),
+    );
+    expect(testnetAddresses.accountFactory.toLowerCase()).toBe(
+      deployment.accounts.factory.address.toLowerCase(),
+    );
+    expect(testnetAddresses.accountRadar.toLowerCase()).toBe(
+      deployment.accounts.radar.address.toLowerCase(),
+    );
+    expect(testnetAddresses.accountBatcher.toLowerCase()).toBe(
+      deployment.accounts.batcher.address.toLowerCase(),
+    );
+    // Not the superseded 1.9 (pre-Shield) deployment.
+    expect(testnetAddresses.accountImplementation.toLowerCase()).not.toBe(
+      "0xc4f080498a720887b6086f13fbad5627d8abc470",
+    );
+    expect(testnetAddresses.accountFactory.toLowerCase()).not.toBe(
+      "0xfb4efe7953af18dbcaa1124da721cd3fb8fd85c3",
+    );
+  });
+
+  it("hint contracts match the on-chain values (not in testnet.json)", () => {
+    // sortedTroves: read live from the deployed implementation's
+    // sortedTroves() view (verified 2026-11-16).
+    // hintHelpers: the Mezo-documented testnet address in the repo's own
+    // contracts/src/account/interfaces/IHintHelpers.sol; verified live
+    // 2026-11-16 — computeNominalCR(0.05e18, 2016.2187e18) returns
+    // 2479889706409329, exactly coll*1e20/debt. The implementation has no
+    // hintHelpers() getter (hints are computed off-chain, not on-chain).
+    expect(testnetAddresses.sortedTroves.toLowerCase()).toBe("0x722e4d24fd6ff8b0ac679450f3d91294607268fa");
+    expect(testnetAddresses.hintHelpers.toLowerCase()).toBe("0x4e4cba3779d56386ed43631b4dcd6d8eacecbcf6");
+    expect(testnetAddresses.borrowerOperations.toLowerCase()).toBe(
+      deployment.mezo.BorrowerOperations.toLowerCase(),
+    );
   });
 });

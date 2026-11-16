@@ -7,4 +7,6 @@ export * from "./typed.js";
 export * from "./nonce.js";
 export * from "./reasons.js";
 export * from "./x402.js";
+export * from "./intent.js";
+export * from "./pay.js";
 export * from "./abi.js";
