@@ -51,7 +51,7 @@
 // (sources under contracts/backend/sdk/app/mcp/keeper/scripts changed
 // since the commit TESTS.json was generated from, or uncommitted changes
 // there), OR when TESTS.json does not validate against itself (total /
-// reconciliation vs the suites, J3-F5), OR when any of the six contracts
+// reconciliation vs the suites, J3-F5), OR when any of the seven contracts
 // suites is not completed (J3-F11: AND, not OR — a not-run contracts
 // suite must block the sync, not silently drop its tests).
 // Stamping a green "N passing" badge over red or stale counts would be a
@@ -222,6 +222,7 @@ function main() {
     (passed(tests, "contracts-invariant") ?? 0) +
     (passed(tests, "contracts-account") ?? 0) +
     (passed(tests, "contracts-fuzz-account") ?? 0) +
+    (passed(tests, "contracts-invariant-account") ?? 0) +
     (passed(tests, "contracts-routes") ?? 0);
   // J3-F11: AND, not OR — every contracts suite must be completed. A
   // not-run contracts suite must block the sync, never silently drop
@@ -233,6 +234,7 @@ function main() {
     isCompleted(tests, "contracts-invariant") &&
     isCompleted(tests, "contracts-account") &&
     isCompleted(tests, "contracts-fuzz-account") &&
+    isCompleted(tests, "contracts-invariant-account") &&
     isCompleted(tests, "contracts-routes");
   const sdk = passed(tests, "sdk");
   const backend = passed(tests, "backend");
@@ -344,7 +346,7 @@ function main() {
     console.log(
       `sync-proof: reconciliation — total.passed=${total} is a NON-FORK subtotal; ` +
         `non-fork declared=${rec.nonForkDeclared}, fork declared=${rec.forkDeclared ?? "n/a"}, ` +
-        `passed incl. fork=${rec.passedInclFork}, distinct declared=${rec.forkDeclared === null ? "n/a" : rec.nonForkDeclared + rec.forkDeclared + 2} (C12: +2 invariant properties)`
+        `passed incl. fork=${rec.passedInclFork}, distinct declared=${rec.forkDeclared === null ? "n/a" : rec.nonForkDeclared + rec.forkDeclared + 11} (C12: +11 invariant properties)`
     );
   }
   if (typeof total !== "number" || !contractsKnown || sdk === null || backend === null || app === null) {

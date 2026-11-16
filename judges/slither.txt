@@ -1,17 +1,45 @@
-'forge clean' running (wd: /workspace/Sternpost/contracts)
+'forge clean' running (wd: /home/hatch/workspace/mezo-wave2/work/ci-fix/contracts)
 'forge config --json' running
-'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /workspace/Sternpost/contracts)
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /home/hatch/workspace/mezo-wave2/work/ci-fix/contracts)
 INFO:Detectors:
-Detector: reentrancy-balance
-Reentrancy in SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322):
-	External call allowing reentrancy:
-	- signatures.withdrawMUSDWithSignature(amount,address(0),address(0),borrower,address(this),withdrawSig,withdrawDeadline) (src/SternpostGovernor.sol#308-310)
-	Balance read before the call:
-	- pre = musd.balanceOf(address(this)) (src/SternpostGovernor.sol#305)
-	Possible stale balance used after the call in a condition:
-	- musd.balanceOf(address(this)) - pre != amount (src/SternpostGovernor.sol#313)
-		- stale variable `pre`
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities
+Detector: divide-before-multiply
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) performs a multiplication on the result of a division:
+	- troveNicr = coll * NICR_SCALE / troveDebt (src/account/TroveAccount.sol#966)
+	- troveNicr * price / NICR_SCALE >= MCR (src/account/TroveAccount.sol#971)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+INFO:Detectors:
+Detector: incorrect-equality
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) uses a dangerous strict equality:
+	- repaid == 0 && collAdded == 0 (src/account/TroveAccount.sol#659)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+INFO:Detectors:
+Detector: uninitialized-local
+TroveAccount.shield().reason (src/account/TroveAccount.sol#610) is a local variable never initialized
+TroveAccount.shield().bountyPaid (src/account/TroveAccount.sol#663) is a local variable never initialized
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#uninitialized-local-variables
+INFO:Detectors:
+Detector: unused-return
+SternpostGovernor._projectedICR(uint256,uint256) (src/SternpostGovernor.sol#193-199) ignores return value by (coll,p,i,None,None,None) = troveManager.getEntireDebtAndColl(borrower) (src/SternpostGovernor.sol#194)
+SternpostGovernor.defend() (src/SternpostGovernor.sol#424-451) ignores return value by (None,p,i,None,None,None) = troveManager.getEntireDebtAndColl(borrower) (src/SternpostGovernor.sol#432)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) ignores return value by (coll,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(cur) (src/account/Radar.sol#164-165)
+Radar._entireDebt(address) (src/account/Radar.sol#186-189) ignores return value by (None,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(trove) (src/account/Radar.sol#187)
+TroveAccount.initialize(address,Policy,address,uint16) (src/account/TroveAccount.sol#253-264) ignores return value by musd.approve(address(smusd),type()(uint256).max) (src/account/TroveAccount.sol#262)
+TroveAccount.repay(uint256,address,address) (src/account/TroveAccount.sol#311-318) ignores return value by (None,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#312)
+TroveAccount.closeAccount() (src/account/TroveAccount.sol#338-367) ignores return value by (None,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#353)
+TroveAccount.approveToken(address,uint256) (src/account/TroveAccount.sol#482-484) ignores return value by musd.approve(spender,amount) (src/account/TroveAccount.sol#483)
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#605)
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) ignores return value by (collNow,principal2,interest2,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#649)
+TroveAccount.needed() (src/account/TroveAccount.sol#765-776) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#767)
+TroveAccount.previewDraw(address,address,uint256) (src/account/TroveAccount.sol#784-811) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(address(this)) (src/account/TroveAccount.sol#804)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) ignores return value by (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+INFO:Detectors:
+Detector: shadowing-local
+TroveAccount._collWanted(uint256,uint256,uint256,uint256).repay (src/account/TroveAccount.sol#917) shadows:
+	- TroveAccount.repay(uint256,address,address) (src/account/TroveAccount.sol#311-318) (function)
+ITroveAccount.initialize(address,Policy,address,uint16).owner (src/account/interfaces/ITroveAccount.sol#43) shadows:
+	- ITroveAccount.owner() (src/account/interfaces/ITroveAccount.sol#58) (function)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#local-variable-shadowing
 INFO:Detectors:
 Detector: missing-zero-check
 SpendWallet.constructor(address,address,uint64).owner_ (src/SpendWallet.sol#27) lacks a zero-check on :
@@ -20,29 +48,157 @@ SpendWallet.constructor(address,address,uint64).agent_ (src/SpendWallet.sol#27) 
 		- agent = agent_ (src/SpendWallet.sol#29)
 SpendWallet.setAgent(address,uint64).agent_ (src/SpendWallet.sol#39) lacks a zero-check on :
 		- agent = agent_ (src/SpendWallet.sol#40)
-SternpostFactory.constructor(IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD).activePool_ (src/SternpostFactory.sol#40) lacks a zero-check on :
-		- activePool = activePool_ (src/SternpostFactory.sol#48)
-SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256).borrower_ (src/SternpostGovernor.sol#110) lacks a zero-check on :
-		- borrower = borrower_ (src/SternpostGovernor.sol#122)
-SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256).activePool_ (src/SternpostGovernor.sol#116) lacks a zero-check on :
-		- activePool = activePool_ (src/SternpostGovernor.sol#128)
+SternpostFactory.constructor(IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint16,address).activePool_ (src/SternpostFactory.sol#48) lacks a zero-check on :
+		- activePool = activePool_ (src/SternpostFactory.sol#59)
+SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256,uint16,address).borrower_ (src/SternpostGovernor.sol#129) lacks a zero-check on :
+		- borrower = borrower_ (src/SternpostGovernor.sol#144)
+SternpostGovernor.constructor(address,IBorrowerOperationsSignatures,IBorrowerOperations,ITroveManager,IPriceFeed,IERC20Min,address,ISavingsMUSD,uint256,uint256,uint16,address).activePool_ (src/SternpostGovernor.sol#135) lacks a zero-check on :
+		- activePool = activePool_ (src/SternpostGovernor.sol#150)
+Batcher.claimCollateralBatch(address[]).account (src/account/Batcher.sol#170) lacks a zero-check on :
+		- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Batcher.claimYieldBatch(address[]).account (src/account/Batcher.sol#196) lacks a zero-check on :
+		- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Batcher.checkpointBatch(address[]).account (src/account/Batcher.sol#214) lacks a zero-check on :
+		- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
 INFO:Detectors:
+Detector: calls-loop
+Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122) has external calls inside a loop: (ok,r) = targets[i].call(data[i]) (src/account/Batcher.sol#114)
+Batcher.multiDraw(address[],Batcher.DrawIntent[]) (src/account/Batcher.sol#133-141) has external calls inside a loop: IBatcherAccount(accounts[i]).drawBySig(intent.agent,intent.payee,intent.amount,intent.deadline,intent.sig) (src/account/Batcher.sol#138)
+Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178) has external calls inside a loop: (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202) has external calls inside a loop: (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219) has external calls inside a loop: (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+Radar.rank(address,uint256) (src/account/Radar.sol#115-143) has external calls inside a loop: icr = troveManager.getCurrentICR(cur,price) (src/account/Radar.sol#125)
+Radar._entireDebt(address) (src/account/Radar.sol#186-189) has external calls inside a loop: (None,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(trove) (src/account/Radar.sol#187)
+	Calls stack containing the loop:
+		Radar.rank(address,uint256)
+Radar.rank(address,uint256) (src/account/Radar.sol#115-143) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/Radar.sol#136)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: (coll,principal,interest,None,None,None) = troveManager.getEntireDebtAndColl(cur) (src/account/Radar.sol#164-165)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: troveManager.getCurrentICR(cur,price) >= MCR (src/account/Radar.sol#171)
+Radar.debtAheadForNICR(uint256,uint256) (src/account/Radar.sol#154-180) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/Radar.sol#174)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.openFor(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.openFor(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.open(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.open(uint256,address,address,uint256)
+		TroveAccount._open(uint256,address,address,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.shield()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.shield()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: (coll,principal,interest,None,None,None) = tm.getEntireDebtAndColl(cur) (src/account/TroveAccount.sol#960)
+	Calls stack containing the loop:
+		TroveAccount.needed()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+TroveAccount._debtAheadForNICR(uint256,uint256,uint256) (src/account/TroveAccount.sol#952-980) has external calls inside a loop: cur = sortedTroves.getPrev(cur) (src/account/TroveAccount.sol#973)
+	Calls stack containing the loop:
+		TroveAccount.needed()
+		TroveAccount._rankStressed(uint256,uint256,uint256)
+SternpostRouter._draw(address,uint256,uint256,bytes,uint256,bytes,uint256) (src/routes/SternpostRouter.sol#274-286) has external calls inside a loop: IGovernorView(governor).draw(amount,address(this),withdrawDeadline,withdrawSig,healDeadline,healSig) (src/routes/SternpostRouter.sol#284)
+	Calls stack containing the loop:
+		SternpostRouter.loop(address,SternpostRouter.Leg[])
+SternpostRouter._draw(address,uint256,uint256,bytes,uint256,bytes,uint256) (src/routes/SternpostRouter.sol#274-286) has external calls inside a loop: musd.balanceOf(address(this)) - m0 != amount (src/routes/SternpostRouter.sol#285)
+	Calls stack containing the loop:
+		SternpostRouter.loop(address,SternpostRouter.Leg[])
+SternpostRouter._approve(address,uint256) (src/routes/SternpostRouter.sol#309-311) has external calls inside a loop: ! musd.approve(spender,amount) (src/routes/SternpostRouter.sol#310)
+	Calls stack containing the loop:
+		SternpostRouter.loop(address,SternpostRouter.Leg[])
+		SternpostRouter._swap(uint256,uint256,address)
+SternpostRouter._swap(uint256,uint256,address) (src/routes/SternpostRouter.sol#288-294) has external calls inside a loop: a = dex.swapExactTokensForTokens(amountIn,minOut,_path(),to,block.timestamp + MAX_SWAP_WINDOW) (src/routes/SternpostRouter.sol#290-291)
+	Calls stack containing the loop:
+		SternpostRouter.loop(address,SternpostRouter.Leg[])
+SternpostRouter.loop(address,SternpostRouter.Leg[]) (src/routes/SternpostRouter.sol#220-258) has external calls inside a loop: signatures.addCollWithSignature{value: l.collAmount}(address(0),address(0),b,l.addCollSig,l.addCollDeadline) (src/routes/SternpostRouter.sol#244-246)
+SternpostRouter.loop(address,SternpostRouter.Leg[]) (src/routes/SternpostRouter.sol#220-258) has external calls inside a loop: icrAfter = tm.getCurrentICR(b,price) (src/routes/SternpostRouter.sol#247)
+SternpostRouter._sendBtc(address,uint256) (src/routes/SternpostRouter.sol#314-318) has external calls inside a loop: (ok,None) = to.call{value: amount}() (src/routes/SternpostRouter.sol#316)
+	Calls stack containing the loop:
+		SternpostRouter.loop(address,SternpostRouter.Leg[])
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+INFO:Detectors:
 Detector: reentrancy-benign
-Reentrancy in SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322):
+Reentrancy in SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#329-385):
 	External calls:
-	- signatures.withdrawMUSDWithSignature(amount,address(0),address(0),borrower,address(this),withdrawSig,withdrawDeadline) (src/SternpostGovernor.sol#308-310)
+	- signatures.withdrawMUSDWithSignature(amount,address(0),address(0),borrower,address(this),withdrawSig,withdrawDeadline) (src/SternpostGovernor.sol#364-366)
 	State variables written after the call(s):
-	- _inDraw = false (src/SternpostGovernor.sol#311)
-	- _standby = Standby(uint128(amount),uint64(healDeadline),uint64(nonce + 1),healSig) (src/SternpostGovernor.sol#318)
+	- _inDraw = false (src/SternpostGovernor.sol#367)
+	- _standby = Standby(uint128(amount),uint64(healDeadline),uint64(nonce + 1),healSig) (src/SternpostGovernor.sol#374)
+Reentrancy in SternpostRouter.loop(address,SternpostRouter.Leg[]) (src/routes/SternpostRouter.sol#220-258):
+	External calls:
+	- _draw(governor,l.amount,l.withdrawDeadline,l.withdrawSig,l.healDeadline,l.healSig,m0) (src/routes/SternpostRouter.sol#235)
+		- IGovernorView(governor).draw(amount,address(this),withdrawDeadline,withdrawSig,healDeadline,healSig) (src/routes/SternpostRouter.sol#284)
+	- _swap(l.amount,l.collAmount,address(this)) (src/routes/SternpostRouter.sol#239)
+		- ! musd.approve(spender,amount) (src/routes/SternpostRouter.sol#310)
+		- a = dex.swapExactTokensForTokens(amountIn,minOut,_path(),to,block.timestamp + MAX_SWAP_WINDOW) (src/routes/SternpostRouter.sol#290-291)
+	- signatures.addCollWithSignature{value: l.collAmount}(address(0),address(0),b,l.addCollSig,l.addCollDeadline) (src/routes/SternpostRouter.sol#244-246)
+	- _sendBtc(b,surplus) (src/routes/SternpostRouter.sol#251)
+		- (ok,None) = to.call{value: amount}() (src/routes/SternpostRouter.sol#316)
+	External calls sending eth:
+	- signatures.addCollWithSignature{value: l.collAmount}(address(0),address(0),b,l.addCollSig,l.addCollDeadline) (src/routes/SternpostRouter.sol#244-246)
+	- _sendBtc(b,surplus) (src/routes/SternpostRouter.sol#251)
+		- (ok,None) = to.call{value: amount}() (src/routes/SternpostRouter.sol#316)
+	State variables written after the call(s):
+	- _acceptBtc = true (src/routes/SternpostRouter.sol#238)
+	- _acceptBtc = false (src/routes/SternpostRouter.sol#240)
+Reentrancy in TroveAccount.shield() (src/account/TroveAccount.sol#587-684):
+	External calls:
+	- smusd.withdraw(take) (src/account/TroveAccount.sol#637)
+	- bo.repayMUSD(repaid,up,lo) (src/account/TroveAccount.sol#642)
+	- bo.addColl{value: collAdded}(up,lo) (src/account/TroveAccount.sol#656)
+	External calls sending eth:
+	- bo.addColl{value: collAdded}(up,lo) (src/account/TroveAccount.sol#656)
+	State variables written after the call(s):
+	- totalBountyPaid += bountyDue (src/account/TroveAccount.sol#679)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
 INFO:Detectors:
 Detector: reentrancy-events
-Reentrancy in SternpostGovernor.fund(uint256) (src/SternpostGovernor.sol#248-253):
+Reentrancy in Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219):
 	External calls:
-	- ! musd.transferFrom(msg.sender,address(this),amount) (src/SternpostGovernor.sol#251)
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
 	Event emitted after the call(s):
-	- Funded(amount) (src/SternpostGovernor.sol#252)
+	- CheckpointBatched(account,ok[i]) (src/account/Batcher.sol#217)
+Reentrancy in Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178):
+	External calls:
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+	Event emitted after the call(s):
+	- CollateralClaimBatched(account,ok[i],claimed[i]) (src/account/Batcher.sol#176)
+Reentrancy in Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202):
+	External calls:
+	- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+	Event emitted after the call(s):
+	- YieldClaimBatched(account,ok[i],yields[i]) (src/account/Batcher.sol#200)
+Reentrancy in TroveAccountFactory.createAccount(address,bytes32,Policy) (src/account/TroveAccountFactory.sol#121-135):
+	External calls:
+	- ITroveAccount(account).initialize(owner,p,feeRecipient,feeBps) (src/account/TroveAccountFactory.sol#133)
+	Event emitted after the call(s):
+	- AccountCreated(owner,account,salt,p.floorICR,p.shieldICR,p.targetICR) (src/account/TroveAccountFactory.sol#134)
+Reentrancy in SternpostGovernor.fund(uint256) (src/SternpostGovernor.sol#296-301):
+	External calls:
+	- ! musd.transferFrom(msg.sender,address(this),amount) (src/SternpostGovernor.sol#299)
+	Event emitted after the call(s):
+	- Funded(amount) (src/SternpostGovernor.sol#300)
+Reentrancy in TroveAccount.initialize(address,Policy,address,uint16) (src/account/TroveAccount.sol#253-264):
+	External calls:
+	- musd.approve(address(smusd),type()(uint256).max) (src/account/TroveAccount.sol#262)
+	Event emitted after the call(s):
+	- PolicySet(p.floorICR,p.shieldICR,p.targetICR,p.bounty,p.minDebtAhead) (src/account/TroveAccount.sol#263)
+Reentrancy in Batcher.multiDraw(address[],Batcher.DrawIntent[]) (src/account/Batcher.sol#133-141):
+	External calls:
+	- IBatcherAccount(accounts[i]).drawBySig(intent.agent,intent.payee,intent.amount,intent.deadline,intent.sig) (src/account/Batcher.sol#138)
+	Event emitted after the call(s):
+	- DrawsBatched(accounts.length) (src/account/Batcher.sol#140)
 Reentrancy in SpendWallet.setBudget(address,uint256) (src/SpendWallet.sol#52-55):
 	External calls:
 	- ! IERC20Min(token).approve(PERMIT2,amount) (src/SpendWallet.sol#53)
@@ -59,34 +215,90 @@ Detector: timestamp
 SpendWallet.isValidSignature(bytes32,bytes) (src/SpendWallet.sol#62-69) uses timestamp for comparisons
 	Dangerous comparisons:
 	- agent == address(0) || block.timestamp > agentExpiry || sig.length != 65 (src/SpendWallet.sol#63)
-SternpostGovernor.previewDraw(address,uint256,address) (src/SternpostGovernor.sol#171-187) uses timestamp for comparisons
+SternpostGovernor.previewDraw(address,uint256,address) (src/SternpostGovernor.sol#202-222) uses timestamp for comparisons
 	Dangerous comparisons:
-	- block.timestamp > a.expiry (src/SternpostGovernor.sol#181)
-SternpostGovernor.standby() (src/SternpostGovernor.sol#196-200) uses timestamp for comparisons
+	- block.timestamp > a.expiry (src/SternpostGovernor.sol#216)
+SternpostGovernor.standby() (src/SternpostGovernor.sol#244-248) uses timestamp for comparisons
 	Dangerous comparisons:
-	- live = s.amount != 0 && s.deadline >= block.timestamp && signatures.getNonce(borrower) == s.nonce (src/SternpostGovernor.sol#198)
-SternpostGovernor.authorizeApp(address,uint128,uint128,uint64,address) (src/SternpostGovernor.sol#215-224) uses timestamp for comparisons
+	- live = s.amount != 0 && s.deadline >= block.timestamp && signatures.getNonce(borrower) == s.nonce (src/SternpostGovernor.sol#246)
+SternpostGovernor.authorizeApp(address,uint128,uint128,uint64,address) (src/SternpostGovernor.sol#263-272) uses timestamp for comparisons
 	Dangerous comparisons:
-	- app == address(0) || expiry <= block.timestamp || perDrawMax == 0 || perDrawMax > budget (src/SternpostGovernor.sol#219)
-SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322) uses timestamp for comparisons
+	- app == address(0) || expiry <= block.timestamp || perDrawMax == 0 || perDrawMax > budget (src/SternpostGovernor.sol#267)
+SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#329-385) uses timestamp for comparisons
 	Dangerous comparisons:
-	- withdrawDeadline > block.timestamp + MAX_WINDOW (src/SternpostGovernor.sol#291)
-	- block.timestamp > a.expiry (src/SternpostGovernor.sol#295)
-SternpostGovernor._validRepay(uint256,uint256,uint256,bytes) (src/SternpostGovernor.sol#378-395) uses timestamp for comparisons
+	- withdrawDeadline > block.timestamp + MAX_WINDOW (src/SternpostGovernor.sol#339)
+	- block.timestamp > a.expiry (src/SternpostGovernor.sol#343)
+SternpostGovernor._validRepay(uint256,uint256,uint256,bytes) (src/SternpostGovernor.sol#465-482) uses timestamp for comparisons
 	Dangerous comparisons:
-	- sig.length != 65 || deadline < block.timestamp (src/SternpostGovernor.sol#383)
+	- sig.length != 65 || deadline < block.timestamp (src/SternpostGovernor.sol#470)
+TroveAccount._setSession(address,uint128,uint128,uint128,uint64,bool,bool) (src/account/TroveAccount.sol#401-428) uses timestamp for comparisons
+	Dangerous comparisons:
+	- expiry <= block.timestamp || expiry > block.timestamp + MAX_SESSION (src/account/TroveAccount.sol#411)
+TroveAccount.drawBySig(address,address,uint256,uint256,bytes) (src/account/TroveAccount.sol#729-745) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > deadline (src/account/TroveAccount.sol#733)
+TroveAccount.previewDraw(address,address,uint256) (src/account/TroveAccount.sol#784-811) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp >= s.dayStart + 86400 (src/account/TroveAccount.sol#798)
+TroveAccount.isValidSignature(bytes32,bytes) (src/account/TroveAccount.sol#826-838) uses timestamp for comparisons
+	Dangerous comparisons:
+	- ! _sessionLive(sess) || ! sess.canSignX402 (src/account/TroveAccount.sol#836)
+TroveAccount._sessionLive(TroveAccount.Session) (src/account/TroveAccount.sol#996-998) uses timestamp for comparisons
+	Dangerous comparisons:
+	- s.active && s.epoch == sessionEpoch && s.expiry >= block.timestamp (src/account/TroveAccount.sol#997)
+TroveAccount._rollDay(TroveAccount.Session) (src/account/TroveAccount.sol#1000-1005) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp >= s.dayStart + 86400 (src/account/TroveAccount.sol#1001)
+SternpostRouter._swap(uint256,uint256,address) (src/routes/SternpostRouter.sol#288-294) uses timestamp for comparisons
+	Dangerous comparisons:
+	- a[a.length - 1] < minOut (src/routes/SternpostRouter.sol#293)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
 INFO:Detectors:
+Detector: assembly
+Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122) uses assembly
+	- INLINE ASM (src/account/Batcher.sol#116-118)
+TroveAccountFactory._clone(address,bytes32) (src/account/TroveAccountFactory.sol#183-188) uses assembly
+	- INLINE ASM (src/account/TroveAccountFactory.sol#185-187)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+INFO:Detectors:
+Detector: costly-loop
+SternpostRouter.loop(address,SternpostRouter.Leg[]) (src/routes/SternpostRouter.sol#220-258) has costly operations inside a loop:
+	- _acceptBtc = true (src/routes/SternpostRouter.sol#238)
+SternpostRouter.loop(address,SternpostRouter.Leg[]) (src/routes/SternpostRouter.sol#220-258) has costly operations inside a loop:
+	- _acceptBtc = false (src/routes/SternpostRouter.sol#240)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#costly-operations-inside-a-loop
+INFO:Detectors:
 Detector: cyclomatic-complexity
-SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#281-322) has a high cyclomatic complexity (14).
+SternpostGovernor.draw(uint256,address,uint256,bytes,uint256,bytes) (src/SternpostGovernor.sol#329-385) has a high cyclomatic complexity (19).
+TroveAccount.shield() (src/account/TroveAccount.sol#587-684) has a high cyclomatic complexity (23).
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in Batcher.multi(address[],bytes[]) (src/account/Batcher.sol#110-122):
+	- (ok,r) = targets[i].call(data[i]) (src/account/Batcher.sol#114)
+Low level call in Batcher.claimCollateralBatch(address[]) (src/account/Batcher.sol#162-178):
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.claimCollateral.selector)) (src/account/Batcher.sol#172)
+Low level call in Batcher.claimYieldBatch(address[]) (src/account/Batcher.sol#188-202):
+	- (success,ret) = account.call(abi.encodeWithSelector(IBatcherAccount.claimYield.selector)) (src/account/Batcher.sol#197)
+Low level call in Batcher.checkpointBatch(address[]) (src/account/Batcher.sol#210-219):
+	- (success,None) = account.call(abi.encodeWithSelector(IBatcherAccount.checkpoint.selector)) (src/account/Batcher.sol#215)
+Low level call in TroveAccount._sendBtc(address,uint256) (src/account/TroveAccount.sol#1027-1031):
+	- (ok,None) = to.call{value: amount}() (src/account/TroveAccount.sol#1029)
+Low level call in SternpostRouter._sendBtc(address,uint256) (src/routes/SternpostRouter.sol#314-318):
+	- (ok,None) = to.call{value: amount}() (src/routes/SternpostRouter.sol#316)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: missing-inheritance
+SpendWallet (src/SpendWallet.sol#11-70) should inherit from IERC1271 (src/account/interfaces/IERC1271.sol#7-9)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
 INFO:Detectors:
 Detector: naming-convention
 Variable SternpostGovernor.DOMAIN_SEPARATOR (src/SternpostGovernor.sol#36) is not in mixedCase
+Variable TroveAccountMainnet.MAX_SESSION_BUDGET (src/account/TroveAccountMainnet.sol#19) is not in mixedCase
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
 INFO:Detectors:
 Detector: too-many-digits
-SternpostFactory.predictGovernor(address,uint256,uint256) (src/SternpostFactory.sol#61-78) uses literals with too many digits:
-	- h = keccak256(bytes)(abi.encodePacked(bytes1(0xff),address(this),bytes32(uint256(uint160(borrower))),keccak256(bytes)(abi.encodePacked(type()(SternpostGovernor).creationCode,abi.encode(borrower,signatures,borrowerOperations,troveManager,priceFeed,musd,activePool,savings,floorICR,defendICR))))) (src/SternpostFactory.sol#62-76)
+SternpostFactory.predictGovernor(address,uint256,uint256) (src/SternpostFactory.sol#74-91) uses literals with too many digits:
+	- h = keccak256(bytes)(abi.encodePacked(bytes1(0xff),address(this),bytes32(uint256(uint160(borrower))),keccak256(bytes)(abi.encodePacked(type()(SternpostGovernor).creationCode,abi.encode(borrower,signatures,borrowerOperations,troveManager,priceFeed,musd,activePool,savings,floorICR,defendICR,feeBps,feeRecipient))))) (src/SternpostFactory.sol#75-89)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
-INFO:Slither:. analyzed (9 contracts with 102 detectors), 20 result(s) found
+INFO:Slither:. analyzed (34 contracts with 101 detectors), 95 result(s) found

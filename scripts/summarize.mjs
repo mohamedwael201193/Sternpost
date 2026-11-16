@@ -26,8 +26,10 @@
 //   yields one suite per kind present (e.g. forge-unit.json yields both
 //   "contracts-unit" and "contracts-fuzz"). Fork files are grouped by
 //   file, not by test kind: every test in them is kind "fork".
-// - Forge counts each invariant suite as ONE test (2 suites = 2 in the
-//   forge summary, although the files declare 4 invariant properties).
+// - Forge counts each invariant suite as ONE test (3 suites = 3 in the
+//   forge summary, although the files declare 14 invariant properties:
+//   3 in Invariant.t.sol + 1 in RouterInvariant.t.sol + 10 in
+//   account/Invariant.t.sol).
 //   That is what is reported here — the real executed count, not the
 //   declared-property count.
 // - Vitest JSON is counted from testResults[].assertionResults FIRST
@@ -62,9 +64,13 @@
 //   contract's entries fail here even though the JSON's own totals
 //   still reconcile — the file's "total" is itself the lie.
 //   Invariant files are checked differently: forge reports one entry
-//   per invariant contract (2 entries for 4 declared properties), so
+//   per invariant contract (3 entries for 14 declared properties
+//   across the tree), so
 //   the check is entry-count == #contracts declaring invariant_
 //   functions, and every entry name must be a declared invariant_ name.
+//   A MIXED dir (test/account/*: unit + fuzz + one invariant contract)
+//   partitions its entries and checks each kind by its own rule — an
+//   invariant entry must never be diffed against the declared test names.
 // - F3: a vitest report with no verifiable evidence (no per-test list
 //   AND no numTotalTests, e.g. `{}`) is an error, not completed 0/0/0.
 // - F4: an out/forge-*.json file EXPECTED does not cover, or a
@@ -104,6 +110,12 @@ const EXPECTED = [
   // (forge-account.json, fuzz) entry in EXPECTED.
   { file: "forge-account.json", name: "contracts-account", kind: "unit" },
   { file: "forge-account.json", name: "contracts-fuzz-account", kind: "fuzz" },
+  // Added after 1.7-1.8 (main 8502a26): test/account/* gained an
+  // invariant suite (Invariant.t.sol, TroveAccountInvariantTest, 10
+  // properties, 1 forge entry), so forge-account.json yields a THIRD
+  // kind. Same false-premise trap as the J1 fuzz entry above: without
+  // this, the invariant entry is "unaccounted" and the run errors.
+  { file: "forge-account.json", name: "contracts-invariant-account", kind: "invariant" },
   { file: "forge-routes.json", name: "contracts-routes", kind: "unit" },
   { file: "forge-fork-offline.json", name: "contracts-fork-offline", kind: "fork" },
   { file: "forge-fork-testnet.json", name: "contracts-fork-testnet", kind: "fork" },
@@ -121,12 +133,15 @@ const EXPECTED = [
 // executed test-name set against the declared `function test…` set;
 // "invariant" compares entry count against #contracts declaring
 // invariant_ functions (forge reports one entry per invariant contract).
+// "mixed" (test/account/* only) partitions the entries by kind and
+// checks the invariant ones by the invariant rule and the rest by the
+// unit rule — the dir holds unit + fuzz tests AND one invariant contract.
 // Fork files share the test/fork source dir; their whole-contract
 // setUp-skip rule is what makes the mainnet 7/10 honest instead of a
 // miscount (see checkForgeAgainstSource).
 const FORGE_SOURCE = {
   "forge-unit.json": { dir: "contracts/test/unit", mode: "unit" },
-  "forge-account.json": { dir: "contracts/test/account", mode: "unit" },
+  "forge-account.json": { dir: "contracts/test/account", mode: "mixed" },
   "forge-routes.json": { dir: "contracts/test/routes", mode: "unit" },
   "forge-invariant.json": { dir: "contracts/test/invariant", mode: "invariant" },
   "forge-fork-offline.json": { dir: "contracts/test/fork", mode: "fork" },
@@ -215,28 +230,25 @@ function parseSourceTests(dir) {
 //   - invariant: entry count must equal the number of contracts
 //     declaring invariant_ functions, and every entry name must be a
 //     declared invariant_ name (forge reports one entry per invariant
-//     contract although the files declare 4 properties).
-function checkForgeAgainstSource(file, entries) {
-  const spec = FORGE_SOURCE[file];
-  if (!spec) return null;
-  const byContract = parseSourceTests(spec.dir);
-  if (byContract === null) {
-    return `source dir ${spec.dir} missing — cannot cross-check counted tests against declared tests`;
+//     contract although the files declare 14 properties across the tree).
+//   - mixed: the invariant entries are checked by the invariant rule
+//     and the rest by the unit rule (see checkForgeAgainstSource).
+function checkInvariantNames(byContract, names, file) {
+  const invContracts = [...byContract.values()].filter((s) => s.invariants.size > 0);
+  const declaredInv = new Set(invContracts.flatMap((s) => [...s.invariants]));
+  const bad = names.filter((n) => !declaredInv.has(n));
+  if (names.length !== invContracts.length) {
+    return `source cross-check: ${file} reports ${names.length} invariant entries but ${invContracts.length} contracts declare invariant_ functions (${[...declaredInv].join(", ")})`;
   }
+  if (bad.length > 0) {
+    return `source cross-check: ${file} reports undeclared invariant entries: ${bad.join(", ")}`;
+  }
+  return null;
+}
+
+function checkUnitNames(byContract, entries, file) {
   const executed = entries.filter((e) => e.name !== "setUp").map((e) => e.name);
   const skippedSetUps = entries.filter((e) => e.name === "setUp" && e.status === "Skipped").length;
-  if (spec.mode === "invariant") {
-    const invContracts = [...byContract.values()].filter((s) => s.invariants.size > 0);
-    const declaredInv = new Set(invContracts.flatMap((s) => [...s.invariants]));
-    const bad = executed.filter((n) => !declaredInv.has(n));
-    if (executed.length !== invContracts.length) {
-      return `source cross-check: ${file} reports ${executed.length} invariant entries but ${invContracts.length} contracts declare invariant_ functions (${[...declaredInv].join(", ")})`;
-    }
-    if (bad.length > 0) {
-      return `source cross-check: ${file} reports undeclared invariant entries: ${bad.join(", ")}`;
-    }
-    return null;
-  }
   const declaredByContract = [...byContract.entries()]
     .filter(([, s]) => s.tests.size > 0)
     .map(([c, s]) => [c, [...s.tests]]);
@@ -297,6 +309,33 @@ function checkForgeAgainstSource(file, entries) {
     return `source cross-check: ${file} is missing all tests of ${cover.names.join(", ")} (${missing.length} tests) but has ${skippedSetUps} skipped setUp() entr${skippedSetUps === 1 ? "y" : "ies"} (expected ${cover.count})`;
   }
   return null;
+}
+
+function checkForgeAgainstSource(file, entries) {
+  const spec = FORGE_SOURCE[file];
+  if (!spec) return null;
+  const byContract = parseSourceTests(spec.dir);
+  if (byContract === null) {
+    return `source dir ${spec.dir} missing — cannot cross-check counted tests against declared tests`;
+  }
+  if (spec.mode === "invariant") {
+    const executed = entries.filter((e) => e.name !== "setUp").map((e) => e.name);
+    return checkInvariantNames(byContract, executed, file);
+  }
+  if (spec.mode === "mixed") {
+    // test/account/*: the invariant entries are checked by the
+    // invariant rule and the rest by the unit rule. The partition is by
+    // forge kind, so an invariant entry can never be diffed against the
+    // declared test names (that false diff is what errored this file
+    // before the fix: invariant_I10_feeAccounting is not a test… name).
+    const invNames = entries
+      .filter((e) => e.kindKey === "Invariant" && e.name !== "setUp")
+      .map((e) => e.name);
+    const invError = checkInvariantNames(byContract, invNames, file);
+    if (invError) return invError;
+    return checkUnitNames(byContract, entries.filter((e) => e.kindKey !== "Invariant"), file);
+  }
+  return checkUnitNames(byContract, entries, file);
 }
 
 // sha256 over a directory tree (sorted relative paths + contents), for
@@ -595,9 +634,10 @@ function main() {
 
   // Reconciliation (J2-F5, plan C12): `total` is a NON-FORK subtotal, so
   // it must never be read as "N in total". The distinct declared count
-  // is nonForkDeclared + forkDeclared + 2: forge executes each invariant
-  // suite as ONE test although the files declare 4 invariant properties
-  // (3 in Invariant.t.sol + 1 in RouterInvariant.t.sol), and the fork
+  // is nonForkDeclared + forkDeclared + 11: forge executes each invariant
+  // suite as ONE test although the files declare 14 invariant properties
+  // (3 in Invariant.t.sol + 1 in RouterInvariant.t.sol + 10 in
+  // account/Invariant.t.sol), executed as 3 entries, and the fork
   // suites (offline/testnet/mainnet) are the SAME 10 tests listed three
   // times, counted once here via the testnet run. Example on the
   // pre-merge tree: 186 non-fork declared + 10 fork + 2 invariant
@@ -619,7 +659,7 @@ function main() {
     nonForkDeclared,
     forkDeclared,
     passedInclFork,
-    note: "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties). Do not read total.passed as 'N in total'.",
+    note: "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). Do not read total.passed as 'N in total'.",
   };
 
   const result = {
@@ -639,7 +679,7 @@ function main() {
     console.log(`${s.name} (${s.kind}): passed=${s.passed} failed=${s.failed} skipped=${s.skipped} [${s.status}]${s.note ? ` — ${s.note}` : ""}`);
   }
   console.log(`total (non-fork subtotal, NOT "in total"): passed=${total.passed} failed=${total.failed} skipped=${total.skipped}`);
-  console.log(`reconciliation: non-fork declared=${nonForkDeclared}, fork declared=${forkDeclared ?? "n/a"}, passed incl. fork=${passedInclFork}, distinct declared=${forkDeclared === null ? "n/a" : nonForkDeclared + forkDeclared + 2} (C12: +2 invariant properties)`);
+  console.log(`reconciliation: non-fork declared=${nonForkDeclared}, fork declared=${forkDeclared ?? "n/a"}, passed incl. fork=${passedInclFork}, distinct declared=${forkDeclared === null ? "n/a" : nonForkDeclared + forkDeclared + 11} (C12: +11 invariant properties)`);
   process.exit(failed || errored ? 1 : 0);
 }
 

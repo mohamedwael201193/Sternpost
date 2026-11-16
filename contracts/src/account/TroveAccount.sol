@@ -594,6 +594,12 @@ contract TroveAccount is ITroveAccount {
         ) {
             revert Cooldown(uint256(lastShieldBlock) + policy.cooldownBlocks - block.number);
         }
+        // CEI (slither reentrancy-eth): advance the cooldown BEFORE the
+        // external legs (sMUSD withdraw, BO repay/addColl, bounty
+        // transfer). It still advances only on success: any revert below
+        // rolls this write back with the tx (see
+        // test_shield_reentrancy_blocked / test_crashDuringCooldown_stateSurvives).
+        lastShieldBlock = uint64(block.number);
         uint256 price = pf.fetchPrice();
         if (price == 0) revert ZeroPrice();
         (uint256 coll, uint256 principal, uint256 interest,,,) = tm.getEntireDebtAndColl(address(this));
@@ -674,7 +680,6 @@ contract TroveAccount is ITroveAccount {
                 _safeTransfer(msg.sender, bountyPaid);
             }
         }
-        lastShieldBlock = uint64(block.number);
         emit Shielded(msg.sender, repaid, collAdded, icrBefore, icrAfter, reason, bountyPaid);
     }
 
@@ -878,9 +883,14 @@ contract TroveAccount is ITroveAccount {
             // debtAhead < minDebtAhead.
             if (complete && debtAhead < minDebtAhead) revert RedemptionExposed(debtAhead, minDebtAhead);
         }
-        bo.openTrove{value: msg.value}(debt, upHint, loHint);
+        // CEI (slither reentrancy-eth): mark the trove opened BEFORE the
+        // external openTrove call, so a re-entrant open() hits
+        // AlreadyOpened instead of re-entering. If openTrove reverts,
+        // these writes roll back with the tx — no half-opened state
+        // can persist.
         opened = true;
         policy.minDebtAhead = uint128(minDebtAhead);
+        bo.openTrove{value: msg.value}(debt, upHint, loHint);
         uint256 icr = tm.getCurrentICR(address(this), price);
         emit TroveOpened(owner, msg.value, debt, icr);
     }
@@ -1012,7 +1022,10 @@ contract TroveAccount is ITroveAccount {
         if (!musd.transfer(to, amount)) revert TransferFailed();
     }
 
+    /// @dev `to` is always the account owner (all 3 callers pass `owner`
+    ///      only: withdrawColl, closeAccount, sweepBtc) — never caller input.
     function _sendBtc(address to, uint256 amount) internal {
+        // slither-disable-next-line arbitrary-send-eth
         (bool ok,) = to.call{value: amount}("");
         if (!ok) revert TransferFailed();
     }

@@ -125,8 +125,12 @@ contract TroveAccountFactory {
         if (isAccount[account]) revert AlreadyCreated(account);
         account = _clone(implementation, _finalSalt(owner, salt, p));
         if (account == address(0)) revert CloneFailed();
-        ITroveAccount(account).initialize(owner, p, feeRecipient, feeBps);
+        // CEI (slither reentrancy-no-eth): record the account BEFORE the
+        // external initialize call, so a re-entrant createAccount for
+        // the same address hits AlreadyCreated. An initialize revert
+        // rolls this write back with the tx.
         isAccount[account] = true;
+        ITroveAccount(account).initialize(owner, p, feeRecipient, feeBps);
         emit AccountCreated(owner, account, salt, p.floorICR, p.shieldICR, p.targetICR);
     }
 
