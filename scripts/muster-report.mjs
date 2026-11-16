@@ -86,16 +86,26 @@ function fail(msg) {
 function checkValue(flag, value) {
   // Reject values with no visible character. Stripping is test-only — the
   // value itself is never modified — so combining marks inside an
-  // otherwise-visible value are unaffected. The strip set must cover the
-  // full invisible class, not just the common cases: \s plus \p{Cf}
-  // (format chars: U+200B–U+200F, U+2060–U+2064, U+061C, U+180E, U+FEFF),
-  // \p{Mn} / \p{Me} (non-spacing / enclosing marks: variation selectors
-  // U+FE00–U+FE0F, U+034F, U+17B4–U+17B5), U+00AD soft hyphen, U+0085 NEL,
-  // and the Hangul fillers U+115F–U+1160, U+3164, U+FFA0 (category Lo, so
-  // no Unicode property covers them — they stay explicit). A value made
-  // solely of any of these would otherwise pass and create a directory
-  // whose name renders empty.
-  if (value.replace(/[\s\p{Cf}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u3164\uFFA0]/gu, "") === "") {
+  // otherwise-visible value are unaffected. The strip set is exactly:
+  //   \s — White_Space (U+0009–U+000D, U+0020, U+0085 NEL, U+00A0, U+1680,
+  //     U+2000–U+200A, U+2028–U+2029, U+202F, U+205F, U+3000, U+FEFF)
+  //   \p{Cc} — all control code points (C0 U+0000–U+001F, DEL U+007F,
+  //     C1 U+0080–U+009F)
+  //   \p{Cf} — format chars (U+200B–U+200F, U+202A–U+202E, U+2060–U+2064,
+  //     U+061C, U+180E, U+FEFF, U+E0000–U+E007F, ...)
+  //   \p{Mn} / \p{Me} — non-spacing / enclosing marks (variation selectors
+  //     U+FE00–U+FE0F, U+034F, U+17B4–U+17B5, ...)
+  //   explicit code points no property covers, or that render blank
+  //     despite a visible category: U+00AD soft hyphen (Cf, listed
+  //     explicitly), U+115F–U+1160, U+3164, U+FFA0 (Hangul fillers, Lo),
+  //     U+2800 braille pattern blank and U+FFFC object replacement
+  //     character (So — they render as blank, not as symbols).
+  // A value made solely of any of these would otherwise pass and create a
+  // directory whose name renders empty. Verified by a full-code-point sweep
+  // over all 1,114,112 code points: zero genuinely-invisible survivors —
+  // every survivor is either a visible character or an unassigned (Cn)
+  // code point, which renders as a missing-glyph box, not as blank.
+  if (value.replace(/[\s\p{Cc}\p{Cf}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u2800\u3164\uFFA0\uFFFC]/gu, "") === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
   }
   if (value.startsWith("=")) {
@@ -139,6 +149,8 @@ const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
 const GOVERNOR = DEPLOYMENTS.sternpost.governor;
 const GOVERNOR_BLOCK = DEPLOYMENTS.sternpost.classicRedeploy.governor.block;
 const EXPLORER = DEPLOYMENTS.explorer;
+// The report is stamped "Mezo testnet 31611" — 31611 decimal = 0x7b7b.
+const EXPECTED_CHAIN_ID = 31611;
 
 async function rpc(method, params) {
   // 15 s timeout: without a signal a stalled / unresolvable RPC hangs
@@ -155,14 +167,16 @@ async function rpc(method, params) {
   return json.result;
 }
 
-// A block number must be a 0x hex string. parseInt(null, 16) /
+// A block number / chain id must be a 0x hex string. parseInt(null, 16) /
 // parseInt("0x", 16) is NaN, which previously sailed through and
 // published a false "0 outside addresses" report stamped "latest NaN".
 // hexToInt throws on anything else, so callers inside the try fail cleanly.
-const isHex = (h) => typeof h === "string" && /^0x[0-9a-fA-F]+$/.test(h);
+// The 0x prefix is matched case-insensitively ("0X7B7B" is the same value
+// as "0x7b7b") so hex casing variants never false-fail.
+const isHex = (h) => typeof h === "string" && /^0[xX][0-9a-fA-F]+$/.test(h);
 const hexToInt = (h) => {
-  if (!isHex(h)) throw new Error(`invalid hex block number: ${JSON.stringify(h)}`);
-  return parseInt(h, 16);
+  if (!isHex(h)) throw new Error(`invalid hex value: ${JSON.stringify(h)}`);
+  return parseInt(h.slice(2), 16);
 };
 const topicAddr = (t) => ("0x" + t.slice(-40)).toLowerCase();
 
@@ -191,8 +205,18 @@ const EXPECTED_TOPICS = {
   [TOPICS.SpendWalletCreated]: 2,
   [TOPICS.Drawn]: 3,
 };
-function validateLog(l) {
+function validateLog(l, expectedAddress) {
   if (!l || typeof l !== "object") throw new Error("malformed log: not an object");
+  // The log must come from the contract this query asked about: the RPC
+  // was called with an address filter, so a log carrying any other address
+  // (or none) is a lying / misrouted response — fail cleanly, never count
+  // it. The two getLogs calls query different contracts, so the caller
+  // passes the address it queried (factory for creations, governor for draws).
+  if (typeof l.address !== "string" || l.address.toLowerCase() !== expectedAddress.toLowerCase()) {
+    throw new Error(
+      `malformed log: address must be ${expectedAddress}, got ${JSON.stringify(l.address)}`
+    );
+  }
   if (!Array.isArray(l.topics) || l.topics.length < 2) {
     throw new Error("malformed log: topics must have at least 2 entries");
   }
@@ -209,6 +233,14 @@ function validateLog(l) {
       throw new Error(`malformed log: topic must be a 32-byte hex word, got ${JSON.stringify(t)}`);
     }
   }
+  // topics[1] is an ABI-encoded address: the upper 12 bytes must be zero.
+  // A non-zero-padded topics[1] is not a real indexed-address topic; its
+  // low 20 bytes would be counted as a bogus address.
+  if (l.topics[1].slice(2, 26) !== "0".repeat(24)) {
+    throw new Error(
+      `malformed log: topics[1] is not a zero-padded address topic, got ${JSON.stringify(l.topics[1])}`
+    );
+  }
   if (typeof l.transactionHash !== "string" || !TX_HASH.test(l.transactionHash)) {
     throw new Error(`malformed log: transactionHash must be a 32-byte hex hash, got ${JSON.stringify(l.transactionHash)}`);
   }
@@ -219,13 +251,19 @@ function validateLog(l) {
 
 // Windowed eth_getLogs (testnet RPCs cap ranges; 2,000 blocks per call).
 // Cap: at most MAX_WINDOWS windows per query, checked BEFORE the first
-// RPC call. Without it an absurd-but-valid-hex latest (e.g.
+// eth_getLogs call. Without it an absurd-but-valid-hex latest (e.g.
 // 0xFFFFFFFFFFFFFFFF) makes the window loop effectively unbounded —
 // astronomical sequential RPC calls, each 15 s-bounded but total
-// unbounded. 100,000 windows x 2,000 blocks = 200M blocks, ~12 years of
-// chain growth at ~2 s/block: far beyond any legitimate daily-report
-// range from the 0.9 deploy blocks, while any absurd value fails
-// instantly with zero RPC calls.
+// unbounded. Arithmetic: 100,000 windows x 2,000 blocks = 200M blocks,
+// ~12.7 years of chain growth at ~2 s/block. The legitimate window count
+// is (latest − FACTORY_BLOCK)/2000 + 1 and grows only ~21.6 windows/day,
+// so no legitimate daily run reaches the cap for ~12 years after the 0.9
+// deploy. A tighter cap would false-fail: e.g. 1,000 windows = 2M blocks
+// ≈ 46 days of growth, and 10,000 windows = 20M blocks ≈ 463 days —
+// both inside a year of the deploy. The cap stays 100,000: bounded, not
+// unbounded — worst case is hours of calls against a lying, user-chosen
+// RPC. Any absurd value fails before the first eth_getLogs call (after
+// only the eth_chainId + eth_blockNumber reads), with zero eth_getLogs calls.
 const MAX_WINDOWS = 100000;
 async function getLogs(address, topics, fromBlock, toBlock) {
   const out = [];
@@ -274,6 +312,24 @@ let latest;
 let creations;
 let draws;
 try {
+  // Chain guard, BEFORE any getLogs call: verify the RPC is actually Mezo
+  // testnet 31611 (eth_chainId must be 0x7b7b). The block floor below only
+  // catches a LOWER chain — a typo'd --rpc pointing at Ethereum mainnet,
+  // BSC, or Mezo mainnet has a HIGHER head, so both getLogs calls would
+  // return [] and the script would publish a vacuous "0 outside addresses"
+  // report stamped as Mezo testnet 31611. The comparison is numeric (via
+  // hexToInt), so hex casing variants ("0x7B7B", "0X7b7b") do not
+  // false-fail; a malformed / null chainId fails cleanly via hexToInt
+  // instead of crashing. The RPC URL itself is never echoed in any error
+  // message (it may contain an API key) — the message names the expected
+  // chain instead, so a wrong---rpc user gets the hint without a leak.
+  const chainId = hexToInt(await rpc("eth_chainId", []));
+  if (chainId !== EXPECTED_CHAIN_ID) {
+    throw new Error(
+      `RPC chain id ${chainId} is not Mezo testnet 31611 (expected chain id ${EXPECTED_CHAIN_ID}, 0x7b7b) — check --rpc points at Mezo testnet 31611`
+    );
+  }
+
   latest = hexToInt(await rpc("eth_blockNumber", []));
 
   // latest must not predate either deploy block: a valid-hex latest
@@ -281,9 +337,10 @@ try {
   // zero iterations and publishes a vacuous "0 outside addresses"
   // report. Reachable via a lagging node, an --rpc pointed at a
   // different/lower chain, or a fresh local node — fail cleanly instead.
+  // (The RPC URL is not echoed here either; the expected chain is named.)
   if (latest < FACTORY_BLOCK || latest < GOVERNOR_BLOCK) {
     throw new Error(
-      `latest block ${latest} is below the deploy blocks (factory ${FACTORY_BLOCK}, governor ${GOVERNOR_BLOCK})`
+      `latest block ${latest} is below the deploy blocks (factory ${FACTORY_BLOCK}, governor ${GOVERNOR_BLOCK}) on Mezo testnet 31611 — check --rpc points at Mezo testnet 31611`
     );
   }
 
@@ -303,12 +360,12 @@ try {
   );
 
   for (const l of creations) {
-    validateLog(l);
+    validateLog(l, FACTORY);
     const kind = l.topics[0] === TOPICS.GovernorCreated ? "GovernorCreated" : "SpendWalletCreated";
     add(topicAddr(l.topics[1]), kind, l.transactionHash, hexToInt(l.blockNumber));
   }
   for (const l of draws) {
-    validateLog(l);
+    validateLog(l, GOVERNOR);
     add(topicAddr(l.topics[1]), "Drawn(app)", l.transactionHash, hexToInt(l.blockNumber));
   }
 } catch (err) {
