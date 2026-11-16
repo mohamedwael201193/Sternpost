@@ -56,6 +56,7 @@ async function renderLimits(trove: Trove = TROVE) {
       <div
         data-limits={JSON.stringify({
           loaded: l.loaded,
+          feeResolved: l.feeResolved,
           isError: l.isError,
           authorized: l.authorized,
           feeError: l.feeError,
@@ -75,6 +76,7 @@ async function renderLimits(trove: Trove = TROVE) {
   container.remove()
   return out as {
     loaded: boolean
+    feeResolved: boolean
     isError: boolean
     authorized: boolean
     feeError: boolean
@@ -152,5 +154,28 @@ describe('useLimits (round 7, J2 F2 + J3 LOW-5)', () => {
     expect(l.isError).toBe(true)
     expect(l.safe).toBeNull()
     expect(l.loaded).toBe(false)
+  })
+})
+
+describe('useLimits feeResolved (round 10, J3 LOW-4)', () => {
+  it('is true when the fee slot answered, even with no floor room (loaded stays false)', async () => {
+    const l = await renderLimits({ ...TROVE, floor: undefined } as unknown as Trove)
+    expect(l.feeResolved).toBe(true)
+    expect(l.loaded).toBe(false)
+    expect(l.safe).toBeNull()
+  })
+
+  it('is false when the fee slot failed', async () => {
+    mockState.q = { data: [okPol(), okRem(), failSlot()], isLoading: false, isError: false }
+    const l = await renderLimits()
+    expect(l.feeResolved).toBe(false)
+    expect(l.feeError).toBe(true)
+  })
+
+  it('is false on a transport error with retained data, even though the retained fee slot says success', async () => {
+    mockState.q = { data: [okPol(), okRem(), okFee()], isLoading: false, isError: true }
+    const l = await renderLimits()
+    expect(l.feeResolved).toBe(false)
+    expect(l.isError).toBe(true)
   })
 })

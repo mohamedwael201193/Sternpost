@@ -139,6 +139,16 @@ export function useTrove() {
   // troveStatusKnown-gated empties would render "No trove" for an active
   // trove. Surface it like gvSlotError/sysSlotError.
   const coreSlotError = (core.data ?? []).some((e) => e?.status === 'failure')
+  // Round 10 (J1 LOW-1): a core-slot failure is only position-blocking
+  // when it took out a slot the position reads need — getEntireDebtAndColl
+  // (coll / debt, slot 0) or fetchPrice (price, slot 1). A failed
+  // balance/nonce slot leaves the position readable, so Draw must still
+  // show the form (with its "Nonce unreadable" sign gate) instead of the
+  // plate. coll / debt / price are defined exactly when those two slots
+  // succeeded, so the value check below IS the slot check — and the
+  // render-test mock derives the same value from the same fields, so the
+  // two cannot drift apart.
+  const positionSlotError = coreSlotError && (coll === undefined || debt === undefined || price === undefined)
   return {
     address, isConnected, governor, hasTrove, troveStatusKnown,
     coll, debt, price: p,
@@ -190,6 +200,8 @@ export function useTrove() {
     gvSlotError,
     /** Round 8 (J3 L7): a single core-batch slot reverted (allowFailure) while the batch itself resolved — OR into the Home rows, the Draw/Home empty gates, the nonce row and the Wallet balances. */
     coreSlotError,
+    /** Round 10 (J1 LOW-1): only a core-slot failure that took out the position reads (getEntireDebtAndColl or fetchPrice) — a balance/nonce-only failure leaves the position readable, so Draw shows the form, not the plate. */
+    positionSlotError,
     /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
     sysLoading: sys.isLoading,
     sysError: sys.isError,

@@ -15,9 +15,13 @@ export function Dial({ value, floor, size = 260, emptyLabel = 'No trove' }: { va
   // no Governor there is no floor, so the old `floor == null` arm labelled
   // a 0% ICR (a liquidatable trove) "Healthy". Healthy requires the ratio
   // to clear the 110% liquidation line AND sit 20 points above the floor.
+  // Round 10 (J3 LOW-3 = J2 LOW-2): with no floor a 0% ICR fell through
+  // to "Near floor" — 0% is 110 points below the 110% liquidation line,
+  // not near it. Below the liquidation line with no floor to be below is
+  // "Below liquidation", never "Near floor".
   const healthy = value != null && value >= 110 && (floor == null || value >= floor + 20)
   // Labelled empty states (plan §6.3): never a bare "—" where a number belongs.
-  const state = value == null ? '' : floor != null && value < floor ? 'Below floor' : healthy ? 'Healthy' : 'Near floor'
+  const state = value == null ? '' : floor != null && value < floor ? 'Below floor' : value < 110 ? 'Below liquidation' : healthy ? 'Healthy' : 'Near floor'
   return (
     <figure className="relative select-none" style={{ width: size }} aria-label={`Collateral ratio ${value == null ? 'unknown' : value.toFixed(0) + '%'}`}>
       <svg viewBox="0 0 200 200" className="w-full overflow-visible">

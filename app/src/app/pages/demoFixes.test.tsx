@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { DEMO_ACCOUNT } from '../../lib/chain'
+import { noTroveKnown, statusOutOfRange } from '../../lib/icr'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -113,7 +114,7 @@ vi.mock('wagmi', () => ({
 vi.mock('wagmi/actions', () => ({ switchChain: vi.fn() }))
 vi.mock('../useAccount', () => ({
   RPC_ERROR_TEXT: 'Could not reach the Mezo testnet RPC. Retrying every 12 s.',
-  SLOT_ERROR_TEXT: 'A Mezo testnet read failed — one view reverted while the RPC answered. Retrying automatically.',
+  SLOT_ERROR_TEXT: 'A Mezo testnet read failed — one or more views reverted while the RPC answered. Retrying automatically.',
   MAINNET_RPC_ERROR_TEXT: 'Could not reach the Mezo mainnet RPC.',
   useAccount: () => acctState,
   useRadar: () => radarState,
@@ -127,6 +128,7 @@ vi.mock('../useTrove', () => ({
     const t = {
       address: walletState.address, isConnected: walletState.isConnected, hasTrove: false, troveStatusKnown: true, governor: undefined,
       troveStatus: undefined as number | undefined, coll: undefined as bigint | undefined, debt: undefined as bigint | undefined,
+      price: undefined as bigint | undefined,
       loading: false, govLoading: false, gvLoading: false, sysLoading: false, sysError: false, sysSlotError: false, recoverySlotError: false, tcrSlotError: false,
       error: false, coreError: false, coreSlotError: false, govError: false, gvError: false, gvSlotError: false, btcError: false,
       balances: { btc: undefined, musd: undefined, smusd: undefined, mezo: undefined },
@@ -136,10 +138,19 @@ vi.mock('../useTrove', () => ({
     // real hook, so it derives the shared fields from the same inputs with
     // the same formula (lib/icr.ts noTroveKnown / statusOutOfRange) instead
     // of letting each test hand-set them — a hand-set value would assert a
-    // mock, not the hook's definition.
-    const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
-    const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
-    return { ...t, noTroveKnown, statusOutOfRange }
+    // mock, not the hook's definition. Round 10 (J1 LOW-3 / J2 LOW-1 /
+    // J3 LOW-7): the mock imports those helpers from lib/icr.ts instead of
+    // re-deriving them inline — a hand-copied formula could drift silently
+    // from the hook. positionSlotError is derived the same way useTrove
+    // derives it (a core-slot failure that left coll/debt/price undefined
+    // took out a position read); the value check IS the slot check, so the
+    // mock and the hook compute the same value from the same fields.
+    return {
+      ...t,
+      noTroveKnown: noTroveKnown({ hasTrove: t.hasTrove, coreSlotError: t.coreSlotError, troveStatusKnown: t.troveStatusKnown, troveStatus: t.troveStatus, coll: t.coll, debt: t.debt }),
+      statusOutOfRange: statusOutOfRange(t.troveStatus),
+      positionSlotError: t.coreSlotError && (t.coll === undefined || t.debt === undefined || t.price === undefined),
+    }
   },
 }))
 vi.mock('../useLimits', () => ({ useLimits: () => limitsState }))
@@ -1872,8 +1883,8 @@ describe('Round 8 — J3 L2: per-slot sys flags — a getTCR-only failure hides 
     // Round 9 (J2 LOW-3, DECIDED): the top plate stays for a slot failure
     // (a getTroveStatus-only failure has no other surface) but its copy
     // must not claim the RPC could not be reached — the RPC answered and
-    // one view reverted.
-    expect(c.textContent).toContain('one view reverted')
+    // one or more views reverted.
+    expect(c.textContent).toContain('one or more views reverted')
     expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
   })
 
@@ -1890,7 +1901,7 @@ describe('Round 8 — J3 L2: per-slot sys flags — a getTCR-only failure hides 
     // a getTCR-only failure must not blank a fully computable ICR.
     expect(c.textContent).toContain('160.2%')
     // Round 9 (J2 LOW-3, DECIDED): same slot-aware plate copy as Home.
-    expect(c.textContent).toContain('one view reverted')
+    expect(c.textContent).toContain('one or more views reverted')
     expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
   })
 })
@@ -2027,7 +2038,7 @@ describe('Round 8 — J3 L7: a core-slot failure never renders "No trove"', () =
     // error, not a load — the round-8 test asserted the skeleton, locking
     // in the stall. The plate copy is slot-aware: the RPC answered and one
     // view reverted.
-    expect(c.textContent).toContain('one view reverted')
+    expect(c.textContent).toContain('one or more views reverted')
     expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
     expect(c.querySelector('[aria-label="Loading trove position"]')).toBeNull()
     expect(c.textContent).not.toContain('No trove')
@@ -2121,7 +2132,7 @@ describe('Round 9 — J1 LOW-4 / J3 H3: DrawHero never stalls on "Checking your 
       governor: undefined, error: false, coreError: false, coreSlotError: true, govError: false, gvError: false, sysError: false,
     }
     const c = await renderPage(<Home />)
-    expect(c.textContent).toContain('one view reverted')
+    expect(c.textContent).toContain('one or more views reverted')
     expect(c.textContent).not.toContain('Checking your trove…')
   })
 
@@ -2134,7 +2145,7 @@ describe('Round 9 — J1 LOW-4 / J3 H3: DrawHero never stalls on "Checking your 
       governor: GOVERNOR, error: false, coreError: false, coreSlotError: true, govError: false, gvError: false, sysError: false,
     }
     const c = await renderPage(<Home />)
-    expect(c.textContent).toContain('one view reverted')
+    expect(c.textContent).toContain('one or more views reverted')
     expect(c.textContent).not.toContain('Set your floor below')
     expect(c.textContent).not.toContain('Checking your trove…')
   })
@@ -2186,6 +2197,19 @@ describe('Round 9 — J2 LOW-8: disconnected-wallet rows never claim "No trove"'
     troveState = { hasTrove: false, troveStatusKnown: false, troveStatus: undefined, coll: undefined, debt: undefined, icr: undefined, governor: undefined }
     const c = await renderPage(<Home />)
     expect(c.textContent).toContain('Not connected')
+    expect(c.textContent).not.toContain('No trove')
+    // Round 10 (J1 LOW-4): the disconnected Home Dial reads "Unavailable"
+    // (an unknown status), not "No trove" — pin the side effect the
+    // round-8 fix introduced instead of leaving it unclaimed.
+    expect(c.querySelector('[data-testid="dial-value"]')?.textContent).toContain('Unavailable')
+  })
+
+  it('Watch ICR card reads "Unavailable", never "No trove", for a disconnected visitor', async () => {
+    walletState = { isConnected: false }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { hasTrove: false, troveStatusKnown: false, troveStatus: undefined, coll: undefined, debt: undefined, icr: undefined, governor: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable')
     expect(c.textContent).not.toContain('No trove')
   })
 })
@@ -2258,7 +2282,9 @@ describe('Round 9 — J2 LOW-5: DrawHero fee % waits for the limits batch', () =
     walletState = { ...LIVE }
     viewedState = { ...LIVE_VIEWED }
     troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true }
-    limitsState = { loaded: true, feePerWad: 5_000_000_000_000_000n, safe: { suggest: 100_000_000_000_000_000_000n, max: 200_000_000_000_000_000_000n } }
+    // Round 10 (J3 LOW-4): the % gates on the fee slot having resolved
+    // (feeResolved), not on loaded — loaded needs a floor room.
+    limitsState = { feeResolved: true, feePerWad: 5_000_000_000_000_000n, safe: { suggest: 100_000_000_000_000_000_000n, max: 200_000_000_000_000_000_000n } }
     feeState = { data: 5_000_000_000_000_000n, isError: false }
     const c = await renderPage(<Home />)
     expect(c.querySelector('[data-testid="hero-fee"]')?.textContent).toContain('(0.50%)')
@@ -2273,5 +2299,163 @@ describe('Round 9 — J1 LOW-6: Watch standby headline for a connected wallet wi
     const c = await renderPage(<Watch />)
     expect(c.textContent).toContain('No Governor')
     expect(c.textContent).not.toContain('Not connected')
+  })
+})
+
+describe('Round 10 — J3 HIGH-1: DrawHero never stalls on "Checking your trove…" when the SYS batch fails', () => {
+  it('shows the RPC plate in the hero (and the page plate), never "Checking your trove…", when getTroveStatus persistently fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    // The exact J1 LOW-1 fixture (round 8): a zero-debt trove with a
+    // persistently failing sys batch — rendered on Home this time, not Draw.
+    troveState = {
+      hasTrove: false, troveStatusKnown: false, troveStatus: undefined,
+      coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      governor: undefined, error: false, coreError: false, govError: false, gvError: false, sysError: true, sysSlotError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('Checking your trove…')
+    // Both plates render the RPC text: Home's top plate AND the hero CTA plate.
+    const plates = (c.textContent ?? '').match(/Could not reach the Mezo testnet RPC/g) ?? []
+    expect(plates.length).toBe(2)
+  })
+
+  it('shows the SLOT plate in the hero, never "Checking your trove…", when only a sys slot reverted', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, troveStatusKnown: false, troveStatus: undefined,
+      coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      governor: undefined, error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('Checking your trove…')
+    expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
+    const plates = (c.textContent ?? '').match(/one or more views reverted/g) ?? []
+    expect(plates.length).toBe(2)
+  })
+})
+
+describe('Round 10 — J3 LOW-1: Watch standby caption labels a slot failure as a slot failure', () => {
+  it('shows SLOT copy, never the RPC text, when only a Governor-batch slot reverted', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, standby: [0n, 0n, 0n, false], gvSlotError: true }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('one or more views reverted')
+    expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
+  })
+})
+
+describe('Round 10 — J3 LOW-2: Watch TCR card holds its skeleton on first load', () => {
+  it('shows the system-health skeleton, never "No data", while the core batch is in flight', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, loading: true }
+    const c = await renderPage(<Watch />)
+    expect(c.querySelector('[aria-label="Loading system health"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No data')
+  })
+})
+
+describe('Round 10 — J3 LOW-3 / J2 LOW-2: Dial labels a 0% ICR "Below liquidation" when no floor exists', () => {
+  it('shows "Below liquidation", never "Near floor", for a coll-0/debt>0 trove with no Governor floor', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, coll: 0n, debt: 100_000_000_000_000_000_000n,
+      price: 64_608_796_300_000_000_000_000n, icr: 0n, troveStatus: 1, troveStatusKnown: true,
+      governor: undefined, floor: undefined, error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="dial-value"]')?.textContent).toContain('0')
+    expect(c.textContent).toContain('Below liquidation')
+    expect(c.textContent).not.toContain('Near floor')
+  })
+})
+
+describe('Round 10 — J3 LOW-4: DrawHero fee % waits for the fee slot, not for a floor room', () => {
+  it('shows the fee % for a coll-0/debt>0 trove once the fee slot has resolved, even though the limits batch has no floor room', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, coll: 0n, debt: 100_000_000_000_000_000_000n,
+      price: 64_608_796_300_000_000_000_000n, icr: 0n, troveStatus: 1, troveStatusKnown: true,
+      governor: GOVERNOR, error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    // No `loaded` and no `safe`: the real hook can never compute a floor
+    // room for this trove (hasTrove is false), so the % must come from the
+    // fee slot alone.
+    limitsState = { feeResolved: true, feePerWad: 5_000_000_000_000_000n }
+    feeState = { data: 5_000_000_000_000_000n, isError: false }
+    const c = await renderPage(<Home />)
+    const input = c.querySelector('#hero-amount') as HTMLInputElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, '100')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    expect(c.querySelector('[data-testid="hero-fee"]')?.textContent).toContain('(0.50%)')
+  })
+})
+
+describe('Round 10 — J3 LOW-5: retained data never renders as live on a transport failure', () => {
+  it('Home hides the stale Wallet balances card on a core transport failure', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, error: true, coreError: true,
+      balances: { btc: 9_876_543_210_000_000_000n, musd: 9_876_543_210_000_000_000n, smusd: 9_876_543_210_000_000_000n, mezo: 9_876_543_210_000_000_000n },
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('Wallet balances')
+    expect(c.textContent).not.toContain('9.88')
+  })
+
+  it('DrawHero Current reads "Unavailable", never the stale ratio, on a core transport failure', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, error: true, coreError: true }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="hero-current"]')?.textContent).toBe('Unavailable')
+  })
+})
+
+describe('Round 10 — J3 LOW-6: Home Ledger shows the balances card for a known-active coll-0/debt>0 trove', () => {
+  it('renders the Wallet balances card (not a blank Ledger) for a status-1 trove with coll 0 and debt > 0', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, coll: 0n, debt: 100_000_000_000_000_000_000n,
+      price: 64_608_796_300_000_000_000_000n, icr: 0n, troveStatus: 1, troveStatusKnown: true,
+      governor: GOVERNOR, error: false, coreError: false, govError: false, gvError: false, sysError: false,
+      balances: { btc: 1_000_000_000_000_000n, musd: 7_770_000_000_000_000_000n, smusd: 3_000_000_000_000_000_000n, mezo: 4_000_000_000_000_000_000n },
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Wallet balances')
+    expect(c.textContent).toContain('7.77')
+  })
+})
+
+describe('Round 10 — J1 LOW-1: Draw shows the form, not the plate, when only a nonce/balance slot failed', () => {
+  it('a nonce-only core-slot failure on the coll-0 path renders the form with "Nonce unreadable — cannot sign"', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, coll: 0n, debt: 100_000_000_000_000_000_000n,
+      price: 64_608_796_300_000_000_000_000n, icr: 0n, troveStatus: 1, troveStatusKnown: true,
+      governor: GOVERNOR, nonce: undefined, coreSlotError: true,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    limitsState = {}
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Nonce unreadable — cannot sign')
+    expect(c.textContent).not.toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('one or more views reverted')
+    expect(signButton(c)?.disabled).toBe(true)
   })
 })

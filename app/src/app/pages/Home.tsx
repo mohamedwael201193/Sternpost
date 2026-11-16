@@ -53,7 +53,7 @@ export default function Home() {
   // coreSlotError too. Round 9 (J2 LOW-3, DECIDED): the plate stays for
   // slot failures — a getTroveStatus-only failure has no other surface —
   // but the copy must not claim the RPC could not be reached when it
-  // answered and one view reverted: transport errors get RPC_ERROR_TEXT,
+  // answered and one or more views reverted: transport errors get RPC_ERROR_TEXT,
   // slot-only failures get SLOT_ERROR_TEXT (pinned by the L2 tests).
   const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError || t.sysSlotError || t.coreSlotError
   const transportError = demo ? acct.isError || radar.isError : t.error || t.sysError
@@ -337,7 +337,17 @@ export default function Home() {
                   non-existent — and no failed core slot). A status value
                   outside the known 0–4 enum renders "Unavailable"
                   explicitly, never "No trove" and never a skeleton held
-                  forever on a settled unknown. */}
+                  forever on a settled unknown.
+                  Round 10 (J3 LOW-5 + LOW-6): the balances card gates on
+                  a KNOWN-active trove (troveStatus === 1), not on
+                  hasTrove — a coll-0/debt>0 trove is active and its
+                  balances belong on the page, while a hasTrove trove
+                  whose status is unknown has no known-active state to
+                  show. And on a core TRANSPORT failure the card does not
+                  render at all: TanStack retains the balances on error,
+                  so the card would present stale numbers as live beside
+                  the top plate — the error line below says the read
+                  failed instead. */}
               {!t.loading && !t.hasTrove && !t.error && statusOutOfRange && <Empty title="Trove status Unavailable">The trove status could not be understood, so this page cannot say whether a trove exists.</Empty>}
               {!t.loading && !t.hasTrove && !t.error && !statusOutOfRange && noTroveKnown && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
               {t.error && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
@@ -349,7 +359,7 @@ export default function Home() {
                   (not null) on error, so the CTA above is suppressed with
                   no error text at all. Say the read failed. */}
               {own.isError && <p className="text-sm text-signal mt-6">{RPC_ERROR_TEXT}</p>}
-              {t.hasTrove && (
+              {t.troveStatus === 1 && !t.error && (
                 <Card title="Wallet balances">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {([['BTC', t.balances.btc, 6], ['MUSD', t.balances.musd, 2], ['sMUSD', t.balances.smusd, 2], ['MEZO', t.balances.mezo, 2]] as const).map(([s, v, d]) => (

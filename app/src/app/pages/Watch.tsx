@@ -70,7 +70,12 @@ export default function Watch() {
   // The TCR value comes from the Radar in demo mode but from useTrove's
   // system-health batch otherwise — gate it on the query that provides it,
   // not on the Radar's state in both modes.
-  const tcrLoading = demo ? radar.isLoading : t.sysLoading
+  // Round 10 (J3 LOW-2): on mount the core batch is in flight, so the
+  // price is unknown and the sys query is DISABLED — a disabled query has
+  // isLoading === false — so the old `t.sysLoading`-only gate rendered
+  // "No data" for ~one RPC round trip before the sys skeleton appeared.
+  // Gate on the page loading too, like the sibling cards.
+  const tcrLoading = demo ? radar.isLoading : loading || t.sysLoading
   // Round 8 (J3 L2): a getTCR-only slot failure is a failed TCR read —
   // "Unavailable", never "No data". (The old code gated only on the
   // transport error, so a slot failure fell through to "No data".)
@@ -195,7 +200,13 @@ export default function Watch() {
                   Round 9 (J1 LOW-6): a CONNECTED wallet with no Governor
                   reads "No Governor" — "Not connected" is false for it. */}
               <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.govLoading || t.gvLoading ? <Skeleton className="h-9 w-28" label="Loading standby" /> : !standbyKnown ? (t.isConnected ? 'No Governor' : 'Not connected') : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-              <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? RPC_ERROR_TEXT : t.govLoading || t.gvLoading ? 'Checking standby state…' : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+              {/* Round 10 (J3 LOW-1): a reverted Governor-batch slot is not a
+                  transport failure — the caption must not claim the RPC
+                  could not be reached when it answered and one view
+                  reverted. Slot-only failures get SLOT_ERROR_TEXT (a
+                  governorOf / batch transport failure still gets the RPC
+                  text), matching the top plate on the same page. */}
+              <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? (t.govError || t.gvError ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT) : t.govLoading || t.gvLoading ? 'Checking standby state…' : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}
         </Card>

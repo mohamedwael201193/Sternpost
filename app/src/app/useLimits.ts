@@ -40,6 +40,13 @@ export function useLimits(t: Trove, app?: Address) {
   // failed fee slot. loaded is likewise false while any slot has failed:
   // q.data is truthy when all three slots failed.
   const polError = pol?.status === 'failure' || rem?.status === 'failure'
+  // Round 10 (J3 LOW-4): the DrawHero fee % only needs the fee slot of
+  // this batch — not a floor room. `loaded` requires floorRoom (which
+  // needs hasTrove), so for a coll-0/debt>0 trove the % never appeared
+  // even after the batch fully resolved. feeResolved is true once the fee
+  // slot answered; a failed batch (transport error, retained data) is not
+  // resolved, even with a retained fee value (round 9, J3 M3 pattern).
+  const feeResolved = fee?.status === 'success' && !q.isError
   // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
   // Round 9 (J3 M3): the batch refetches every 15 s and TanStack RETAINS
   // q.data on a failed refetch — without the !q.isError gate, `safe` kept
@@ -54,5 +61,5 @@ export function useLimits(t: Trove, app?: Address) {
   // finished AND there is room to bound (a missing floor means no safe
   // draw can be computed at all). Round 9 (J3 M3): a failed batch is not
   // loaded, even with retained data.
-  return { loaded: floorRoom !== undefined && !!q.data && !q.isError && !feeError && !polError, isError: q.isError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
+  return { loaded: floorRoom !== undefined && !!q.data && !q.isError && !feeError && !polError, feeResolved, isError: q.isError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
 }

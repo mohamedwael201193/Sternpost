@@ -71,9 +71,14 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   // are gone. Round 9 (J1 LOW-4 / J3 H3): a settled core-SLOT failure is
   // not "checking" either — troveUnknown excludes coreSlotError, and the
   // CTA branch below surfaces the RPC plate for it, exactly like a
-  // transport error.
+  // transport error. Round 10 (J3 HIGH-1): the same applies to a settled
+  // SYS-batch failure — a zero-debt trove whose getTroveStatus read
+  // persistently fails is not "checking" either (the read settled: it
+  // failed). troveUnknown excludes sysError/sysSlotError too, and the CTA
+  // branch surfaces the plate for them, slot-aware (transport → RPC text,
+  // slot-only → SLOT text).
   const statusOutOfRange = t.statusOutOfRange
-  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n && !statusOutOfRange && !t.error && !t.coreSlotError
+  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n && !statusOutOfRange && !t.error && !t.coreSlotError && !t.sysError && !t.sysSlotError
   const noTroveKnown = t.noTroveKnown
   // Round 8 (J3 M2): while governorOf is in flight a debt>0 trove has no
   // Governor yet — hold the "Set your floor below" CTA, which would lead
@@ -104,8 +109,12 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             className="display text-4xl bg-transparent outline-none w-full min-w-0" aria-describedby="hero-avail" />
           <span className="caps text-[12px]">MUSD</span>
         </div>
+        {/* Round 10 (J3 LOW-4): the fee % gates on the fee slot having
+            resolved (lim.feeResolved), not on lim.loaded — loaded needs a
+            floor room (hasTrove), so a coll-0/debt>0 trove never saw the %
+            even after the batch fully resolved. */}
         <div id="hero-avail" className="flex justify-between mt-2 text-xs">
-          <span className="text-muted" data-testid="hero-fee">Mezo fee {feeError ? 'unavailable' : fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD${!lim.loaded ? '' : ` (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)`}` : '—'}</span>
+          <span className="text-muted" data-testid="hero-fee">Mezo fee {feeError ? 'unavailable' : fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD${!lim.feeResolved ? '' : ` (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)`}` : '—'}</span>
           {over > 0n && <span className="text-signal" data-testid="hero-over">{fmt(over)} MUSD over max safe</span>}
         </div>
         <Limits t={t} l={lim} onPick={(v) => { setTouched(true); setAmount(v) }} />
@@ -126,8 +135,12 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
               as active (useTrove), so a zero-debt own trove whose sys batch
               is pending/failed would claim "No debt" on the Home page
               itself. Gate the no-debt label on troveStatus === 1, mirroring
-              the Home Dial (round 5). */}
-          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
+              the Home Dial (round 5).
+              Round 10 (J3 LOW-5): TanStack retains t.icr on a failed
+              refetch — on a core TRANSPORT failure the Current cell would
+              keep rendering the stale ratio as live beside the top plate.
+              A failed read is "Unavailable", never the retained number. */}
+          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{t.error ? 'Unavailable' : t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
           <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${floorForDisplay && after < floorForDisplay ? ' · below floor' : ''}` : '—'}</dd>
           <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>
@@ -172,8 +185,12 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             // false and the status unknown, so without this the hero
             // claimed "Checking your trove…" forever. The plate copy is
             // slot-aware (J2 LOW-3): only a transport error claims the
-            // RPC could not be reached.
-            : !ready ? (t.error || t.coreSlotError ? <p role="alert" className="text-sm text-signal flex-1">{t.error ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
+            // RPC could not be reached. Round 10 (J3 HIGH-1): the same
+            // applies to a settled SYS-batch failure — a zero-debt trove
+            // whose getTroveStatus read persistently fails is not
+            // "checking" either, so sysError/sysSlotError join the plate
+            // branch (transport → RPC text, slot-only → SLOT text).
+            : !ready ? (t.error || t.coreSlotError || t.sysError || t.sysSlotError ? <p role="alert" className="text-sm text-signal flex-1">{(t.error || t.sysError) ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
               : troveUnknown || govUnknown
               ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Checking your trove…</button>
               : statusOutOfRange

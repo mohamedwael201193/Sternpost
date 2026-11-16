@@ -12,8 +12,8 @@ export type { AccountSnapshot, RadarSnapshot }
 
 /** Plan §6.4.1: shown when the testnet RPC cannot be reached, instead of a stall or a dash. */
 export const RPC_ERROR_TEXT = 'Could not reach the Mezo testnet RPC. Retrying every 12 s.'
-/** Round 9 (J2 LOW-3): shown when the RPC answered but one view reverted — a per-slot failure is not a transport failure, so the plate must not claim the RPC could not be reached. */
-export const SLOT_ERROR_TEXT = 'A Mezo testnet read failed — one view reverted while the RPC answered. Retrying automatically.'
+/** Round 9 (J2 LOW-3): shown when the RPC answered but one view reverted — a per-slot failure is not a transport failure, so the plate must not claim the RPC could not be reached. Round 10 (J1 LOW-2): the copy is plural-aware — a multi-slot failure is "one or more views", never "one view". */
+export const SLOT_ERROR_TEXT = 'A Mezo testnet read failed — one or more views reverted while the RPC answered. Retrying automatically.'
 export const MAINNET_RPC_ERROR_TEXT = 'Could not reach the Mezo mainnet RPC. Retrying every 30 s.'
 
 /** Reads use public RPC clients; writes use wagmi (plan §6.2). */

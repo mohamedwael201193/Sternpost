@@ -150,7 +150,12 @@ export default function Draw() {
             // transport error, so without this branch the page held the
             // skeleton forever. The plate copy is slot-aware (J2 LOW-3):
             // only a transport error claims the RPC could not be reached.
-            : (t.sysError || t.sysSlotError || t.coreSlotError)
+            // Round 10 (J1 LOW-1): the plate is narrowed to
+            // position-blocking slots (t.positionSlotError) — a nonce- or
+            // balance-only core-slot failure leaves the position readable,
+            // so the page shows the form (with its "Nonce unreadable"
+            // sign gate) instead of the plate.
+            : (t.sysError || t.sysSlotError || t.positionSlotError)
             ? <p className="text-sm text-signal" role="alert">{t.sysError ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
             // Round 9 (J1 MED-1 / J3 H1): a known-active status reaches the
             // draw form even when hasTrove is false (coll-0 / debt>0) —
