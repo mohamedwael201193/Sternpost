@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-16T02:42:58.578Z",
-  "sourceCommit": "da7ce2f3df275e60ad7cd7b3232ade32fba302df",
+  "generatedAt": "2026-11-16T02:49:11.792Z",
+  "sourceCommit": "e21a48adaa760aca7e3b9c9eaed4dd361e50a1b5",
   "network": "Mezo testnet",
   "chainId": 31611,
   "explorer": "https://explorer.test.mezo.org",
   "notes": [
     "Testnet only (chain 31611). Sternpost is NOT deployed on mainnet; mainnet rows below are fork-tested, never broadcast.",
-    "TESTS.json is stale: sources changed since TESTS.json commit 54ae7a9: contracts/script/fork-rehearse-prod.sh, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
+    "TESTS.json is stale: sources changed since TESTS.json commit 54ae7a9: app/src/app/pages/Close.tsx, app/src/app/pages/Open.tsx, contracts/script/fork-rehearse-prod.sh, mcp/README.md, mcp/src/chain.ts, mcp/src/config.ts, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
     "Account contracts ARE deployed to testnet (Shield redeploy 2026-11-16, deployments.accounts), but every §7.4 production proof row is still 'not evidenced on main': the demo account is BLOCKED on funding, so no production flow has run. Lab rows are labelled as lab.",
     "total.passed is a NON-FORK subtotal (495). Passed incl. fork is 505; distinct declared tests are 540. Never quote 495 as the whole table total.",
     "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic; the MCP server (mcp/, TESTS.json mcp 56/0/19) is covered by docs/THREAT_MODEL.md S26."
@@ -185,7 +185,7 @@
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b",
     "stale": true,
     "testsStale": true,
-    "staleReason": "sources changed since TESTS.json commit 54ae7a9: contracts/script/fork-rehearse-prod.sh, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
+    "staleReason": "sources changed since TESTS.json commit 54ae7a9: app/src/app/pages/Close.tsx, app/src/app/pages/Open.tsx, contracts/script/fork-rehearse-prod.sh, mcp/README.md, mcp/src/chain.ts, mcp/src/config.ts, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
     "total": {
       "passed": 495,
       "failed": 0,
