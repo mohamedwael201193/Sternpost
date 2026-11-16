@@ -11,7 +11,7 @@ const MEZO = [
   ['Recovery Mode', 'Draws blocked; repay and add collateral stay open — unit-tested (fork tests cover draw/heal/revoke/defend)'],
   ['Bitcoin wallets', 'OrangeKit sign-in for owners — but a Bitcoin wallet cannot draw: Mezo checks ECDSA.recover only'],
   ['Shield (deployed)', 'A stranger tops up your defence for a keeper bounty — owner-set, capped at 5 MUSD per shield; deployed in the TroveAccount implementation, never yet called on a live production account'],
-  ['Test suite', '539 passing / 584 distinct / 549 incl. fork / 312 contracts (TESTS.json @ e929cfc)'],
+  ['Test suite', '563 passing / 609 distinct / 573 incl. fork / 312 contracts (TESTS.json @ e929cfc)'],
   ['x402 facilitator', 'Per-request API payments settled on Mezo'],
 ]
 

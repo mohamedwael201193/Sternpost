@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T03:31:47.149Z",
-  "commit": "a234c228390e52d66fbb14b777c590cda50dec9a",
+  "generatedAt": "2026-11-16T04:35:57.686Z",
+  "commit": "e929cfc821f0e7f7c0d2b65df53fd20206f5f05e",
   "inputs": {
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b"
   },
@@ -99,9 +99,9 @@
     {
       "name": "backend",
       "kind": "unit",
-      "passed": 124,
+      "passed": 148,
       "failed": 0,
-      "skipped": 0,
+      "skipped": 1,
       "status": "completed"
     },
     {
@@ -131,14 +131,14 @@
     }
   ],
   "total": {
-    "passed": 539,
+    "passed": 563,
     "failed": 0,
-    "skipped": 24
+    "skipped": 25
   },
   "reconciliation": {
-    "nonForkDeclared": 563,
+    "nonForkDeclared": 588,
     "forkDeclared": 10,
-    "passedInclFork": 549,
+    "passedInclFork": 573,
     "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). passedInclFork counts each distinct fork test once, via the testnet run — the mainnet run's passed tests are a subset of the testnet run's, so they are not added again. Do not read total.passed as 'N in total'."
   },
   "forkNote": "fork suites listed separately, never added twice"
