@@ -20,8 +20,8 @@ read-only Radar counts). The mainnet pilot has NOT started — see
 | 2 | Redemptions and Recovery Mode | Radar + rank-aware shield + `claimCollateral` + Recovery Mode state machine. A lab minimum trove was redeemed; no production trove has been redeemed. | [fork test `testFork_claimCollateralAfterSimulatedRedemption`](contracts/test/account/Batcher.t.sol) |
 | 3 | previewDraw double count | Fixed in commit `511f18b` (item 0.1); non-zero pending tests. | [commit 511f18b](https://github.com/mohamedwael201193/Sternpost/commit/511f18b84aefc11c5c034d8609de6c85a79d28da) |
 | 4 | Outside users / agents | **0 outside addresses.** Muster roll is a placeholder. | [Muster placeholder](app/src/app/Dashboard.tsx) |
-| 5 | Source-verify contracts | 0.9 Classic Factory / Governor / SpendWallet / Router: `is_verified: true`, bytecode MATCH. Account contracts: not deployed. | [judges/VERIFY.md](judges/VERIFY.md) |
-| 6 | Reconcile test counts | 495 passed / 0 failed / 24 skipped (non-fork subtotal); 505 passed including fork (10 testnet fork + 7 mainnet fork passed, 1 mainnet skipped); account suite 164 / 0 / 3 (six on-main suites; full pre-merge re-execution log incl. Shield suite's then-14 tests: 175/0/3 — see `judges/forge-account.json`). | [`TESTS.json`](TESTS.json) |
+| 5 | Source-verify contracts | 0.9 Classic Factory / Governor / SpendWallet / Router: `is_verified: true`, bytecode MATCH. Account contracts: DEPLOYED on testnet — 1.9 (blocks 16803284–85) then the Shield redeploy 2026-11-16 (implementation [`0x02Dda72b…`](https://explorer.test.mezo.org/address/0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8), block 16804465; Factory [`0x46442898…`](https://explorer.test.mezo.org/address/0x46442898c022e1fAa2BD05a23600C1Ec89DcA200), block 16804466; Radar [`0xfe74C8e6…`](https://explorer.test.mezo.org/address/0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C), block 16804467; Batcher [`0x427D3B9e…`](https://explorer.test.mezo.org/address/0x427D3B9ee181f8658698c1c6c0F8075d003406F8), block 16804468). 1.9 Implementation / Radar / Batcher `is_verified: true`, bytecode MATCH; redeploy Radar / Batcher v2 flags read false (indexer quirk — source available via v1, identical bytecode; see `shared/deployments/testnet.json` accounts). | [judges/VERIFY.md](judges/VERIFY.md) |
+| 6 | Reconcile test counts | 495 passed / 0 failed / 24 skipped (non-fork subtotal); 505 passed including fork (495 + 10 testnet; the 7 mainnet passes are the same tests, counted once; 1 mainnet skipped); account suite 164 / 0 / 3 (six on-main suites; full pre-merge re-execution log incl. Shield suite's then-14 tests: 175/0/3 — see `judges/forge-account.json`). | [`TESTS.json`](TESTS.json) |
 | 7 | Fee model | 10 bps per agent draw, immutable, cap 50 bps. No live fee-bearing production draw yet. | [0.9 Factory (fee 10 bps)](https://explorer.test.mezo.org/address/0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8) |
 | 8 | Agent-builder demand | MCP server exists (`mcp/`, TESTS.json mcp 56 passed / 0 failed / 19 skipped); mainnet is refused without `STERNPOST_MAINNET_OK=1` and a recorded mainnet account — no account is recorded, so mainnet is refused outright today. No install count claimed (0 agents onboarded). | [threat model S26](docs/THREAT_MODEL.md) |
 
@@ -37,7 +37,7 @@ read-only Radar counts). The mainnet pilot has NOT started — see
 | A stranger can shield | [0xf6de87bc…095f4b, block 16790917, status ok](https://explorer.test.mezo.org/tx/0xf6de87bcbc0b745cb62d283d8f696d7c5f6c90b107faca1b6d451d7b8d095f4b) (lab, policy-line triggered) |
 | sMUSD yield is real (manual on testnet) | [0xe52099be…a34a, block 16791429](https://explorer.test.mezo.org/tx/0xe52099be84a5a5e1f565199e7c47d1f746355dbd1cd320ec80634629ee78a34a) then [0x3d11f63b…8ac4, block 16791432](https://explorer.test.mezo.org/tx/0x3d11f63b2ee44aa89faac16d60d3be93361128c35f1bda4e7ecbf19f224e8ac4) (lab; manual `distributeMUSD`, not automatic yield) |
 | A Bitcoin key can own and administer an account (headless) | [0x325e0e96…13a8, block 16791668, status ok](https://explorer.test.mezo.org/tx/0x325e0e96cf6225d331891a0e7b1598b8d0ec6b4235fcfd64caf59dc4ffbe13a8) (lab; headless only — a real wallet popup is untested) |
-| Redemptions happen to small troves and surplus is stranded without `claimCollateral` | Lab incident hash truncated in the record (`0xff2ca3c4…d95c`, block 16791587) — no explorer link claimed. Proof is the fork test [`testFork_claimCollateralAfterSimulatedRedemption`](contracts/test/account/Batcher.t.sol). |
+| Redemptions happen to small troves and surplus is stranded without `claimCollateral` | Lab incident hash truncated in the record (`0xff2ca3c4…d95c`, block 16791587) — no explorer link claimed. Proof is the fork test [`testFork_claimCollateralAfterSimulatedRedemption`](contracts/test/account/Batcher.t.sol) — executed 2026-11-16 with `BATCHER_FORK=1`: PASS (gas 2449784; redeem 6254 MUSD, surplus 0.019465605613950649 BTC), read-only mainnet fork at block 13243357, nothing broadcast; log [`judges/logs/fork_batcher_claimCollateral.txt`](judges/logs/fork_batcher_claimCollateral.txt). |
 | Mainnet flow works against forked mainnet state | Fork suites in [`TESTS.json`](TESTS.json) (mainnet fork 7 passed / 1 skipped). Fork, nothing broadcast. |
 | Recovery Mode semantics | [`test_I9_drawRevertsRecoveryModeBeforeMezo`, `test_I9_repayAndAddCollSucceedInRecoveryMode`](contracts/test/account/TroveAccountDraw.t.sol) (mocked Mezo; no fork RM test exists — see threat model S14). |
 
@@ -46,21 +46,33 @@ read-only Radar counts). The mainnet pilot has NOT started — see
 Read from `judges/VERIFY.md` / `shared/deployments/testnet.json`. Green tick
 only if `is_verified == true`.
 
-| Contract | Address | Verified |
-|---|---|---|
-| SternpostFactory (0.9) | `0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8` | true |
-| SternpostGovernor (0.9) | `0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38` | true |
-| SpendWallet (0.9) | `0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a` | true |
-| SternpostRouter (0.9) | `0xd6833f811e987f06a1e55a435d4be38c6d4188d4` | true |
-| TroveAccountFactory (production) | not deployed | — |
-| TroveAccount implementation | not deployed | — |
-| Radar | not deployed | — |
-| Batcher | not deployed | — |
+| Contract | Address | Block | Verified |
+|---|---|---|---|
+| SternpostFactory (0.9) | `0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8` | [16794393](https://explorer.test.mezo.org/block/16794393) | true |
+| SternpostGovernor (0.9) | `0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38` | [16794411](https://explorer.test.mezo.org/block/16794411) | true |
+| SpendWallet (0.9) | `0x4F878203175B1BB6C63Ec02CEEBE1af4A7c9Ee4a` | [16794411](https://explorer.test.mezo.org/block/16794411) | true |
+| SternpostRouter (0.9) | `0xd6833f811e987f06a1e55a435d4be38c6d4188d4` | [16794452](https://explorer.test.mezo.org/block/16794452) | true |
+| TroveAccount implementation (Shield redeploy, current) | [`0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8`](https://explorer.test.mezo.org/address/0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8) | [16804465](https://explorer.test.mezo.org/block/16804465) | true |
+| TroveAccountFactory (Shield redeploy, current) | [`0x46442898c022e1fAa2BD05a23600C1Ec89DcA200`](https://explorer.test.mezo.org/address/0x46442898c022e1fAa2BD05a23600C1Ec89DcA200) | [16804466](https://explorer.test.mezo.org/block/16804466) | true |
+| Radar (Shield redeploy, current) | [`0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C`](https://explorer.test.mezo.org/address/0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C) | [16804467](https://explorer.test.mezo.org/block/16804467) | false (v2 flag; source available via v1, identical bytecode — indexer quirk, see `shared/deployments/testnet.json` accounts) |
+| Batcher (Shield redeploy, current) | [`0x427D3B9ee181f8658698c1c6c0F8075d003406F8`](https://explorer.test.mezo.org/address/0x427D3B9ee181f8658698c1c6c0F8075d003406F8) | [16804468](https://explorer.test.mezo.org/block/16804468) | false (v2 flag; source available via v1, identical bytecode — indexer quirk, see `shared/deployments/testnet.json` accounts) |
+
+The 1.9 set (superseded by the Shield redeploy, preserved as `accounts.previous`
+in `shared/deployments/testnet.json`): implementation
+[`0xC4f080498a720887b6086f13fBad5627d8abc470`](https://explorer.test.mezo.org/address/0xC4f080498a720887b6086f13fBad5627d8abc470)
+(block 16803284), Factory
+[`0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3`](https://explorer.test.mezo.org/address/0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3)
+(block 16803285), Radar
+[`0x9Cd95A420e014da798dbFB74833b9D4DEe868be2`](https://explorer.test.mezo.org/address/0x9Cd95A420e014da798dbFB74833b9D4DEe868be2)
+(block 16803285), Batcher
+[`0xB094e06559F7aF264e515F5363D9E89920b19b33`](https://explorer.test.mezo.org/address/0xB094e06559F7aF264e515F5363D9E89920b19b33)
+(block 16803285). All four deployed bytecodes MATCH the local forge build
+(immutable slots masked) for both sets.
 
 ## Test counts (read from `TESTS.json`)
 
 - 495 passed / 0 failed / 24 skipped — non-fork subtotal, not "495 in total".
-- 505 passed including fork suites (10 testnet fork + 7 mainnet fork passed, 1 mainnet fork skipped).
+- 505 passed including fork suites (495 + 10 testnet; the 7 mainnet passes are the same tests, counted once; 1 mainnet fork skipped).
 - Account suite, independently re-executed 2026-11-15 and updated for the
   Shield-round Factory tests from the TESTS.json run at 54ae7a9: 164 passed /
   0 failed / 3 skipped. 164 = the six account suites on main

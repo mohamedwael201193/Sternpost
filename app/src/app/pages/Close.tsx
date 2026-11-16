@@ -15,7 +15,9 @@ export default function Close() {
           (<span className="mono">contracts/src/account/TroveAccount.sol</span>, merged task 1.3) and covered by unit
           tests (mock Mezo) — <span className="mono">contracts/test/account/TroveAccount.t.sol:559-666</span>;
           there are zero <span className="mono">closeAccount</span> tests in <span className="mono">contracts/test/fork/</span>.
-          The account contract is not deployed on testnet yet, so there is no live close transaction to show —
+          The account contracts are deployed on testnet (Shield redeploy 2026-11-16,
+          implementation <span className="mono">0x02Dda72b…</span>), but no production close has run
+          (demo account BLOCKED on funding), so there is no live close transaction to show —
           the behaviour below is the merged contract code, not a demo.
         </p>
         <ol className="text-sm leading-relaxed mt-4 space-y-2 list-decimal pl-5">

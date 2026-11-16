@@ -7,8 +7,9 @@ import { z } from "zod";
  * Environment (plan §5.1):
  * - STERNPOST_NETWORK: `testnet` (default) or `mainnet`. Mainnet is REFUSED
  *   unless STERNPOST_MAINNET_OK=1 AND the account address is in the mainnet
- *   deployments file (shared/deployments/mainnet.json, which does not exist
- *   yet — so mainnet is refused outright today; see requireMainnetGate).
+ *   deployments file (shared/deployments/mainnet.json exists but records no
+ *   account (all addresses null), so mainnet is refused outright today even
+ *   with the flag set; see requireMainnetGate).
  * - STERNPOST_ACCOUNT: TroveAccount address (optional; balance/pay default
  *   to it, request_session requires an explicit account).
  * - STERNPOST_AGENT_KEY_FILE: default ~/.sternpost/agent.json, chmod 600,
@@ -50,8 +51,9 @@ export const MEZO_TESTNET = {
 
 /** Mezo mainnet 31612. Only the values verified in MEZO_RESOURCES.md are
  * pinned here; the remaining system addresses must come from the mainnet
- * deployments file (shared/deployments/mainnet.json) — which does not exist
- * yet, so the mainnet path is refused before any of them is needed. */
+ * deployments file (shared/deployments/mainnet.json) — which exists but
+ * records no account (all addresses null), so the mainnet path is refused
+ * outright today even with the flag set, before any of them is needed. */
 export const MEZO_MAINNET = {
   chainId: 31612,
   rpc: "https://rpc.mezo.org",

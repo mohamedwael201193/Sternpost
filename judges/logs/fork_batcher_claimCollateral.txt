@@ -1,0 +1,32 @@
+Compiling 42 files with Solc 0.8.24
+Solc 0.8.24 finished in 58.18s
+Compiler run successful with warnings:
+Warning (8760): This declaration has the same name as another declaration.
+   --> src/account/TroveAccount.sol:917:54:
+    |
+917 |     function _collWanted(uint256 coll, uint256 debt, uint256 repay, uint256 price)
+    |                                                      ^^^^^^^^^^^^^
+Note: The other declaration is here:
+   --> src/account/TroveAccount.sol:311:5:
+    |
+311 |     function repay(uint256 amount, address upHint, address loHint) external onlyOwner nonReentrant {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/account/Batcher.t.sol:248:5:
+    |
+248 |     function claimCollateral() external {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+
+Ran 1 test for test/account/Batcher.t.sol:BatcherTest
+[PASS] testFork_claimCollateralAfterSimulatedRedemption() (gas: 2449784)
+Logs:
+  redeemAmount MUSD: 6254
+  surplus BTC (wei): 19465605613950649
+  LIVE: zero-surplus claimCollateral NO-OPS (does not revert)
+  LIVE: claimYield ok (1 = success, 0 = live call reverts): 1
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.59s (1.56s CPU time)
+
+Ran 1 test suite in 1.60s (1.59s CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

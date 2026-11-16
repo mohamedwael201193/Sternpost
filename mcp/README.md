@@ -80,7 +80,7 @@ after `npm run build`.
 
 | Var | Default | Notes |
 | --- | --- | --- |
-| `STERNPOST_NETWORK` | `testnet` | `testnet` (31611) or `mainnet` (31612). Mainnet is refused unless `STERNPOST_MAINNET_OK=1` **and** the account is recorded in `shared/deployments/mainnet.json` (which does not exist yet — mainnet is refused outright today) |
+| `STERNPOST_NETWORK` | `testnet` | `testnet` (31611) or `mainnet` (31612). Mainnet is refused unless `STERNPOST_MAINNET_OK=1` **and** the account is recorded in `shared/deployments/mainnet.json` (which exists but records no account (all addresses null) — mainnet is refused outright today even with the flag set) |
 | `STERNPOST_MAINNET_OK` | — | Set to `1` to enable the gated mainnet path |
 | `STERNPOST_ACCOUNT` | — | TroveAccount address; `balance`/`pay` default to it |
 | `STERNPOST_AGENT_KEY_FILE` | `~/.sternpost/agent.json` | Local agent key, chmod 600, created by `request_session` if absent. The key is **never** returned in a tool result or logged |

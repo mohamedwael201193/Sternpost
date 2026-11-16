@@ -144,8 +144,9 @@ export function createAgentWallet(
 /**
  * Mainnet gate (plan §5.1): mainnet is refused unless STERNPOST_MAINNET_OK=1
  * AND the account address is in the mainnet deployments file. That file
- * (shared/deployments/mainnet.json) does not exist yet, so mainnet is
- * refused outright today — the REFUSALS.MAINNET_REFUSED constant is wired
+ * (shared/deployments/mainnet.json) exists but records no account (all
+ * addresses null), so mainnet is refused outright today even with the flag
+ * set — the REFUSALS.MAINNET_REFUSED constant is wired
  * here (J1 F5 / J3 F7), not dead.
  */
 export async function requireMainnetGate(env: McpEnv, account?: string): Promise<void> {

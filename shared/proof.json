@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-16T02:24:29.191Z",
-  "sourceCommit": "9718bc4fee126eea1233499b2bb4e2ba081b15b3",
+  "generatedAt": "2026-11-16T02:42:58.578Z",
+  "sourceCommit": "da7ce2f3df275e60ad7cd7b3232ade32fba302df",
   "network": "Mezo testnet",
   "chainId": 31611,
   "explorer": "https://explorer.test.mezo.org",
@@ -196,7 +196,7 @@
     "passedInclFork": 505,
     "distinctDeclared": 540,
     "distinctDeclaredNote": "nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties)",
-    "contracts": 311,
+    "contracts": 312,
     "suites": {
       "contracts-unit": {
         "passed": 87,
@@ -357,7 +357,7 @@
     "reconciliationNote": "Reconciled against TESTS.json (commit 54ae7a9): TESTS.json contracts-account (unit) 192 passed / 0 failed / 5 skipped = pin unit 162 (57 + 36 + 17 + 25 Factory unit + 27 Batcher unit) + TroveAccountShieldTest unit 27 + TroveAccountFuzzTest unit 3; skipped 5 = pin 3 (Batcher 1 + RadarFork 2) + Shield 1 (testFork_shieldOnLiveMezoPath, fork-gated) + Fork 1 (collapsed setUp skip for 8 testFork_ fns). TESTS.json contracts-fuzz-account 15 = pin fuzz 2 (Factory 1 + Batcher 1) + TroveAccountFuzzTest 12 + Shield 1; contracts-invariant-account 1 = TroveAccountInvariantTest (10 properties, 1 forge entry). Verified from the forge run behind TESTS.json (~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries).",
     "staticCheck": "Declared counts re-checked against contracts/test/account/*.sol on every generation (167 declared = 164 passed + 3 skipped).",
     "scopeNote": "164 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 26, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent pre-merge re-execution log also ran Shield's then-14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
-    "artifact": "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped (pre-Factory-+3; current pin is 164/0/3).",
+    "artifact": "judges/forge-account.json — forge JSON output for the six on-main account suites, the 54ae7a9-era run behind TESTS.json (~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries; six-suite subset extracted verbatim); totals verified from the artifact: 164 Success / 0 Failure / 3 Skipped.",
     "fullRunWithUnmergedShield": {
       "passed": 175,
       "failed": 0,
@@ -441,7 +441,7 @@
         "txUrl": "https://explorer.test.mezo.org/tx/0x0a3f4c0de6132f9abb030a8a1a07238ce6e5169cf699e796d9e028906db50545",
         "block": 16790703,
         "blockUrl": "https://explorer.test.mezo.org/block/16790703",
-        "what": "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD composite principal (NET 1800 MUSD received: 1800 + 1.8 borrowing fee + 200 gas comp), ICR 1.9255 on the composite principal; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)"
+        "what": "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD composite principal (NET 1800 MUSD received: 1800 + 1.8 borrowing fee + 200 gas comp), ICR 1.9231 on the composite principal at $64,160/BTC (runbook step B price, 2026-11-15); Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)"
       },
       "note": "Production createAndOpen needs a demo account: contracts are deployed (deployments.accounts) but the demo account is BLOCKED on funding — no production flow has run.",
       "source": "WAVE2_WIN_PLAN.md §4.1"
@@ -621,7 +621,8 @@
         "block": 16791587,
         "blockUrl": "https://explorer.test.mezo.org/block/16791587",
         "what": "Redemption incident: a lab minimum trove was redeemed (block 16791587); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral() (see contracts/src/account/Batcher.sol:144). No explorer link: the redemption tx hash is truncated in every in-repo record.",
-        "forkTest": "contracts/test/account/Batcher.t.sol testFork_claimCollateralAfterSimulatedRedemption"
+        "forkTest": "contracts/test/account/Batcher.t.sol testFork_claimCollateralAfterSimulatedRedemption",
+        "forkRun": "Executed 2026-11-16: BATCHER_FORK=1 forge test --match-test testFork_claimCollateralAfterSimulatedRedemption — PASS (gas 2449784; redeem 6254 MUSD, surplus 0.019465605613950649 BTC; zero-surplus claimCollateral no-ops, claimYield ok); read-only mainnet fork at block 13243357, nothing broadcast; log judges/logs/fork_batcher_claimCollateral.txt"
       },
       "note": "The redemption tx hash is cited TRUNCATED in the plan — never expand it. The plan §4.6 figures (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent) and the 'bot' attribution are NOT repeated here: no full hash exists in-repo, so no judge can re-verify them on-chain. Production claimCollateral needs a demo account (contracts deployed; demo BLOCKED on funding) or a fork test only, labelled, if no bot cooperates.",
       "source": "WAVE2_WIN_PLAN.md §4.6 (incident only — figures not repeated, see note); Batcher.sol:144 (0.0105 BTC surplus)"

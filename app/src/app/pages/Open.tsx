@@ -39,9 +39,10 @@ export default function Open() {
       <Card title="One-transaction open — coming, not live">
         <p className="text-sm leading-relaxed">
           The Wave 2 TroveAccount open — one transaction deploys your account and opens your trove — is implemented
-          in <span className="mono">contracts/src/account/TroveAccountFactory.sol</span> but the factory is{' '}
-          <b>not deployed on testnet yet</b>. There is no deploy button here until it is; the three steps above are
-          the live path today.
+          in <span className="mono">contracts/src/account/TroveAccountFactory.sol</span> and the factory is{' '}
+          deployed on testnet (Shield redeploy 2026-11-16, Factory <span className="mono">0x46442898…</span>),
+          but no production account has opened a trove yet (demo BLOCKED on funding). There is no live open button
+          here until that changes; the three steps above are the live path today.
         </p>
       </Card>
 
