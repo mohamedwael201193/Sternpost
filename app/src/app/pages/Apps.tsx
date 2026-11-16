@@ -82,15 +82,22 @@ function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
             <p className="text-sm text-muted">No draws yet on this account.</p>
           ) : (
             <ul>
-              {draws.map((d) => (
-                <li key={`${d.tx}-${d.logIndex}`} className="py-3 border-t border-ink/15 text-sm">
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <span>Agent <a className="ink-link mono text-xs" href={addrUrl(d.args.agent)} target="_blank" rel="noreferrer">{String(d.args.agent).slice(0, 6)}…{String(d.args.agent).slice(-4)}</a></span>
-                    <a className="ink-link mono text-xs" href={txUrl(d.tx)} target="_blank" rel="noreferrer">tx {d.tx.slice(0, 8)}… ↗</a>
-                  </div>
-                  <div className="mono text-xs mt-1 text-muted">drew {fmt(d.args.amount)} MUSD · ICR after {pct(d.args.icrAfter, 1)} · block {String(d.block)}</div>
-                </li>
-              ))}
+              {draws.map((d) => {
+                // Two Drawn shapes: the Governor's (app, …) and the
+                // TroveAccount's (agent, …) — v2 and v3. Same rule as
+                // Activity.describe(): prefer `app` when present, else `agent`.
+                const actor = (d.args as { app?: Address; agent?: Address }).app ?? (d.args as { agent?: Address }).agent
+                const label = (d.args as { app?: unknown }).app ? 'App' : 'Agent'
+                return (
+                  <li key={`${d.tx}-${d.logIndex}`} className="py-3 border-t border-ink/15 text-sm">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span>{label} {actor ? <a className="ink-link mono text-xs" href={addrUrl(actor)} target="_blank" rel="noreferrer">{String(actor).slice(0, 6)}…{String(actor).slice(-4)}</a> : 'unknown'}</span>
+                      <a className="ink-link mono text-xs" href={txUrl(d.tx)} target="_blank" rel="noreferrer">tx {d.tx.slice(0, 8)}… ↗</a>
+                    </div>
+                    <div className="mono text-xs mt-1 text-muted">drew {fmt(d.args.amount)} MUSD · ICR after {pct(d.args.icrAfter, 1)} · block {String(d.block)}</div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Card>

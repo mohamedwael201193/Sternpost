@@ -33,9 +33,17 @@ export default function Home() {
   const floorV = demo ? (a?.floorICR ?? undefined) : t.floor
   const hasTrove = demo ? !!a && a.troveStatus === 1 : t.hasTrove
   const loading = demo ? acct.isLoading : t.loading
-  const rpcError = demo ? acct.isError : false
+  // The top error plate covers EITHER failed read: a radar failure must not
+  // pass silently (it hides the Recovery banner). The numbers below gate
+  // only on the account read — a radar failure leaves them readable.
+  const rpcError = demo ? acct.isError || radar.isError : false
+  const acctError = demo ? acct.isError : false
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
   const troveStatus = demo ? a?.troveStatus : t.troveStatus
+  // A closed trove (status 2/3/4, not 0 = never existed) blocks draws. The
+  // old condition required hasTrove, which is false exactly when the trove
+  // is closed — the banner could never render in demo mode.
+  const troveClosed = troveStatus !== undefined && troveStatus !== null && troveStatus !== 1 && troveStatus !== 0
   const host = useRef<HTMLDivElement>(null)
   const ship = useRef<HTMLDivElement>(null), dial = useRef<HTMLDivElement>(null), form = useRef<HTMLElement>(null)
   const sColl = useRef<HTMLDivElement>(null), sDebt = useRef<HTMLDivElement>(null), sRoute = useRef<HTMLDivElement>(null)
@@ -58,7 +66,7 @@ export default function Home() {
           <b>Recovery Mode</b> — Mezo system health is below 150%, so draws are paused on-chain. Repay or add collateral to continue; the guard cannot draw until the system recovers.
         </div>
       )}
-      {hasTrove && troveStatus !== undefined && troveStatus !== 1 && (
+      {troveClosed && !loading && (
         <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
           <b>Trove {TROVE_STATUS_LABEL[troveStatus ?? 0] ?? 'closed'}</b> — draws are blocked. The trove no longer exists on Mezo, so the dashboard numbers above are stale.
           {troveStatus === 4 && (demo
@@ -80,7 +88,7 @@ export default function Home() {
         <div className="xl:col-start-3 xl:row-start-1 flex flex-col items-center">
           <div className="caps text-[11px] tracking-[.24em] mb-2">Collateral ratio</div>
           <div ref={dial}>
-            {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : rpcError ? (
+            {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
               <Dial value={hasTrove ? toPct(icrV) : null} floor={toPct(floorV) ?? undefined} size={240} />
@@ -91,12 +99,12 @@ export default function Home() {
         {/* Stats */}
         <div className="xl:col-start-1 xl:row-start-2 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 self-start relative z-10 min-w-0">
           <StatCard ref={sColl} icon="M12 3v14M7 8h10M5 14a7 7 0 0014 0M12 17v4" k="Collateral"
-            v={loading ? <Skeleton className="h-7 w-24" /> : rpcError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} sub={usd(coll)} />
+            v={loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} sub={usd(coll)} />
           <StatCard ref={sDebt} icon="M12 3a9 9 0 100 18 9 9 0 000-18zM15 9l-2 5-4 1 2-5z" k="Debt"
-            v={loading ? <Skeleton className="h-7 w-24" /> : rpcError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} sub={debt !== undefined ? `≈ $${fmt(debt)}` : ''} />
+            v={loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} sub={debt !== undefined ? `≈ $${fmt(debt)}` : ''} />
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
-              ? (loading ? <Skeleton className="h-7 w-24" /> : rpcError ? 'Unavailable' : 'Credit account')
+              ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
               : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
@@ -115,10 +123,10 @@ export default function Home() {
           {demo ? (
             <>
               <Row k="Credit account" v={loading ? <Skeleton className="h-4 w-32" /> : <a className="ink-link text-magenta mono text-xs" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">Account {viewed.address.slice(0, 6)}…{viewed.address.slice(-4)}</a>} />
-              <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : rpcError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} />
-              <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : rpcError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : floorV ? pct(floorV) : 'No floor set'} />
-              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : a?.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed'} />
+              <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} />
+              <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} />
+              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : floorV ? pct(floorV) : 'Not configured'} />
+              <Row k="Shield" v={loading ? <Skeleton className="h-4 w-32" /> : a?.needed ? (a.needed.repayWanted > 0n || a.needed.collWanted > 0n ? `Needs repay ${fmt(a.needed.repayWanted)} MUSD` : 'No shield needed') : acctError ? 'Unavailable' : 'No policy'} />
               <Row k="Account owner" v={loading ? <Skeleton className="h-4 w-32" /> : a?.owner ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(a.owner)} target="_blank" rel="noreferrer">{a.owner.slice(0, 6)}…{a.owner.slice(-4)}</a> : 'Unknown'} />
             </>
           ) : (
@@ -126,7 +134,7 @@ export default function Home() {
               <Row k="Plotted course" v={t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
               <Row k="Collateral" v={t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={t.floor ? pct(t.floor) : 'No floor set'} />
+              <Row k="Floor" v={t.floor ? pct(t.floor) : 'Not configured'} />
               <Row k="Standby heal" v={t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
               <Row k="Mezo nonce" v={t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
@@ -141,12 +149,12 @@ export default function Home() {
             <Card title="Demo account balances">
               {loading ? (
                 <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /></div>
-              ) : rpcError ? (
+              ) : acctError ? (
                 <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
               ) : a ? (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {([['BTC', a.balances.btc, 6], ['MUSD', a.balances.musd, 2], ['sMUSD', a.balances.smusd, 2], ['Yield due', a.pendingYield ?? 0n, 2]] as const).map(([s, v, d]) => (
-                    <div key={s} className="flex items-center gap-3"><Token sym={s === 'Yield due' ? 'sMUSD' : s} size={32} /><div><div className="text-sm">{s}</div><div className="mono text-sm">{fmt(v, 18, d)}</div></div></div>
+                    <div key={s} className="flex items-center gap-3"><Token sym={s === 'Yield due' ? 'sMUSD' : s} size={32} /><div><div className="text-sm">{s}</div><div className="mono text-sm">{v === null ? 'unreadable' : fmt(v, 18, d)}</div></div></div>
                   ))}
                 </div>
               ) : <p className="text-sm text-muted">Account not readable.</p>}
@@ -173,7 +181,7 @@ export default function Home() {
             <Card title="Credit account">
               {loading ? (
                 <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
-              ) : rpcError ? (
+              ) : acctError ? (
                 <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
               ) : a ? (
                 <div className="text-sm space-y-2">
@@ -217,13 +225,13 @@ function DemoHero({ acct, viewed }: { acct: ReturnType<typeof useAccount>; viewe
           <p className="text-sm text-signal mt-5" role="alert">{RPC_ERROR_TEXT}</p>
         ) : a ? (
           <>
-            <div className="display text-4xl mt-5">{a.icr >= 2n ** 200n ? '∞' : pct(a.icr, 1)}</div>
+            <div className="display text-4xl mt-5">{pct(a.icr, 1)}</div>
             <p className="text-sm text-muted mt-1">Collateral ratio · {fmt(a.coll, 18, 6)} BTC backing {fmt(a.debt)} MUSD of debt</p>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-1 mt-4 text-sm">
               <dt className="text-muted">Floor</dt><dd className="mono text-right">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield line</dt><dd className="mono text-right">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</dd>
               <dt className="text-muted">Shield target</dt><dd className="mono text-right">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</dd>
-              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.needed && (a.needed.repayWanted > 0n || a.needed.collWanted > 0n) ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none'}</dd>
+              <dt className="text-muted">Shield need</dt><dd className="mono text-right">{a.needed ? (a.needed.repayWanted > 0n || a.needed.collWanted > 0n ? `repay ${fmt(a.needed.repayWanted)} MUSD` : 'none') : 'No policy'}</dd>
             </dl>
             <p className="text-xs text-muted mt-4">Read-only: this account belongs to the demo owner. Drawing, defending and closing need the owner wallet.</p>
           </>

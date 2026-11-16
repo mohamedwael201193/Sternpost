@@ -7,6 +7,10 @@ export function useApiList<T>(key: string, path: string | null) {
   const [s, set] = useState<{ state: 'off' | 'loading' | 'ok' | 'error'; items: T[] }>({ state: API_URL && path ? 'loading' : 'off', items: [] })
   useEffect(() => {
     if (!API_URL || !path) return set({ state: 'off', items: [] })
+    // The path carries the account (borrower/payer), so a ?account= switch
+    // changes it: clear the previous account's rows immediately, before the
+    // new fetch resolves, instead of showing stale rows as the new account's.
+    set({ state: 'loading', items: [] })
     let live = true
     fetch(API_URL + path).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((j) => live && set({ state: 'ok', items: j[key] ?? [] }))

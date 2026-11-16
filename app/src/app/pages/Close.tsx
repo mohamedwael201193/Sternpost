@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
+import { useAccount as useWagmiAccount } from 'wagmi'
+import type { Address } from 'viem'
 import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
-import { RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
+import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useRadar, useViewedAccount } from '../useAccount'
 import { fmt, pct } from '../../lib/icr'
+import { DEMO_ACCOUNT_BADGE } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -11,31 +14,106 @@ const UNFREEZE_TX = deployments.sternpost.classicRedeploy.defend.flow.find((t) =
 
 export default function Close() {
   const viewed = useViewedAccount()
-  const acct = useAccount(viewed.address)
-  const radar = useRadar('testnet', viewed.address)
-  const a = acct.data
+  const { address: walletAddress, isConnected } = useWagmiAccount()
+  // Connected with no ?account= preview: the demo account's numbers are NOT
+  // the user's own — show their own account, or the no-account CTA (§6.4.1).
+  const preview = viewed.source === 'param'
+  const own = useOwnAccount(!viewed.demoMode && isConnected ? walletAddress : undefined)
+  if (!viewed.demoMode) {
+    if (own.isLoading) {
+      return (
+        <div className="space-y-8">
+          <Card title="Your account — live close position">
+            <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+          </Card>
+          <CloseExplainer />
+        </div>
+      )
+    }
+    if (own.isError) {
+      return (
+        <div className="space-y-8">
+          <Card title="Your account — live close position">
+            <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+          </Card>
+          <CloseExplainer />
+        </div>
+      )
+    }
+    if (!own.data) {
+      return (
+        <div className="space-y-8">
+          <Card title="Your account — live close position">
+            <p className="text-sm leading-relaxed">You have no credit account yet. Open one in about two minutes.</p>
+            <p className="text-sm mt-3"><Link className="pill" to="/app/open">Open a credit account →</Link></p>
+          </Card>
+          <CloseExplainer />
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-8">
+        <ClosePosition address={own.data} title="Your account — live close position" readOnlyNote="Closing is owner-only; only the owner wallet can close this account." />
+        <CloseExplainer />
+      </div>
+    )
+  }
+  // Demo mode: disconnected (the public demo account) or a ?account= preview.
+  // The LAB PROTOTYPE badge marks the lab fallback; a preview is labelled by
+  // the DemoBanner, and the copy never claims the preview is "in demo mode".
   return (
     <div className="space-y-8">
-      <Card title="Demo account — live close position">
-        {acct.isLoading || radar.isLoading ? (
-          <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
-        ) : acct.isError ? (
-          <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
-        ) : a ? (
-          <div className="text-sm space-y-2">
-            <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address} ↗</a></div>
-            <div>Trove <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b> · ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
-            <div>Recovery Mode <b>{radar.data?.recoveryMode ? 'ON — closeAccount() would revert' : 'off'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'unknown'}</b></div>
-            <p className="text-muted">
-              {a.troveStatus === 1
-                ? `Closing would repay the full ${fmt(a.debt)} MUSD debt from the account's MUSD + sMUSD and return the ${fmt(a.coll, 18, 6)} BTC collateral to the owner.`
-                : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
-              Closing is owner-only; in demo mode this account is read-only.
-            </p>
-          </div>
-        ) : <p className="text-sm text-muted">Account not readable.</p>}
-      </Card>
+      <ClosePosition
+        address={viewed.address}
+        title={preview ? 'Previewed account — live close position' : 'Demo account — live close position'}
+        badge={viewed.isLabPrototype ? DEMO_ACCOUNT_BADGE : null}
+        readOnlyNote={preview
+          ? 'Closing is owner-only; this preview is read-only — connect the owner wallet to close it.'
+          : 'Closing is owner-only; in demo mode this account is read-only.'}
+      />
+      <CloseExplainer />
+    </div>
+  )
+}
 
+/**
+ * The live close position for one account. Recovery Mode is a safety boolean:
+ * it renders only on an explicit `=== true` / `=== false` read — a failed or
+ * missing radar read renders "Unavailable", never "off" (an undefined read
+ * must never assert the system is safe).
+ */
+function ClosePosition({ address, title, badge, readOnlyNote }: { address: Address; title: string; badge?: string | null; readOnlyNote: string }) {
+  const acct = useAccount(address)
+  const radar = useRadar('testnet', address)
+  const a = acct.data
+  const recovery = radar.data?.recoveryMode
+  return (
+    <Card title={title} aside={badge ? <span className="caps text-[10px] text-muted">{badge}</span> : undefined}>
+      {acct.isLoading || radar.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+      ) : acct.isError ? (
+        <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+      ) : a ? (
+        <div className="text-sm space-y-2">
+          <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(address)} target="_blank" rel="noreferrer">{address} ↗</a></div>
+          <div>Trove <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b> · ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
+          <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'unknown'}</b></div>
+          {radar.isError && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
+          <p className="text-muted">
+            {a.troveStatus === 1
+              ? `Closing would repay the full ${fmt(a.debt)} MUSD debt from the account's MUSD + sMUSD and return the ${fmt(a.coll, 18, 6)} BTC collateral to the owner.`
+              : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
+            {readOnlyNote}
+          </p>
+        </div>
+      ) : <p className="text-sm text-muted">Account not readable.</p>}
+    </Card>
+  )
+}
+
+function CloseExplainer() {
+  return (
+    <>
       <Card title="Close the account — what happens" aside={<span className="caps text-[10px] text-muted">Contract code · task 1.3</span>}>
         <p className="text-sm leading-relaxed">
           <span className="mono">closeAccount()</span> is implemented in TroveAccount
@@ -99,6 +177,6 @@ export default function Close() {
           <Link className="ink-link text-magenta" to="/app/revoke">Go to Revoke →</Link>
         </p>
       </Card>
-    </div>
+    </>
   )
 }

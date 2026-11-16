@@ -50,7 +50,9 @@ export function maxSafeDraw(coll: bigint, price: bigint, debt: bigint, floor: bi
 }
 
 export function pct(v: bigint, digits = 0): string {
-  if (v >= 2n ** 200n) return '∞'
+  // A zero-debt ICR is 2**255 by construction (see icr() above): it means the
+  // trove owes nothing, so label it "No debt" — a bare infinity symbol explains nothing.
+  if (v >= 2n ** 200n) return 'No debt'
   const n = Number((v * 10000n) / WAD) / 100
   return `${n.toFixed(digits)}%`
 }

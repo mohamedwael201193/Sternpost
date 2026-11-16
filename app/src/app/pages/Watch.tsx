@@ -32,6 +32,11 @@ export default function Watch() {
   const standbyArmed = standbyKnown && !!t.standby?.[3]
   const loading = demo ? acct.isLoading || radar.isLoading : false
   const rpcError = demo ? acct.isError || radar.isError : false
+  // The TCR value comes from the Radar in demo mode but from useTrove's
+  // system-health batch otherwise — gate it on the query that provides it,
+  // not on the Radar's state in both modes.
+  const tcrLoading = demo ? radar.isLoading : t.sysLoading
+  const tcrError = demo ? radar.isError : t.sysError
   const shield = a?.needed
   const shieldNeeded = !!shield && (shield.repayWanted > 0n || shield.collWanted > 0n)
   return (
@@ -58,8 +63,8 @@ export default function Watch() {
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
         <Card title="System health (TCR)">
-          {radar.isLoading ? <Skeleton className="h-9 w-28" label="Loading system health" /> : (
-            <div className="display text-3xl">{radar.isError ? 'Unavailable' : tcrPct === null ? 'No data' : `${tcrPct.toFixed(1)}%`}</div>
+          {tcrLoading ? <Skeleton className="h-9 w-28" label="Loading system health" /> : (
+            <div className="display text-3xl">{tcrError ? 'Unavailable' : tcrPct === null ? 'No data' : `${tcrPct.toFixed(1)}%`}</div>
           )}
           <p className="text-xs text-muted mt-1">Recovery Mode below 150% (Mezo CCR)</p>
           <p className="text-xs text-muted mt-1">
@@ -70,7 +75,7 @@ export default function Watch() {
           {demo ? (
             loading ? <Skeleton className="h-9 w-28" label="Loading shield state" /> : (
               <>
-                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : 'None'}</div>
+                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : a?.shieldICR == null ? 'No policy' : 'None'}</div>
                 <p className="text-xs text-muted mt-1">
                   {rpcError ? RPC_ERROR_TEXT : shieldNeeded
                     ? `Shield would repay ${fmt(shield!.repayWanted)} MUSD${shield!.collWanted > 0n ? ` and add ${fmt(shield!.collWanted, 18, 6)} BTC` : ''} to reach the ${a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : ''} target`

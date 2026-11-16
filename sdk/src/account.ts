@@ -69,7 +69,16 @@ export type AccountSnapshot = {
   cooldownBlocks: number | null;
   needed: ShieldNeed | null;
   pendingYield: bigint | null;
-  balances: { btc: bigint; musd: bigint; smusd: bigint };
+  /**
+   * Token balances. BTC is `null` when the balance read itself fails — a failed
+   * read must render as "unreadable" in the UI, never as 0 (a 0 BTC balance on
+   * a funded account would be a fake fact). MUSD/sMUSD fall back to 0n only
+   * when their in-batch slot fails: `balanceOf` never reverts for a real
+   * address on the live tokens, and a dead transport throws first (the core
+   * TroveManager/PriceFeed slots above throw), so a failed slot here is
+   * unreachable in practice — it would mean the token contract itself broke.
+   */
+  balances: { btc: bigint | null; musd: bigint; smusd: bigint };
 };
 
 type CallResult<T> = { status: "success"; result: T } | { status: "failure"; error?: unknown };
@@ -127,7 +136,7 @@ export async function readAccount(
   // A failed core read is an RPC/batch failure, NOT an empty trove: viem's
   // multicall with allowFailure:true returns a failure slot for EVERY
   // contract when the transport itself fails, so without this throw a dead
-  // RPC would render as coll 0 / debt 0 / ICR 2**255 ("999%", "∞").
+  // RPC would render as coll 0 / debt 0 / ICR 2**255 ("999%", "No debt").
   // getEntireDebtAndColl never reverts for a real address (it returns zeros
   // for a non-existent trove), and neither does fetchPrice on the live feed,
   // so a failure here can only mean the read itself broke.
@@ -151,7 +160,11 @@ export async function readAccount(
       ? { icr: neededV2[0], repayWanted: neededV2[1], collWanted: neededV2[2], reason: null }
       : null;
 
-  const btc = await client.getBalance({ address: account }).catch(() => 0n);
+  // The BTC balance is a separate eth_getBalance call after the multicall
+  // batch: a failure here must NOT silently become 0n — null lets the UI
+  // render "unreadable". (A dead transport throws first, in the core slots
+  // above, so a null here means the transport died between the two calls.)
+  const btc = await client.getBalance({ address: account }).catch(() => null);
 
   return {
     account,

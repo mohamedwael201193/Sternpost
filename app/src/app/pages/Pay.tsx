@@ -31,7 +31,7 @@ export default function Pay() {
           {demo ? (
             acct.isLoading ? <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
             : acct.isError ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
-            : acct.data?.owner ? <Wallets owner={acct.data.owner} />
+            : acct.data?.owner ? <Wallets owner={acct.data.owner} demo />
             : <Empty title="No spend wallets">The demo account has no known owner.</Empty>
           ) : (
             <NeedsWallet what="see your spend wallets"><Wallets owner={t.address!} /></NeedsWallet>
@@ -52,7 +52,7 @@ export default function Pay() {
   )
 }
 
-function Wallets({ owner }: { owner: Address }) {
+function Wallets({ owner, demo = false }: { owner: Address; demo?: boolean }) {
   const { data: wallets } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
   const list = (wallets ?? []) as Address[]
   const reads = useReadContracts({
@@ -75,7 +75,7 @@ function Wallets({ owner }: { owner: Address }) {
             <a className="ink-link mono text-xs" href={addrUrl(w)} target="_blank" rel="noreferrer">{w.slice(0, 10)}…{w.slice(-4)}</a>
             <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : 'Loading…'}</b> MUSD</span>
             <span className="text-xs">{!a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
-            <PayRow wallet={w} agent={a} />
+            <PayRow wallet={w} agent={a} demo={demo} />
           </div>
         )
       })}
@@ -100,12 +100,16 @@ function Receipts({ payer }: { payer?: string }) {
   )
 }
 
-function PayRow({ wallet, agent }: { wallet: Address; agent?: Address }) {
+function PayRow({ wallet, agent, demo = false }: { wallet: Address; agent?: Address; demo?: boolean }) {
   const { address } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
   const [s, set] = useState<{ phase: 'idle' | 'busy' | 'done' | 'error'; msg?: string; tx?: string; ok?: boolean }>({ phase: 'idle' })
   const isAgent = !!agent && !!address && agent.toLowerCase() === address.toLowerCase()
+  // Demo mode is read-only: the pay button must never render here, even when
+  // the connected wallet IS the demo spend wallet's agent — a live x402
+  // settlement is a write, and demo mode promises no writes.
+  if (demo) return <p className="sm:col-span-3 text-xs text-muted">Read-only demo — paying from this wallet needs the owner wallet outside demo mode.</p>
   if (!isAgent) return <p className="sm:col-span-3 text-xs text-muted">Only this wallet's agent can sign its x402 payments. Connect as {agent && agent !== zeroAddress ? `${agent.slice(0, 8)}…` : 'the agent'} to pay from it; you, the owner, can sweep or revoke it from the SDK.</p>
   async function go() {
     set({ phase: 'busy' })

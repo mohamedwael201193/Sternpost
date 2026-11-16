@@ -18,14 +18,6 @@ export const mezoMainnet = defineChain({
   blockExplorers: { default: { name: 'Mezo Explorer', url: 'https://explorer.mezo.org' } },
 })
 
-/** Mezo mainnet (31612) proxies, verified against official docs + release table (MEZO_RESOURCES.md). */
-export const MEZO_MAINNET = {
-  troveManager: '0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193',
-  priceFeed: '0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88',
-  sortedTroves: '0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f',
-  musd: '0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186',
-} as const satisfies Record<string, Address>
-
 /** Mezo protocol contracts on testnet 31611 (verified against live calls in our fork tests). */
 export const MEZO = {
   signatures: '0xD757e3646AF370b15f32EB557F0F8380Df7D639e',

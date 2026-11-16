@@ -8,6 +8,10 @@ import type { Address } from "viem";
 const ACCOUNT = "0x5A1166eC096e12C0C6187695F82B7F4b285389Df" as Address;
 const OWNER = "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3" as Address;
 
+// Live snapshot of the demo account read from Mezo testnet: debt (principal +
+// interest) as at block 16810513, price as at block 16810514 — the read
+// straddled a PriceFeed update. Verified against rpc.test.mezo.org 2026-11-16.
+
 const ok = <T>(result: T) => ({ status: "success", result }) as const;
 const fail = { status: "failure", error: new Error("revert") } as const;
 
@@ -102,7 +106,7 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(snap.debt).toBeGreaterThan(0n);
   });
 
-  it("throws when the core TroveManager read fails: a dead RPC must surface as an error, never as an empty trove (coll 0 / debt 0 / ICR 2**255 renders as '999%' / '∞')", async () => {
+  it("throws when the core TroveManager read fails: a dead RPC must surface as an error, never as an empty trove (coll 0 / debt 0 / ICR 2**255 renders as '999%' / 'No debt')", async () => {
     const slots = base();
     slots[0] = fail; // getEntireDebtAndColl fails: the whole batch is dead (viem returns failure slots for every contract when the transport fails)
     await expect(readAccount(mockClient(slots), ACCOUNT)).rejects.toThrow("TroveManager read failed");
@@ -112,6 +116,13 @@ describe("readAccount (Multicall3 batch)", () => {
     const slots = base();
     slots[2] = fail; // fetchPrice fails
     await expect(readAccount(mockClient(slots), ACCOUNT)).rejects.toThrow("PriceFeed read failed");
+  });
+
+  it("a failed BTC balance read is null (unreadable), never a silent 0", async () => {
+    const client = mockClient(base());
+    (client.getBalance as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("transport died between calls"));
+    const snap = await readAccount(client, ACCOUNT);
+    expect(snap.balances.btc).toBeNull();
   });
 
   it("reads against the deployed Mezo addresses by default", async () => {

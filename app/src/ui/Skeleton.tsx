@@ -1,6 +1,6 @@
 /**
  * Skeleton loading blocks. Rendered while data loads so no page ever shows
- * "Loading", "—", or "Floor not set" to a disconnected user (plan §6.3).
+ * "Loading", "—", or "Not configured" to a disconnected user (plan §6.3).
  */
 export function Skeleton({ className = '', label = 'Loading' }: { className?: string; label?: string }) {
   return (

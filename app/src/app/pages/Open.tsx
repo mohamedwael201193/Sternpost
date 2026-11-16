@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
+import { useAccount as useWagmiAccount } from 'wagmi'
+import type { Address } from 'viem'
 import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
-import { RPC_ERROR_TEXT, useAccount, useViewedAccount } from '../useAccount'
+import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useViewedAccount } from '../useAccount'
 import { fmt, pct } from '../../lib/icr'
 import { DEMO_ACCOUNT_BADGE } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
@@ -17,26 +19,69 @@ function Addr({ a }: { a: string }) {
   return <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(a)} target="_blank" rel="noreferrer">{a} ↗</a>
 }
 
-export default function Open() {
-  const viewed = useViewedAccount()
-  const acct = useAccount(viewed.address)
+/** The live position card for one account: the demo/previewed account in demo mode, the user's own when connected. */
+function OpenAccountCard({ address, title, badge, note }: { address: Address; title: string; badge?: string | null; note: string }) {
+  const acct = useAccount(address)
   const a = acct.data
   return (
-    <div className="space-y-8">
-      <Card title="Demo account — live on testnet" aside={viewed.isLabPrototype && DEMO_ACCOUNT_BADGE ? <span className="caps text-[10px] text-muted">{DEMO_ACCOUNT_BADGE}</span> : undefined}>
-        {acct.isLoading ? (
+    <Card title={title} aside={badge ? <span className="caps text-[10px] text-muted">{badge}</span> : undefined}>
+      {acct.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+      ) : acct.isError ? (
+        <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+      ) : a ? (
+        <div className="text-sm space-y-2">
+          <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(address)} target="_blank" rel="noreferrer">{address} ↗</a></div>
+          <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></div>
+          <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
+          <p className="text-muted">{note}</p>
+        </div>
+      ) : <p className="text-sm text-muted">Account not readable.</p>}
+    </Card>
+  )
+}
+
+export default function Open() {
+  const viewed = useViewedAccount()
+  const { address: walletAddress, isConnected } = useWagmiAccount()
+  // Connected with no ?account= preview: the demo account's numbers are NOT
+  // the user's own — show their own account, or the no-account CTA (§6.4.1).
+  const preview = viewed.source === 'param'
+  const own = useOwnAccount(!viewed.demoMode && isConnected ? walletAddress : undefined)
+  const firstCard = !viewed.demoMode
+    ? own.isLoading
+      ? (
+        <Card title="Your account — live on testnet">
           <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
-        ) : acct.isError ? (
-          <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
-        ) : a ? (
-          <div className="text-sm space-y-2">
-            <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address} ↗</a></div>
-            <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></div>
-            <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
-            <p className="text-muted">This is the account demo mode shows on every page. One-transaction open would create an account like this one for you.</p>
-          </div>
-        ) : <p className="text-sm text-muted">Account not readable.</p>}
-      </Card>
+        </Card>
+      )
+      : own.isError
+        ? (
+          <Card title="Your account — live on testnet">
+            <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+          </Card>
+        )
+        : !own.data
+          ? (
+            <Card title="Your account — live on testnet">
+              <p className="text-sm leading-relaxed">You have no credit account yet. Open one in about two minutes.</p>
+              <p className="text-sm text-muted mt-2">Start with step 1 below — open a trove on Mezo testnet, then create your Governor here.</p>
+            </Card>
+          )
+          : <OpenAccountCard address={own.data} title="Your account — live on testnet" note="This is your account, read live from Mezo testnet. One-transaction open would create an account like this one for you." />
+    : (
+      <OpenAccountCard
+        address={viewed.address}
+        title={preview ? 'Previewed account — live on testnet' : 'Demo account — live on testnet'}
+        badge={viewed.isLabPrototype ? DEMO_ACCOUNT_BADGE : null}
+        note={preview
+          ? 'This is the account you are previewing (read-only demo). One-transaction open would create an account like this one for you.'
+          : 'This is the account demo mode shows on every page. One-transaction open would create an account like this one for you.'}
+      />
+    )
+  return (
+    <div className="space-y-8">
+      {firstCard}
 
       <Card title="Open a credit account — the live path today, in three steps">
         <ol className="text-sm leading-relaxed space-y-3 list-decimal pl-5">

@@ -94,6 +94,9 @@ export function useTrove() {
     nonce: nonce?.result as bigint | undefined,
     balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined, mezo: mezo?.result as bigint | undefined },
     loading: core.isLoading || gov.isLoading,
+    /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
+    sysLoading: sys.isLoading,
+    sysError: sys.isError,
     refetch: () => { core.refetch(); gv.refetch(); gov.refetch(); btc.refetch(); sys.refetch() },
   }
 }

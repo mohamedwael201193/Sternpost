@@ -83,9 +83,8 @@ function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; v
           <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
         ) : a ? (
           <>
-            <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
+            <div className="grid sm:grid-cols-1 gap-6 justify-items-center">
               <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" /></div>
-              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="After draw" /></div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 text-center mt-4 gap-4">
               <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{pct(a.icr, 1)}</div></div>

@@ -4,7 +4,8 @@ import { useAccount as useWagmiAccount } from 'wagmi'
 import { createPublicClient, http, isAddress, type Address } from 'viem'
 import { readAccount, type AccountSnapshot } from '../../../sdk/src/account'
 import { readMainnetHealth, readRadar, type RadarSnapshot } from '../../../sdk/src/radar'
-import { DEMO_ACCOUNT, DEMO_ACCOUNT_SOURCE, RADAR_TESTNET, mezoMainnet, mezoTestnet } from '../lib/chain'
+import { ACCOUNTS, ACCOUNTS_DEPLOY_BLOCK, DEMO_ACCOUNT, DEMO_ACCOUNT_SOURCE, RADAR_TESTNET, mezoMainnet, mezoTestnet } from '../lib/chain'
+import { troveAccountFactoryAbi } from '../lib/abi'
 
 export type { AccountSnapshot, RadarSnapshot }
 
@@ -53,6 +54,51 @@ export function useAccount(address?: Address) {
     queryFn: () => readAccount(testnetClient, address!),
     enabled: !!address,
     refetchInterval: 12_000,
+  })
+}
+
+/**
+ * The connected wallet's own TroveAccount, if it has one (plan §6.4.1): the
+ * factory has no `accountOf(owner)` lookup — `predict()` needs the creation
+ * salt + policy — so the only honest discovery is the factory's
+ * `AccountCreated` log, filtered by owner. The newest event wins (an owner
+ * can create more than one account). Returns null when the wallet never
+ * created an account: callers must show the "no credit account yet" CTA,
+ * never the demo account's numbers as the user's own.
+ * Chunked in 9,500-block walks like useLogs: the RPC caps one eth_getLogs
+ * call at 10,000 blocks.
+ */
+export async function fetchOwnAccount(
+  client: Pick<typeof testnetClient, 'getBlockNumber' | 'getContractEvents'>,
+  owner: Address,
+): Promise<Address | null> {
+  const factory = ACCOUNTS.factory
+  if (!factory) return null
+  const latest = await client.getBlockNumber()
+  const CHUNK = 9500n
+  let found: { account: Address; block: bigint; logIndex: number } | null = null
+  for (let from = ACCOUNTS_DEPLOY_BLOCK; from <= latest; from += CHUNK + 1n) {
+    const to = from + CHUNK > latest ? latest : from + CHUNK
+    const logs = await client.getContractEvents({
+      address: factory, abi: troveAccountFactoryAbi, eventName: 'AccountCreated',
+      args: { owner }, fromBlock: from, toBlock: to,
+    })
+    for (const l of logs as unknown as { blockNumber: bigint; logIndex: number; args: { account: Address } }[]) {
+      if (!found || l.blockNumber > found.block || (l.blockNumber === found.block && l.logIndex > found.logIndex)) {
+        found = { account: l.args.account, block: l.blockNumber, logIndex: l.logIndex }
+      }
+    }
+  }
+  return found?.account ?? null
+}
+
+/** React-query wrapper for fetchOwnAccount: key `['own-account', owner]`, refetch every 30 s. */
+export function useOwnAccount(owner?: Address) {
+  return useQuery({
+    queryKey: ['own-account', owner ?? null],
+    queryFn: () => fetchOwnAccount(testnetClient, owner!),
+    enabled: !!owner && !!ACCOUNTS.factory,
+    refetchInterval: 30_000,
   })
 }
 

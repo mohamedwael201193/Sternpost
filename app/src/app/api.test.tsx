@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { verifyMessage } from 'viem'
 import { judgeDraw, REASONS, troveTotals } from '../lib/icr'
 
+;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 vi.mock('../lib/chain', () => ({ API_URL: 'https://api.test' }))
-const { setRequestStatus, requestStatusMessage } = await import('./api')
+const { setRequestStatus, requestStatusMessage, useApiList } = await import('./api')
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -33,6 +37,38 @@ describe('draw reasons (C7: trove status and Recovery Mode)', () => {
   })
   it('accepts an active trove in normal mode', () => {
     expect(judgeDraw({ ...base, troveStatus: 1, recoveryMode: false }).ok).toBe(true)
+  })
+})
+
+describe('useApiList (?account= switch must not show the previous account’s rows)', () => {
+  it('clears stale rows immediately when the path changes, before the new fetch resolves', async () => {
+    let releaseB!: (v: Response) => void
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('borrower=A')) return Promise.resolve(new Response(JSON.stringify({ requests: [{ id: 1 }] }), { status: 200 }))
+      return new Promise<Response>((resolve) => { releaseB = resolve })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    function Probe({ path }: { path: string }) {
+      const s = useApiList<{ id: number }>('requests', path)
+      return <div data-state={s.state} data-items={JSON.stringify(s.items.map((i) => i.id))} />
+    }
+    await act(async () => { root.render(<Probe path="/v1/requests?borrower=A" />) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)) })
+    const el = () => container.firstElementChild as HTMLElement
+    expect(el().dataset.state).toBe('ok')
+    expect(el().dataset.items).toBe('[1]')
+    await act(async () => { root.render(<Probe path="/v1/requests?borrower=B" />) })
+    // The B fetch is still pending, yet the A rows are already gone.
+    expect(el().dataset.state).toBe('loading')
+    expect(el().dataset.items).toBe('[]')
+    await act(async () => { releaseB(new Response(JSON.stringify({ requests: [{ id: 2 }] }), { status: 200 })); await new Promise((r) => setTimeout(r, 10)) })
+    expect(el().dataset.state).toBe('ok')
+    expect(el().dataset.items).toBe('[2]')
+    await act(async () => { root.unmount() })
+    container.remove()
   })
 })
 

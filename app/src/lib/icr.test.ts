@@ -9,8 +9,8 @@ describe('icr math', () => {
   it('computes collateral ratio', () => {
     expect(pct(icr(coll, price, debt))).toBe('400%')
   })
-  it('treats zero debt as infinite', () => {
-    expect(pct(icr(coll, price, 0n))).toBe('∞')
+  it('treats zero debt as no debt, not an unexplained infinity', () => {
+    expect(pct(icr(coll, price, 0n))).toBe('No debt')
   })
   it('accepts a draw that stays above the floor', () => {
     const v = judgeDraw({ coll, price, debt, amount: 1_000n * WAD, fee: 0n, floor: 3n * WAD })

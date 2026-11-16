@@ -23,8 +23,11 @@ vi.mock('../../../sdk/src/radar', () => ({
 let walletConnected = false
 vi.mock('wagmi', () => ({ useAccount: () => ({ isConnected: walletConnected, address: undefined }) }))
 
-const { useAccount, useRadar, useViewedAccount } = await import('./useAccount')
+const { useAccount, useRadar, useViewedAccount, fetchOwnAccount } = await import('./useAccount')
 
+// Live snapshot of the demo account read from Mezo testnet @ block 16810643
+// (debt 2016208555450632253551 + price 64608796300000000000000000, verified
+// against rpc.test.mezo.org 2026-11-16).
 const SNAP: AccountSnapshot = {
   account: DEMO_ACCOUNT,
   owner: '0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3',
@@ -46,6 +49,9 @@ const SNAP: AccountSnapshot = {
 }
 
 const RADAR_SNAP: RadarSnapshot = {
+  // Live snapshot of the testnet Radar read in the same session as SNAP
+  // above; its price/TCR pair was not re-found in a 543-block systemHealth
+  // scan around block 16810643, so its block is not pinned here.
   network: 'testnet',
   price: 64_607_461_300_000_000_000_000n,
   tcr: 2_320_369_306_368_630_978n,
@@ -153,5 +159,33 @@ describe('useRadar (plan §6.2)', () => {
     expect(radar.tcr).toBe('2320369306368630978')
     expect(radar.rank).toBe('181')
     expect(viReadRadar).toHaveBeenCalled()
+  })
+})
+
+describe('fetchOwnAccount (plan §6.4.1: connected users see their own account, never the demo numbers)', () => {
+  const OWNER = '0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3' as const
+  const ACCT = '0x5A1166eC096e12C0C6187695F82B7F4b285389Df' as const
+  const OTHER = '0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8' as const
+  type Client = Parameters<typeof fetchOwnAccount>[0]
+  const stub = (events: { blockNumber: bigint; logIndex: number; args: { account: string } }[]) =>
+    ({
+      getBlockNumber: vi.fn().mockResolvedValue(16804470n),
+      getContractEvents: vi.fn().mockResolvedValue(events),
+    }) as unknown as Client
+
+  it('returns the newest AccountCreated for the owner', async () => {
+    const client = stub([
+      { blockNumber: 16804466n, logIndex: 0, args: { account: OTHER } },
+      { blockNumber: 16804468n, logIndex: 2, args: { account: ACCT } },
+    ])
+    await expect(fetchOwnAccount(client, OWNER as `0x${string}`)).resolves.toBe(ACCT)
+    expect((client.getContractEvents as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
+      eventName: 'AccountCreated',
+      args: { owner: OWNER },
+    })
+  })
+
+  it('returns null when the owner never created an account', async () => {
+    await expect(fetchOwnAccount(stub([]), OWNER as `0x${string}`)).resolves.toBeNull()
   })
 })

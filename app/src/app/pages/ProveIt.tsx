@@ -83,7 +83,7 @@ function ProveIt() {
             </p>
             <p>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></p>
             <p>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'} · MUSD on the account {fmt(a.balances.musd)} · sMUSD {fmt(a.balances.smusd)}</p>
-            <p className="text-muted">Read live from Mezo testnet with one Multicall3 batch; refreshes every 12 s. The same account demo mode shows on every app page.</p>
+            <p className="text-muted">Read live from Mezo testnet with one Multicall3 batch; refreshes every 12 s. The same demo account demo mode shows on every app page — unless you preview another account with ?account=, which shows that account instead.</p>
           </div>
         ) : <p className="text-sm text-muted">Account not readable.</p>}
 

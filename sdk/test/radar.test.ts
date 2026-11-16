@@ -8,6 +8,11 @@ const RADAR = "0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C" as Address;
 const ACCOUNT = "0x5A1166eC096e12C0C6187695F82B7F4b285389Df" as Address;
 const FRONTIER = "0x5eaA8bdc315608E8Cf873CFAbA05e42826f68C4d" as Address;
 
+// Live snapshot of the testnet Radar read from Mezo testnet during the 3.2
+// authoring session (2026-11-16). The exact block was not recorded in the
+// commit, so none is claimed here — the price/TCR pair was not re-found in a
+// 543-block systemHealth scan around block 16810643.
+
 const ok = <T>(result: T) => ({ status: "success", result }) as const;
 const fail = { status: "failure", error: new Error("revert") } as const;
 
