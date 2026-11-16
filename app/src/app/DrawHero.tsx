@@ -70,8 +70,23 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   // status is unknown — the "Open a trove" link would flash for a real
   // zero-debt trove whose sys batch is still in flight. Hold on a disabled
   // button until the status is known or the core read proves coll 0.
-  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n
-  const cur = toPct(t.icr), aft = wei > 0n ? toPct(after) : cur, flo = toPct(t.floor)
+  // Round 8 (J3 L5 + M5 + L6 + M2): a failed core read is NOT "checking"
+  // (it failed — the hero must surface the error, below), a status value
+  // outside the known 0–4 enum is NOT "checking" either (it settled
+  // unknown — the hero must say "Unavailable", below), and a coll-0 /
+  // debt>0 trove is NOT "no trove" (liquidatable, not non-existent).
+  const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
+  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n && !statusOutOfRange && !t.error
+  const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
+  // Round 8 (J3 M2): while governorOf is in flight a debt>0 trove has no
+  // Governor yet — hold the "Set your floor below" CTA, which would lead
+  // to Draw's false "No Governor yet" empty.
+  const govUnknown = t.hasTrove && !t.governor && t.govLoading
+  // Round 8 (J2 LOW-4): a retained floor after a Governor-batch failure
+  // must not drive the gauge marker, the "floor X%" label or the "below
+  // floor" suffix — the floor is unknown, not the last good value.
+  const floorForDisplay = t.gvError || t.gvSlotError ? undefined : t.floor
+  const cur = toPct(t.icr), aft = wei > 0n ? toPct(after) : cur, flo = toPct(floorForDisplay)
 
   return (
     <section ref={ref} aria-labelledby="draw-hero" className="glow-card rounded-2xl bg-[#FBF6EC] shadow-[0_30px_70px_-30px_rgba(163,32,79,.55)]">
@@ -116,7 +131,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
               itself. Gate the no-debt label on troveStatus === 1, mirroring
               the Home Dial (round 5). */}
           <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{!t.icr ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
-          <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${t.floor && after < t.floor ? ' · below floor' : ''}` : '—'}</dd>
+          <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${floorForDisplay && after < floorForDisplay ? ' · below floor' : ''}` : '—'}</dd>
           <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>
         {ROUTER && (
@@ -151,9 +166,16 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
 
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />
-            : !ready ? (troveUnknown
+            // Round 8 (J3 L5): a failed core/Governor read surfaces the RPC
+            // error in the hero itself — "Checking your trove…" would stall
+            // forever on a read that already failed (Home's top plate
+            // explains, the hero itself never did).
+            : !ready ? (t.error ? <p role="alert" className="text-sm text-signal flex-1">{RPC_ERROR_TEXT}</p>
+              : troveUnknown || govUnknown
               ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Checking your trove…</button>
-              : <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{!t.hasTrove ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>)
+              : statusOutOfRange
+              ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Trove status Unavailable</button>
+              : <Link to="/app/draw" className="pill flex-1 justify-center py-3.5">{noTroveKnown ? 'Open a trove on Mezo first' : 'Set your floor below'}</Link>)
             : <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled={!ok || d.busy || wei === 0n || btcAcct || blocked} onClick={() => d.go(wei, self, self, route)}>
                 {d.busy ? 'Signing…' : 'Sign & send'} <span aria-hidden>→</span>
               </button>}

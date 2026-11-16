@@ -90,14 +90,23 @@ export function useTrove() {
   // The coll > 0 requirement does NOT exclude closed troves: a closed
   // trove CAN still report coll > 0 / debt 0 — after a full redemption the
   // debt is cleared but the remaining collateral stays in the contracts
-  // until the borrower claims it (Mezo docs, "How To Claim Your Collateral
-  // After a Full Redemption", verified 2026-11-16; Home's status-4 banner
-  // says the same: "Claim your collateral"). The old comment ("a closed
-  // trove has coll 0") was wrong as a general invariant — the status check
-  // is what excludes closed troves, and the round-4 CLOSED_SNAP fixture
-  // (status 2, coll > 0, debt 0) is a state the UI must render correctly,
-  // not an impossible one.
-  const troveStatusKnown = statusNum !== undefined
+  // until the borrower claims it (Mezo docs, "Mezo 101: Liquidations &
+  // Redemptions", https://mezo.org/blog/mezo-101-liquidations-redemptions/,
+  // §"Partial vs. Full Redemptions": "your debt is completely cleared, and
+  // any remaining BTC collateral is set aside for you as surplus. You can
+  // claim this surplus at any time."; Home's status-4 banner says the same:
+  // "Claim your collateral"). The old comment ("a closed trove has coll 0")
+  // was wrong as a general invariant — the status check is what excludes
+  // closed troves, and the round-4 CLOSED_SNAP fixture (status 2, coll > 0,
+  // debt 0) is a state the UI must render correctly, not an impossible one.
+  // Round 8 (J3 M5 + J1 LOW-2): "known" means known-AND-understood. A
+  // future status (e.g. 5 from a newer TroveManager) is a value this code
+  // does not understand — it must NOT count as known, or every
+  // troveStatusKnown-gated empty renders "No trove" for it while the ICR
+  // card, Close/Open/ProveIt and demoIcrLabel all say "Unavailable" for
+  // the same state. The round-7 useTrove test locked in the conflation
+  // (troveStatusKnown: true for status 5) and is corrected with it.
+  const troveStatusKnown = statusNum !== undefined && statusNum >= 0 && statusNum <= 4
   const hasTrove = coll !== undefined && debt !== undefined && coll > 0n && (debt > 0n || statusNum === 1)
   const [floor, frozen, standby, defend] = gv.data ?? []
   // Round 7 (LOW-6): with allowFailure: true the batch query never sets
@@ -109,6 +118,20 @@ export function useTrove() {
   // into the same gates.
   const gvSlotError = (gv.data ?? []).some((e) => e?.status === 'failure')
   const sysSlotError = (sys.data ?? []).some((e) => e?.status === 'failure')
+  // Round 8 (J3 L2): sysSlotError is over-broad — a getTCR-only slot failure
+  // hid a KNOWN Recovery state behind the "system-health read failed"
+  // banner. Split it per slot (sys batch order: getTroveStatus,
+  // checkRecoveryMode, getTCR): the Recovery banner gates on
+  // recoverySlotError, the TCR card on tcrSlotError. sysSlotError stays as
+  // the any-slot OR for the top error plates.
+  const recoverySlotError = sys.data?.[1]?.status === 'failure'
+  const tcrSlotError = sys.data?.[2]?.status === 'failure'
+  // Round 8 (J3 L7): the core batch has the same allowFailure hole, one
+  // batch behind gv/sys — a single reverted core slot leaves coll/debt
+  // undefined with core.isError false, so the Home rows and the
+  // troveStatusKnown-gated empties would render "No trove" for an active
+  // trove. Surface it like gvSlotError/sysSlotError.
+  const coreSlotError = (core.data ?? []).some((e) => e?.status === 'failure')
   return {
     address, isConnected, governor, hasTrove, troveStatusKnown,
     coll, debt, price: p,
@@ -129,6 +152,10 @@ export function useTrove() {
     nonce: nonce?.result as bigint | undefined,
     balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined, mezo: mezo?.result as bigint | undefined },
     loading: core.isLoading || gov.isLoading,
+    /** The governorOf read alone is still in flight (round 8, J3 M2): Governor rows gate on this — a debt>0 trove whose core read already returned must not flash "No Governor yet" while governorOf is pending. */
+    govLoading: gov.isLoading,
+    /** The Governor view batch (floor/frozen/standby/defend) is still in flight (round 8, J3 M1): floor/standby rows gate on this — an undefined batch must never render as "Not configured" / "DISARMED" / "active" while it loads. */
+    gvLoading: gv.isLoading,
     /** The core trove/Governor read failed (LOW-8): callers must show the RPC error, never a 'No trove'/'No Governor' empty. */
     error: core.isError || gov.isError,
     /** The core trove read alone failed (L5): the trove numbers (coll/debt/ICR) gate on this, never on the Governor read — a gov-only failure must not mask readable trove numbers as 'Unavailable'. */
@@ -139,11 +166,17 @@ export function useTrove() {
     gvError: gv.isError,
     /** Round 7 (LOW-6): a single Governor-batch slot reverted (allowFailure) while the batch itself resolved — OR into every gvError gate (Home Floor/Standby/Spend route/Governor card, Watch standby/Shield, Revoke). */
     gvSlotError,
+    /** Round 8 (J3 L7): a single core-batch slot reverted (allowFailure) while the batch itself resolved — OR into the Home rows, the Draw/Home empty gates, the nonce row and the Wallet balances. */
+    coreSlotError,
     /** Trove-status / system-health batch (getTroveStatus, checkRecoveryMode, getTCR). */
     sysLoading: sys.isLoading,
     sysError: sys.isError,
     /** Round 7 (LOW-6): a single sys-batch slot reverted (allowFailure) while the batch resolved — OR into the Recovery-banner state (Home/Watch) alongside sysError. */
     sysSlotError,
+    /** Round 8 (J3 L2): only the checkRecoveryMode slot reverted — the Recovery banner gates on this, never on the any-slot OR (a getTCR-only failure must not hide a KNOWN Recovery state). */
+    recoverySlotError,
+    /** Round 8 (J3 L2): only the getTCR slot reverted — the TCR card gates on this (a getTCR slot failure reads "Unavailable", never "No data"). */
+    tcrSlotError,
     refetch: () => { core.refetch(); gv.refetch(); gov.refetch(); btc.refetch(); sys.refetch() },
   }
 }

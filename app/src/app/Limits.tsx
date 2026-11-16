@@ -7,7 +7,18 @@ const str = (v: bigint) => fmt(v, 18, 2).replace(/,/g, '')
 
 /** Max-safe chip plus a plain explanation of the two different limits: the floor (trove health) and the per-draw cap (app policy). */
 export function Limits({ t, l, onPick }: { t: Trove; l: ReturnType<typeof useLimits>; onPick: (s: string) => void }) {
-  if (!l.safe) return null
+  // Round 8 (J2 LOW-4): a retained floor after a Governor-batch failure
+  // must not drive the chip or the pre-fill — the floor is unknown, not the
+  // last good value. Return null when the Governor batch is unknown.
+  if (t.gvError || t.gvSlotError) return null
+  // Round 8 (J3 L4): when `safe` is undefined because the policy/fee read
+  // failed, the chip and pre-fill silently vanish — render an explicit
+  // "unavailable" signal instead of nothing. (No error: the Governor may
+  // simply be missing or the app unauthorized — still null, as before.)
+  if (!l.safe) {
+    if (l.feeError || l.polError) return <p data-testid="limits-unavailable" className="mt-2 text-xs text-signal">Draw limits unavailable — the policy or fee read failed, so the max safe draw is unknown.</p>
+    return null
+  }
   const { max, limit } = l.safe
   return (
     <div data-testid="limits" className="mt-2 text-xs space-y-1.5">

@@ -34,6 +34,9 @@ export default function Apps() {
             live branch below would render a false "No Governor yet" with a
             wrong CTA. An error is an error plate, never a false empty. */}
         {t.error || t.govError ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+          // Round 8 (J3 M2): while governorOf is in flight the Governor is
+          // unknown — a skeleton, never "No Governor yet".
+          : t.govLoading ? <Card><div className="space-y-3"><Skeleton className="h-4 w-full" label="Loading Governor" /><Skeleton className="h-4 w-2/3" label="Loading Governor" /></div></Card>
           : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home first. Budgets live on it.</Empty> : (
           <div className="grid lg:grid-cols-2 gap-8">
             <Authorize governor={t.governor} preset={params.get('app') ?? ''} presetAmount={params.get('amount')} requestId={params.get('request')} />

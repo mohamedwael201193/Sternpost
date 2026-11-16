@@ -100,7 +100,12 @@ function ClosePosition({ address, title, badge, readOnlyNote }: { address: Addre
   const acct = useAccount(address)
   const radar = useRadar('testnet', address)
   const a = acct.data
-  const recovery = radar.data?.recoveryMode
+  // Round 8 (J2 MED-1 / J3 M6): TanStack Query v5 RETAINS data on error —
+  // a radar failure after a success keeps the last recoveryMode, so the
+  // retained 'ON — closeAccount() would revert' / 'off' would render beside
+  // the RPC-error plate. A failed radar read means the Recovery state is
+  // unknown, never the last good value.
+  const recovery = radar.isError ? undefined : radar.data?.recoveryMode
   return (
     <Card title={title} aside={badge ? <span className="caps text-[10px] text-muted">{badge}</span> : undefined}>
       {acct.isLoading || radar.isLoading ? (

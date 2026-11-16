@@ -70,12 +70,17 @@ export type AccountSnapshot = {
   needed: ShieldNeed | null;
   pendingYield: bigint | null;
   /**
-   * Round 7: true when the address IS an account contract (owner() answered)
-   * but NO policy source answered — the v3 policy() tuple and all four v2
-   * getters failed. Without this flag the UI renders "Not configured" /
-   * "No policy" about an unknown policy. A plain trove (owner() reverts)
-   * is not an error: it simply has no policy, so policyError is false
-   * there. A v2 account's failing v3 slots are expected, not an error.
+   * Round 7 + round 8: true when the address IS an account contract
+   * (owner() answered) but the policy is unreadable — either NO policy
+   * source answered (the v3 policy() tuple and all four v2 getters failed),
+   * or a version IS established but one of floor/shield/target/bounty is
+   * null (round 8, J3 L3: v3 policy() fails but one v2 getter succeeds —
+   * the policy partially answered, so "Not configured" / "No policy"
+   * would be a lie about a policy that is merely half-read). Without this
+   * flag the UI renders "Not configured" / "No policy" about an unknown
+   * policy. A plain trove (owner() reverts) is not an error: it simply has
+   * no policy, so policyError is false there. A v2 account's failing v3
+   * slots are expected, not an error.
    */
   policyError: boolean;
   /**
@@ -159,18 +164,30 @@ export async function readAccount(
 
   const policy = ok(policyR);
   const floorV2 = ok(floorV2R);
+  const shieldV2 = ok(shieldV2R);
+  const targetV2 = ok(targetV2R);
+  const bountyV2 = ok(bountyV2R);
   const version: AccountSnapshot["version"] = policy !== undefined ? "v3" : floorV2 !== undefined ? "v2" : null;
+  const floorICR = policy?.[0] ?? floorV2 ?? null;
+  const shieldICR = policy?.[1] ?? shieldV2 ?? null;
+  const targetICR = policy?.[2] ?? targetV2 ?? null;
+  const bounty = policy?.[3] ?? bountyV2 ?? null;
   // Round 7: owner() answering proves this is an account contract, so a
   // policy that answers from NO source is a failed read, not an absent
   // policy. (A v2 account's v3 slots failing is expected — version is v2
   // then — and a plain trove's owner() failing means no policy exists.)
-  const policyError =
-    ok(ownerR) !== undefined &&
+  // Round 8 (J3 L3): a version established but ANY of the four policy
+  // values null is the same unknown — the policy partially answered, so
+  // the missing value is unreadable, not "not configured".
+  const noPolicySource =
     policy === undefined &&
     floorV2 === undefined &&
-    ok(shieldV2R) === undefined &&
-    ok(targetV2R) === undefined &&
-    ok(bountyV2R) === undefined;
+    shieldV2 === undefined &&
+    targetV2 === undefined &&
+    bountyV2 === undefined;
+  const partialPolicy =
+    version !== null && (floorICR === null || shieldICR === null || targetICR === null || bounty === null);
+  const policyError = ok(ownerR) !== undefined && (noPolicySource || partialPolicy);
 
   const neededV3 = ok(neededV3R);
   const neededV2 = ok(neededV2R);
@@ -195,10 +212,10 @@ export async function readAccount(
     price,
     icr,
     troveStatus: ok(statusR) ?? null,
-    floorICR: policy?.[0] ?? floorV2 ?? null,
-    shieldICR: policy?.[1] ?? ok(shieldV2R) ?? null,
-    targetICR: policy?.[2] ?? ok(targetV2R) ?? null,
-    bounty: policy?.[3] ?? ok(bountyV2R) ?? null,
+    floorICR,
+    shieldICR,
+    targetICR,
+    bounty,
     minDebtAhead: policy?.[4] ?? null,
     cooldownBlocks: policy?.[5] ?? null,
     needed,

@@ -129,7 +129,15 @@ export default function Activity() {
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Activity</h1><p className="text-muted mt-2">Every event your Governor emitted, read from Mezo testnet and merged with the Sternpost indexer.</p></header>
       <NeedsWallet what="see your activity">
-        {!t.governor ? <Empty title="No Governor yet">Nothing to log until you create one on Home.</Empty> : (
+        {/* Round 8 (J3 M2 family — found by the round-8 grep audit, not a
+            round-6 finding): this was the last ungated "No Governor yet" in
+            app/src. A governorOf failure rendered the definitive empty for
+            a user who may have a Governor, and a pending governorOf flashed
+            it on every load. An error is an RPC error plate; a pending read
+            is a skeleton. */}
+        {t.error || t.govError ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+          : t.govLoading ? <Card><div className="space-y-3"><Skeleton className="h-4 w-full" label="Loading Governor" /><Skeleton className="h-4 w-2/3" label="Loading Governor" /></div></Card>
+          : !t.governor ? <Empty title="No Governor yet">Nothing to log until you create one on Home.</Empty> : (
           <Card>
             {q.isLoading && <p className="text-sm text-muted">Reading logs…</p>}
             {q.error && <p className="text-sm text-signal">Could not read logs from the RPC.</p>}

@@ -47,19 +47,28 @@ export default function Home() {
   // L-b (round 4): the sys batch (getTroveStatus / checkRecoveryMode /
   // getTCR) failing must surface too — otherwise recoveryMode is undefined,
   // no Recovery banner renders, and the failure passes silently.
-  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError
+  // Round 8 (J2 LOW-3, builder residual 2): a single sys-batch slot
+  // failure is the same silent hole — OR in sysSlotError.
+  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError || t.sysSlotError
   // L1/L5: the dial + trove numbers gate on the CORE read only — a
   // governorOf-only failure must not mask readable trove numbers as
   // 'Unavailable' (that is what t.govError is for, below).
   const acctError = demo ? acct.isError : !!t.coreError
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
-  // Round 7 (J1 L1): TanStack Query v5 RETAINS data on error — on a sys
-  // failure recoveryMode keeps its last good value, so the ON/OFF banners
-  // keyed off it would render stale claims beside (or instead of)
-  // "Unavailable". Derive the banner state from the error: unknown
-  // whenever the sys batch failed (transport OR a per-slot failure,
-  // LOW-6) — the ON/OFF banners only render for a KNOWN state.
-  const sysUnknown = !demo && (t.sysError || t.sysSlotError)
+  // Round 7 (J1 L1) + round 8 (J2 MED-1 / J3 M6): TanStack Query v5 RETAINS
+  // data on error — on a sys failure recoveryMode keeps its last good value,
+  // so the ON/OFF banners keyed off it would render stale claims beside (or
+  // instead of) "Unavailable". Derive the banner state from the error:
+  // unknown whenever the sys batch failed (transport OR a per-slot failure,
+  // LOW-6) — the ON/OFF banners only render for a KNOWN state. The round-7
+  // fix covered only the connected path (sysUnknown was `!demo && ...`):
+  // demo mode is the default landing view and the radar is a plain useQuery
+  // too, so a demo radar failure after a success retained ON/OFF the same
+  // way. In demo the radar IS the sys batch: unknown whenever it errors.
+  // Round 8 (J3 L2): on the connected path the banner gates on the
+  // RECOVERY slot only (recoverySlotError), never the any-slot OR — a
+  // getTCR-only failure must not hide a KNOWN Recovery state.
+  const sysUnknown = demo ? radar.isError : (t.sysError || t.recoverySlotError)
   const recoveryKnown = sysUnknown ? undefined : recoveryMode
   const troveStatus = demo ? a?.troveStatus : t.troveStatus
   // A closed trove (status 2/3/4, not 0 = never existed) blocks draws. The
@@ -68,6 +77,24 @@ export default function Home() {
   // status (> 4) is UNKNOWN, not closed — never claim the trove no longer
   // exists for a status this code does not understand.
   const troveClosed = troveStatus !== undefined && troveStatus !== null && troveStatus >= 2 && troveStatus <= 4
+  // Round 8 (J3 H2/M1/M2/M5, L6/L7): the loading/error gates the render
+  // sites below share. govLoading = governorOf in flight; gvLoading = the
+  // Governor batch in flight; coreSlotUnknown = a single core-batch slot
+  // reverted (coll/debt/nonce unreadable, no transport error).
+  const govLoading = t.govLoading
+  const gvLoading = t.gvLoading
+  const coreSlotUnknown = !demo && !!t.coreSlotError
+  // Round 8 (J3 M5): a status value outside the known 0–4 enum (e.g. 5) is
+  // UNKNOWN, not "no trove" — troveStatusKnown is false for it, but the
+  // empties below must say "Unavailable" explicitly instead of holding on
+  // a skeleton forever.
+  const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
+  // Round 8 (J3 L6 + L7 + M5): "no trove" is KNOWN only when the status is
+  // understood-and-not-active, or when the core read proves coll 0 AND
+  // debt 0. The old shortcut (status known OR coll 0) claimed "No trove"
+  // for a coll-0 / debt>0 trove (liquidatable, not non-existent). A failed
+  // core slot is the same unknown: noTroveKnown is false while it is set.
+  const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
   const host = useRef<HTMLDivElement>(null)
   const ship = useRef<HTMLDivElement>(null), dial = useRef<HTMLDivElement>(null), form = useRef<HTMLElement>(null)
   const sColl = useRef<HTMLDivElement>(null), sDebt = useRef<HTMLDivElement>(null), sRoute = useRef<HTMLDivElement>(null)
@@ -141,10 +168,28 @@ export default function Home() {
                 default "No trove" while the same state renders
                 "Unavailable" everywhere else. Pass an explicit label for
                 the unknown case. */}
-            {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
+            {loading || (!demo && !t.troveStatusKnown && t.sysLoading) ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError || (coreSlotUnknown && (coll === undefined || debt === undefined)) ? (
+              // Round 8 (J3 L7): a failed core slot (e.g. getEntireDebtAndColl)
+              // leaves coll/debt undefined with no transport error — the
+              // Dial's default "No trove" would be a false claim about an
+              // active trove. "Unavailable" when the numbers the Dial needs
+              // are unreadable; a failed nonce-only slot still shows the
+              // live Dial (coll/debt defined).
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
-              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={troveStatus == null || troveStatus > 4 ? 'Unavailable' : hasTrove && isNoDebtIcr(icrV) ? (troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} />
+              // Round 8 (J1 LOW-3): the Dial skeleton above keys on t.loading
+              // (core/gov only), not t.sysLoading — a zero-debt trove briefly
+              // showed "Unavailable" (a failure word) during a pending sys
+              // read. Hold the skeleton while the status is unknown and the
+              // sys batch is in flight, on the own-account branch.
+              // Round 8 (J3 L4 family + L6): a zero-debt ICR is "No debt" only
+              // for a known-active status; a readable trove whose ICR is
+              // undefined (price slot failed) is "Unavailable", never the
+              // Dial's default "No trove". And the Dial value itself is the
+              // ICR read, not hasTrove: a coll-0 / debt>0 trove has a real
+              // ICR of 0% (liquidatable, not non-existent) — gating the
+              // value on hasTrove rendered "No trove" for it.
+              <Dial value={icrPct(icrV)} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={troveStatus == null || troveStatus > 4 ? 'Unavailable' : hasTrove && isNoDebtIcr(icrV) ? (troveStatus === 1 ? 'No debt' : 'Unavailable') : hasTrove && icrV === undefined ? 'Unavailable' : undefined} />
             )}
           </div>
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
@@ -152,17 +197,23 @@ export default function Home() {
         {/* Stats */}
         <div className="xl:col-start-1 xl:row-start-2 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 self-start relative z-10 min-w-0">
           <StatCard ref={sColl} icon="M12 3v14M7 8h10M5 14a7 7 0 0014 0M12 17v4" k="Collateral"
-            v={loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} sub={usd(coll)} />
+            v={loading ? <Skeleton className="h-7 w-24" /> : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : acctError || coreSlotUnknown ? 'Unavailable' : 'No trove'} sub={usd(coll)} />
           <StatCard ref={sDebt} icon="M12 3a9 9 0 100 18 9 9 0 000-18zM15 9l-2 5-4 1 2-5z" k="Debt"
-            v={loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} sub={debt !== undefined ? `≈ $${fmt(debt)}` : ''} />
+            v={loading ? <Skeleton className="h-7 w-24" /> : debt !== undefined ? `${fmt(debt)} MUSD` : acctError || coreSlotUnknown ? 'Unavailable' : 'No trove'} sub={debt !== undefined ? `≈ $${fmt(debt)}` : ''} />
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
               ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
+              // Round 8 (J3 H2 family): while governorOf or the Governor
+              // batch is in flight the route is unknown — a skeleton, never
+              // "No Governor". The value itself is readable once the reads
+              // return, so the error gate stays after the loading gate.
+              : govLoading || gvLoading ? <Skeleton className="h-7 w-24" />
               : t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
                 ? <span className="text-magenta">Floor {pct(a.floorICR)} · shield {pct(a.shieldICR)}</span>
                 : loading ? 'Loading policy…' : a?.policyError ? 'Unavailable' : a ? 'No policy on this account' : 'Policy not readable')
+              : govLoading || gvLoading ? 'Checking Governor…'
               : t.governor ? <span className="text-magenta">Trove → Governor → Payee</span> : 'Create a Governor to set a floor'} />
         </div>
         {/* Hero form / demo hero */}
@@ -196,9 +247,20 @@ export default function Home() {
             </>
           ) : (
             <>
-              <Row k="Plotted course" v={t.govError ? 'Unavailable' : t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
-              <Row k="Collateral" v={acctError ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
-              <Row k="Debt" v={acctError ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
+              {/* Round 8 (J3 H2): the Plotted-course row gates on gov-loading
+                  — a skeleton while governorOf is in flight, "Unavailable"
+                  on govError, never "No Governor yet" for an unknown
+                  Governor. */}
+              <Row k="Plotted course" v={govLoading ? <Skeleton className="h-4 w-32" /> : t.govError ? 'Unavailable' : t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
+              {/* Round 8 (J3 H2 + L7): the demo branch of these rows gates on
+                  `loading` with a skeleton; the connected branch did not, so
+                  both rows flashed "No trove" while core loaded
+                  (acctError is false while loading). Gate on t.loading with
+                  skeletons, mirroring the demo branch; a value that is
+                  still undefined once loading settles is "Unavailable" when
+                  the core read failed (transport OR a single slot). */}
+              <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : acctError || coreSlotUnknown ? 'Unavailable' : 'No trove'} />
+              <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : acctError || coreSlotUnknown ? 'Unavailable' : 'No trove'} />
               {/* MED-2 (round 6): the Governor batch is enabled: !!governor,
                   so on a governorOf failure (govError, governor undefined)
                   it NEVER runs — gvError stays false and floor/standby stay
@@ -207,10 +269,19 @@ export default function Home() {
                   both rows on govError || gvError (plus gvSlotError in
                   round 7: a reverted slot inside the batch is the same
                   unknown), matching the Spend route (Home:161) and Watch
-                  standby (Watch:139–140). */}
-              <Row k="Floor" v={t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
-              <Row k="Standby heal" v={t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
-              <Row k="Mezo nonce" v={acctError ? 'Unavailable' : t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
+                  standby (Watch:139–140).
+                  Round 8 (J3 M1): the same rows flash while the batch is
+                  merely in flight — gate on govLoading || gvLoading with a
+                  skeleton, never "Not configured" / "DISARMED" about a
+                  batch that has not answered yet. */}
+              <Row k="Floor" v={govLoading || gvLoading ? <Skeleton className="h-4 w-16" /> : t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Standby heal" v={govLoading || gvLoading ? <Skeleton className="h-4 w-32" /> : t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
+              {/* Round 8 (J3 H2 + L7): the nonce row flashed "Not connected"
+                  while the core batch loaded (t.nonce still undefined) and
+                  again when the getNonce slot reverted (core.isError stays
+                  false under allowFailure). Skeleton while loading;
+                  "Unavailable" on a failed core read or slot. */}
+              <Row k="Mezo nonce" v={loading ? <Skeleton className="h-4 w-16" /> : t.nonce !== undefined ? String(t.nonce) : acctError || coreSlotUnknown ? 'Unavailable' : 'Not connected'} />
             </>
           )}
         </aside>
@@ -240,8 +311,16 @@ export default function Home() {
                   trove status is unknown — the "No trove" empty must not
                   flash for a real zero-debt trove whose sys batch is still
                   in flight. It renders only once the status is known, or
-                  once the core read proves coll 0 (a real empty trove). */}
-              {!t.loading && !t.hasTrove && !t.error && (t.troveStatusKnown || t.coll === 0n) && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
+                  once the core read proves coll 0 (a real empty trove).
+                  Round 8 (J3 M5 + L6 + L7): noTroveKnown is the shared
+                  definition (status understood-and-not-active, or coll 0
+                  AND debt 0 — a coll-0 / debt>0 trove is liquidatable, not
+                  non-existent — and no failed core slot). A status value
+                  outside the known 0–4 enum renders "Unavailable"
+                  explicitly, never "No trove" and never a skeleton held
+                  forever on a settled unknown. */}
+              {!t.loading && !t.hasTrove && !t.error && statusOutOfRange && <Empty title="Trove status Unavailable">The trove status could not be understood, so this page cannot say whether a trove exists.</Empty>}
+              {!t.loading && !t.hasTrove && !t.error && !statusOutOfRange && noTroveKnown && <Empty title="No trove on this wallet">Open a trove at <a className="ink-link" href="https://testnet.mezo.org" target="_blank" rel="noreferrer">testnet.mezo.org</a>, then come back to set a floor.</Empty>}
               {t.error && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
               {own.data === null && !own.isLoading && !own.isError && (
                 <p className="text-sm leading-relaxed mt-6">You have no credit account yet. Open one in about two minutes. <Link className="pill" to="/app/open">Open a credit account →</Link></p>
@@ -255,12 +334,17 @@ export default function Home() {
                 <Card title="Wallet balances">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {([['BTC', t.balances.btc, 6], ['MUSD', t.balances.musd, 2], ['sMUSD', t.balances.smusd, 2], ['MEZO', t.balances.mezo, 2]] as const).map(([s, v, d]) => (
-                      <div key={s} className="flex items-center gap-3"><Token sym={s} size={32} /><div><div className="text-sm">{s}</div><div className="mono text-sm">{v === undefined ? 'Loading…' : fmt(v, 18, d)}</div></div></div>
+                      // Round 8 (J3 L7): a failed balance slot rendered
+                      // perpetual "Loading…" — the batch resolved, so the
+                      // slot will never answer. "unreadable" when a core
+                      // slot failed, "Loading…" only while the batch is
+                      // still in flight.
+                      <div key={s} className="flex items-center gap-3"><Token sym={s} size={32} /><div><div className="text-sm">{s}</div><div className="mono text-sm">{v === undefined ? (t.coreSlotError ? 'unreadable' : 'Loading…') : fmt(v, 18, d)}</div></div></div>
                     ))}
                   </div>
                 </Card>
               )}
-              {t.hasTrove && !t.governor && !t.govError && <CreateGovernor onDone={t.refetch} />}
+              {t.hasTrove && !t.governor && !t.govError && !govLoading && <CreateGovernor onDone={t.refetch} />}
             </NeedsWallet>
           )}
         </div>
@@ -284,14 +368,20 @@ export default function Home() {
             </Card>
           ) : (
             <Card title="Governor">
-              {t.govError
+              {/* Round 8 (J3 H2): while governorOf is in flight the Governor
+                  is unknown — a skeleton, never "None yet". */}
+              {govLoading ? (
+                <div className="space-y-3"><Skeleton className="h-4 w-full" label="Loading Governor" /><Skeleton className="h-4 w-2/3" label="Loading Governor" /></div>
+              ) : t.govError
                 ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
                 : t.governor
                 ? <div className="text-sm space-y-2"><a className="ink-link mono text-xs break-all" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">{t.governor}</a>
                     {/* Round 7 (LOW-6): a reverted Governor-batch slot leaves
                         frozen undefined — "active" would be a claim about an
-                        unknown batch. Gate on gvSlotError like gvError. */}
-                    <div>Status: {t.gvError || t.gvSlotError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
+                        unknown batch. Gate on gvSlotError like gvError.
+                        Round 8 (J3 M1): the same applies while the batch is
+                        merely in flight — "Checking…", never "active". */}
+                    <div>Status: {t.gvError || t.gvSlotError ? <b>Unavailable</b> : gvLoading ? <b>Checking…</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}</div></div>
                 : <p className="text-sm text-muted">None yet. Create one to set a floor and hand out bounded budgets.</p>}
             </Card>
           )}

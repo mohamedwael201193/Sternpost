@@ -73,6 +73,12 @@ async function renderTrove() {
           gvSlotError: t.gvSlotError,
           sysSlotError: t.sysSlotError,
           governor: t.governor ?? null,
+          loading: t.loading,
+          govLoading: t.govLoading,
+          gvLoading: t.gvLoading,
+          coreSlotError: t.coreSlotError,
+          recoverySlotError: t.recoverySlotError,
+          tcrSlotError: t.tcrSlotError,
         })}
       />
     )
@@ -97,6 +103,12 @@ async function renderTrove() {
     gvSlotError: boolean
     sysSlotError: boolean
     governor: string | null
+    loading: boolean
+    govLoading: boolean
+    gvLoading: boolean
+    coreSlotError: boolean
+    recoverySlotError: boolean
+    tcrSlotError: boolean
   }
 }
 
@@ -155,12 +167,12 @@ describe('useTrove hasTrove (L8)', () => {
     expect(t.icr).toBe(NO_DEBT_ICR)
   })
 
-  it('a future status 5 with debt 0 does not count', async () => {
+  it('a future status 5 with debt 0 does not count, and is NOT known (round 8: known means known-AND-understood — a status this code does not understand must never gate an empty into "No trove")', async () => {
     mockState.core = { data: coreData(50_000_000_000_000_000n, 0n, 0n), isLoading: false, isError: false }
     mockState.sys = { data: sysData(5), isLoading: false, isError: false }
     const t = await renderTrove()
     expect(t.hasTrove).toBe(false)
-    expect(t.troveStatusKnown).toBe(true)
+    expect(t.troveStatusKnown).toBe(false)
     expect(t.troveStatus).toBe(5)
     expect(t.icr).toBe(NO_DEBT_ICR)
   })
@@ -242,5 +254,80 @@ describe('useTrove per-slot failures (round 7, LOW-6)', () => {
     const t = await renderTrove()
     expect(t.gvSlotError).toBe(false)
     expect(t.sysSlotError).toBe(false)
+  })
+})
+
+describe('useTrove loading + per-slot flags (round 8)', () => {
+  it('gvLoading is true while the Governor batch is in flight, and loading covers it via gov/core only when those load', async () => {
+    mockState.gv = { data: undefined, isLoading: true, isError: false }
+    const t = await renderTrove()
+    expect(t.gvLoading).toBe(true)
+    expect(t.govLoading).toBe(false)
+    expect(t.loading).toBe(false)
+  })
+
+  it('govLoading is true while governorOf is in flight, and loading covers it', async () => {
+    mockState.gov = { data: undefined, isLoading: true, isError: false }
+    const t = await renderTrove()
+    expect(t.govLoading).toBe(true)
+    expect(t.loading).toBe(true)
+  })
+
+  it('a reverted core slot sets coreSlotError while coreError stays false', async () => {
+    mockState.core = {
+      data: [
+        { status: 'failure' },
+        { status: 'success', result: PRICE },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.coreSlotError).toBe(true)
+    expect(t.coreError).toBe(false)
+    expect(t.error).toBe(false)
+  })
+
+  it('a reverted checkRecoveryMode slot sets recoverySlotError only (not tcrSlotError)', async () => {
+    mockState.sys = {
+      data: [
+        { status: 'success', result: 1 },
+        { status: 'failure' },
+        { status: 'success', result: 2_320_369_306_368_630_978n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.recoverySlotError).toBe(true)
+    expect(t.tcrSlotError).toBe(false)
+    expect(t.sysSlotError).toBe(true)
+  })
+
+  it('a reverted getTCR slot sets tcrSlotError only (not recoverySlotError)', async () => {
+    mockState.sys = {
+      data: [
+        { status: 'success', result: 1 },
+        { status: 'success', result: false },
+        { status: 'failure' },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.tcrSlotError).toBe(true)
+    expect(t.recoverySlotError).toBe(false)
+    expect(t.sysSlotError).toBe(true)
+  })
+
+  it('no per-slot sys error when every sys slot succeeds', async () => {
+    const t = await renderTrove()
+    expect(t.recoverySlotError).toBe(false)
+    expect(t.tcrSlotError).toBe(false)
+    expect(t.coreSlotError).toBe(false)
   })
 })

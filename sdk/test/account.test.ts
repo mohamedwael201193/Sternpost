@@ -109,16 +109,34 @@ describe("readAccount (Multicall3 batch)", () => {
   });
 
   it("flags a policy-read error when owner() answers but every policy slot fails: version null, policyError true (not 'no policy')", async () => {
-    // base() already has owner() ok and all nine policy slots (v3 policy +
-    // v2 floor/shield/target/bounty/needed) failing — a v2 account's v3
-    // slots failing is expected, but NO policy source answering at all is a
-    // failed read, not an absent policy.
+    // base() already has owner() ok and all five policy sources (v3 policy()
+    // + v2 floor/shield/target/bounty) failing — a v2 account's v3 slots
+    // failing is expected, but NO policy source answering at all is a
+    // failed read, not an absent policy. (status/needed/yield are not
+    // policy sources, and the SDK correctly checks only the five.)
     const snap = await readAccount(mockClient(base()), ACCOUNT);
     expect(snap.version).toBeNull();
     expect(snap.owner).toBe(OWNER);
     expect(snap.policyError).toBe(true);
     expect(snap.floorICR).toBeNull();
     expect(snap.shieldICR).toBeNull();
+  });
+
+  it("flags a policy-read error when the version is established but one policy getter fails (partial policy failure, round 8 J3 L3)", async () => {
+    // v3 policy() fails but the v2 floorICR() getter succeeds: the version
+    // is v2, the floor reads — but shield/target/bounty are null, so the
+    // policy partially answered and policyError must be true ("Not
+    // configured" / "No policy" would be a lie about a half-read policy).
+    const slots = base();
+    slots[10] = ok(1_200_000_000_000_000_000n); // floorICR answers (v2)
+    // shieldICR / targetICR / bounty stay failed.
+    const snap = await readAccount(mockClient(slots), ACCOUNT);
+    expect(snap.version).toBe("v2");
+    expect(snap.floorICR).toBe(1_200_000_000_000_000_000n);
+    expect(snap.shieldICR).toBeNull();
+    expect(snap.targetICR).toBeNull();
+    expect(snap.bounty).toBeNull();
+    expect(snap.policyError).toBe(true);
   });
 
   it("reads a plain trove (not an account contract): version null, trove numbers still present", async () => {

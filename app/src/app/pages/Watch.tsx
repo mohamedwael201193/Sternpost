@@ -3,7 +3,7 @@ import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
 import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, icrPct as toPct, isNoDebtIcr, pct, demoIcrLabel } from '../../lib/icr'
+import { fmt, icrPct as toPct, isNoDebtIcr, pct, demoIcrLabel, troveStatusUnknown } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -24,22 +24,39 @@ export default function Watch() {
   const tcrPct = demo ? toPct(radar.data?.tcr) : toPct(t.tcr)
   const mainnetTcrPct = toPct(radarMainnet.data?.tcr)
   const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
-  // Round 7 (J1 L1): TanStack Query v5 RETAINS data on error — on a sys
-  // failure recoveryMode keeps its last good value, so the ON/OFF banners
-  // keyed off it would render stale claims beside (or instead of)
-  // "Unavailable". Derive the banner state from the error: unknown
-  // whenever the sys batch failed (transport OR a per-slot failure,
-  // LOW-6) — the ON/OFF banners only render for a KNOWN state.
-  const sysUnknown = !demo && (t.sysError || t.sysSlotError)
+  // Round 7 (J1 L1) + round 8 (J2 MED-1 / J3 M6): TanStack Query v5 RETAINS
+  // data on error — on a sys failure recoveryMode keeps its last good value,
+  // so the ON/OFF banners keyed off it would render stale claims beside (or
+  // instead of) "Unavailable". Derive the banner state from the error:
+  // unknown whenever the sys batch failed (transport OR a per-slot failure,
+  // LOW-6) — the ON/OFF banners only render for a KNOWN state. The round-7
+  // fix covered only the connected path (sysUnknown was `!demo && ...`):
+  // demo mode is the default landing view and the radar is a plain useQuery
+  // too, so a demo radar failure after a success retained ON/OFF the same
+  // way. In demo the radar IS the sys batch: unknown whenever it errors.
+  // Round 8 (J3 L2): on the connected path the banner gates on the
+  // RECOVERY slot only (recoverySlotError), never the any-slot OR — a
+  // getTCR-only failure must not hide a KNOWN Recovery state.
+  const sysUnknown = demo ? radar.isError : (t.sysError || t.recoverySlotError)
   const recoveryKnown = sysUnknown ? undefined : recoveryMode
   // Standby state is UNKNOWN until a wallet is connected, a Governor exists, and the read returns —
   // unknown must never render as "Disarmed".
   const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
   const standbyArmed = standbyKnown && !!t.standby?.[3]
-  const loading = demo ? acct.isLoading || radar.isLoading || (viewed.reconnecting && viewed.source !== 'param') : false
+  // Round 8 (J3 H1): `loading` was hardcoded `false` outside demo, so the
+  // connected ICR card rendered immediately with `icrVal === undefined ?
+  // 'No trove'` and the Standby card with `!standbyKnown ? 'Not connected'`
+  // on every initial load — no skeleton anywhere in the connected branch,
+  // while the TCR card IS gated on tcrLoading. The connected branch loads
+  // on t.loading (core + governorOf) exactly like the demo branch loads on
+  // its account/radar reads.
+  const loading = demo ? acct.isLoading || radar.isLoading || (viewed.reconnecting && viewed.source !== 'param') : t.loading
   // LOW-8: outside demo mode a failed useTrove core read shows the RPC
-  // error plate (t.error), never a silent 'No trove' empty.
-  const rpcError = demo ? acct.isError || radar.isError : t.error
+  // error plate (t.error), never a silent 'No trove' empty. Round 8 (J2
+  // LOW-3): the sys batch failed too — same plate, one line, mirroring
+  // Home (the failure is already surfaced via the Recovery banner + the
+  // ICR/TCR "Unavailable", so this is cosmetic).
+  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError || t.sysSlotError
   // L6: the demo numbers are not settled while wagmi reconnects — hold the
   // demo cards on skeletons (Close/Open hold their first card the same way).
   // An explicit ?account= preview is the user's choice and shows at once.
@@ -48,7 +65,10 @@ export default function Watch() {
   // system-health batch otherwise — gate it on the query that provides it,
   // not on the Radar's state in both modes.
   const tcrLoading = demo ? radar.isLoading : t.sysLoading
-  const tcrError = demo ? radar.isError : t.sysError
+  // Round 8 (J3 L2): a getTCR-only slot failure is a failed TCR read —
+  // "Unavailable", never "No data". (The old code gated only on the
+  // transport error, so a slot failure fell through to "No data".)
+  const tcrError = demo ? radar.isError : t.sysError || t.tcrSlotError
   const shield = a?.needed
   const shieldNeeded = !!shield && (shield.repayWanted > 0n || shield.collWanted > 0n)
   // MED-1 (round 4): "No debt" only for a known-active trove. In demo mode
@@ -65,7 +85,11 @@ export default function Watch() {
   // status-1-gated via demoHasTrove and is unchanged by this.
   const icrVal = demo ? a?.icr : t.icr
   const icrStatus = demo ? a?.troveStatus : t.troveStatus
-  const icrLabel = rpcError ? 'Unavailable'
+  // Round 8 (J3 L7): a failed core slot (e.g. fetchPrice) leaves icr
+  // undefined with no transport error — "No trove" would be a false claim
+  // about a trove whose numbers merely failed to read. Unavailable, like
+  // the RPC-error case.
+  const icrLabel = rpcError || (!demo && t.coreSlotError) ? 'Unavailable'
     : icrVal === undefined ? 'No trove'
     : isNoDebtIcr(icrVal) ? demoIcrLabel(icrVal, icrStatus)
     : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`
@@ -79,14 +103,15 @@ export default function Watch() {
           <b>Recovery Mode is ON</b> — Mezo system health (TCR) is below 150%, so draws are paused on-chain. Repay or add collateral to continue.
         </div>
       )}
-      {/* LOW-6 (round 6) + round 7 (J1 L1): the connected sys batch (getTroveStatus /
-          checkRecoveryMode / getTCR) failed, so recoveryMode is unknown —
-          say so explicitly, mirroring the Home banner (round 4, L-b).
-          Without this the page renders no Recovery banner at all and the
-          failure passes silently; the TCR card already shows
-          "Unavailable" on tcrError. The banner keys off recoveryKnown,
-          never retained recoveryMode: on a sys failure the ON/OFF banners
-          are suppressed even when they retain a last good value. */}
+      {/* LOW-6 (round 6) + round 7 (J1 L1) + round 8 (J3 L2): the connected
+          sys batch (getTroveStatus / checkRecoveryMode / getTCR) failed, so
+          recoveryMode is unknown — say so explicitly, mirroring the Home
+          banner (round 4, L-b). Without this the page renders no Recovery
+          banner at all and the failure passes silently; the TCR card shows
+          "Unavailable" on tcrError (transport OR a getTCR slot failure).
+          The banner keys off recoveryKnown, never retained recoveryMode: on
+          a sys failure the ON/OFF banners are suppressed even when they
+          retain a last good value. */}
       {sysUnknown && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
           Recovery Mode: <b>Unavailable</b> — the system-health read failed, so this page cannot say whether Recovery Mode is on.
@@ -128,7 +153,14 @@ export default function Watch() {
                       ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
                       : a?.needed == null
                         ? 'Shield need unknown — the needed() read failed, so this page cannot say whether the shield would fire.'
-                        : !hasTrove
+                        // Round 8 (J1 LOW-2): the reachable-today null case —
+                        // getTroveStatus failed but policy/needed() succeeded,
+                        // so the ICR card above says "Unavailable" while this
+                        // line would claim "No trove". An unreadable status
+                        // is "Unavailable", never a claim about the trove.
+                        : troveStatusUnknown(icrStatus)
+                          ? 'Unavailable — the trove status could not be read, so there may be no ICR to compare with the shield line.'
+                          : !hasTrove
                           ? 'No trove — there is no ICR to compare with the shield line, so shield() has nothing to defend.'
                           : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
                 </p>
@@ -136,8 +168,15 @@ export default function Watch() {
             )
           ) : (
             <>
-              <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-              <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+              {/* Round 8 (J3 H1): while the governorOf read is in flight
+                  (t.govLoading) or the Governor batch is (t.gvLoading),
+                  standby is unknown — a skeleton / "Checking…", never "Not
+                  connected" / "No Governor yet". (Core loading alone does
+                  not hide a standby value the Governor batch already
+                  returned.) Only a wallet that is genuinely not connected
+                  (loading false, isConnected false) reads "Not connected". */}
+              <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.govLoading || t.gvLoading ? <Skeleton className="h-9 w-28" label="Loading standby" /> : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+              <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? RPC_ERROR_TEXT : t.govLoading || t.gvLoading ? 'Checking standby state…' : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}
         </Card>
@@ -196,10 +235,21 @@ export default function Watch() {
             // as if it were a live read. Label the user's Governor, link
             // to it, and render "unknown" when the batch is unreadable.
             <>Policy on your Governor:{' '}
-              {t.governor
+              {/* Round 8 (J3 M3): a governorOf failure renders "unknown"
+                  here, never "no Governor yet" — the failure is already
+                  gated on the floor/defend below, and the Shield card must
+                  not contradict them. While governorOf is still in flight
+                  the Governor is unknown, not absent. The floor/defend
+                  values gate on gvLoading too: a retained floor is not a
+                  live read while the batch is in flight. */}
+              {t.govLoading
+                ? 'checking…'
+                : t.govError
+                ? 'unknown'
+                : t.governor
                 ? <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">{t.governor}</a>
                 : 'no Governor yet'}
-              {' '}— floor {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.floor ? pct(t.floor) : 'unknown'} · defend line {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.defend ? pct(t.defend) : 'unknown'}.</>
+              {' '}— floor {t.govError || t.gvError || t.gvSlotError || t.gvLoading ? 'unknown' : t.floor ? pct(t.floor) : 'unknown'} · defend line {t.govError || t.gvError || t.gvSlotError || t.gvLoading ? 'unknown' : t.defend ? pct(t.defend) : 'unknown'}.</>
           )}
         </p>
       </Card>

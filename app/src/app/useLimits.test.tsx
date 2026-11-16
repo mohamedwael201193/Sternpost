@@ -46,12 +46,12 @@ const TROVE = {
   debt: 1_000_000_000_000_000_000_000n,
 } as unknown as Trove
 
-async function renderLimits() {
+async function renderLimits(trove: Trove = TROVE) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   function Probe() {
-    const l = useLimits(TROVE, APP as `0x${string}`)
+    const l = useLimits(trove, APP as `0x${string}`)
     return (
       <div
         data-limits={JSON.stringify({
@@ -134,5 +134,13 @@ describe('useLimits (round 7, J2 F2 + J3 LOW-5)', () => {
     expect(l.safe).toBeNull()
     expect(l.feeError).toBe(true)
     expect(l.polError).toBe(true)
+  })
+
+  it('loaded is false when there is no floor room (no floor), even when the batch succeeds (round 8, J3 L4: loaded was true while safe was undefined)', async () => {
+    const l = await renderLimits({ ...TROVE, floor: undefined } as unknown as Trove)
+    expect(l.loaded).toBe(false)
+    expect(l.safe).toBeNull()
+    expect(l.feeError).toBe(false)
+    expect(l.polError).toBe(false)
   })
 })

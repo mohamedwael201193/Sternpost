@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useReadContract, useSignTypedData, useWriteContract } from 'wagmi'
 import { parseUnits, type Hex } from 'viem'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
+import { RPC_ERROR_TEXT } from '../useAccount'
 import { governorAbi } from '../../lib/abi'
 import { fmt } from '../../lib/icr'
 import { addCollTypes, burnMessage, deadlineIn, mezoDomain, repayTypes, DRAW_WINDOW_S } from '../../lib/sig'
@@ -36,7 +38,16 @@ export default function Revoke() {
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Revoke</h1><p className="text-muted mt-2 max-w-2xl">One transaction freezes your Governor and advances your Mezo signature nonce, so every signature you handed out stops working at once.</p></header>
       <NeedsWallet what="revoke signatures">
-        {!t.governor ? <Empty title="No Governor yet">Nothing to revoke.</Empty> : (
+        {/* Round 8 (J3 M3): Revoke had no error surface at all — no
+            RPC_ERROR_TEXT import, no t.error / t.govError check anywhere on
+            the page. A governorOf failure rendered the definitive "No
+            Governor yet / Nothing to revoke" for a user who may have a
+            Governor. An error is an RPC error plate, never a false empty.
+            Round 8 (J3 M2): while governorOf is in flight the Governor is
+            unknown — a skeleton, never the empty. */}
+        {t.error || t.govError ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+          : t.govLoading ? <Card><div className="space-y-3"><Skeleton className="h-4 w-full" label="Loading Governor" /><Skeleton className="h-4 w-2/3" label="Loading Governor" /></div></Card>
+          : !t.governor ? <Empty title="No Governor yet">Nothing to revoke.</Empty> : (
           <div className="grid lg:grid-cols-3 gap-6">
             <Card title="Burn the nonce">
               <p className="text-sm">You sign a 1-wei collateral top-up at your current nonce ({t.nonce?.toString() ?? '…'}). The Governor submits it, the nonce moves on, and old signatures become invalid.</p>
@@ -49,9 +60,11 @@ export default function Revoke() {
                   batch failed, frozen is undefined — rendering "active"
                   would claim the Governor is unfrozen about an unknown
                   batch. Gate on the Governor errors, mirroring Watch
-                  standby (:128-129). The Unfreeze button stays gated on
-                  !t.frozen, so an unknown state can never unfreeze. */}
-              <p className="text-sm">Status: {t.govError || t.gvError || t.gvSlotError ? <b>Unavailable</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}. While frozen, no app can draw.</p>
+                  standby (:139–140). The Unfreeze button stays gated on
+                  !t.frozen, so an unknown state can never unfreeze.
+                  Round 8 (J3 M1): the same applies while the batch is
+                  merely in flight — "Checking…", never "active". */}
+              <p className="text-sm">Status: {t.govError || t.gvError || t.gvSlotError ? <b>Unavailable</b> : t.gvLoading ? <b>Checking…</b> : t.frozen ? <b className="text-signal">frozen</b> : <b className="text-safe">active</b>}. While frozen, no app can draw.</p>
               <button className="pill-ghost mt-4" disabled={!t.frozen || busy(unfreeze)} onClick={async () => { await unfreeze.run(() => writeContractAsync({ address: t.governor!, abi: governorAbi, functionName: 'unfreeze' })); t.refetch() }}>Unfreeze</button>
               <TxStatus tx={unfreeze} />
             </Card>
@@ -60,8 +73,10 @@ export default function Revoke() {
               {/* Round 7 (MED-1): same gate as the Status line above — a
                   failed Governor batch leaves standby undefined, which must
                   render "unknown", never "not armed". The re-arm button
-                  stays gated on buffer.data. */}
-              <p className="text-xs text-muted mt-2">Buffer available: {buffer.data !== undefined ? `${fmt(buffer.data)} MUSD` : '—'} · standby {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.standby?.[3] ? 'live' : 'not armed'}</p>
+                  stays gated on buffer.data.
+                  Round 8 (J3 M1): the same applies while the batch is
+                  merely in flight — "checking…", never "not armed". */}
+              <p className="text-xs text-muted mt-2">Buffer available: {buffer.data !== undefined ? `${fmt(buffer.data)} MUSD` : '—'} · standby {t.govError || t.gvError || t.gvSlotError ? 'unknown' : t.gvLoading ? 'checking…' : t.standby?.[3] ? 'live' : 'not armed'}</p>
               <input aria-label="Re-arm amount" className="mono text-sm border border-ink/30 bg-paper px-3 py-2 w-full mt-3" placeholder="MUSD amount" value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" />
               <button className="pill mt-3" disabled={!amt || !buffer.data || busy(rearm)} onClick={doRearm}>Sign and re-arm</button>
               <TxStatus tx={rearm} />

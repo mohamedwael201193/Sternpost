@@ -42,5 +42,10 @@ export function useLimits(t: Trove, app?: Address) {
   const polError = pol?.status === 'failure' || rem?.status === 'failure'
   // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
   const safe = floorRoom !== undefined && q.data && !feeError && !polError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
-  return { loaded: !!q.data && !feeError && !polError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
+  // Round 8 (J3 L4): `loaded` was dead and misleading — no consumer reads
+  // it, and it was true while `safe` was undefined whenever `floorRoom`
+  // was missing. Gate it on floorRoom: loaded now means the limits read
+  // finished AND there is room to bound (a missing floor means no safe
+  // draw can be computed at all).
+  return { loaded: floorRoom !== undefined && !!q.data && !feeError && !polError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
 }

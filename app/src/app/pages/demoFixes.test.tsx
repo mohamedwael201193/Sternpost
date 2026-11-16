@@ -47,10 +47,14 @@ let feeState: { data?: bigint; isError: boolean } = { data: undefined, isError: 
 let policyState: { data?: unknown; isError: boolean } = { data: undefined, isError: false }
 // Round-7 LOW-9: the mocked walletsOf result for Pay — a failed read must
 // surface the RPC error, never a false "No spend wallets".
-let walletsState: { data?: unknown; isError: boolean } = { data: [SPEND_WALLET], isError: false }
+let walletsState: { data?: unknown; isError: boolean; isLoading?: boolean } = { data: [SPEND_WALLET], isError: false }
 // Round-7 LOW-9: the mocked useReadContracts batch error for Pay's
 // balance/agent reads — a failed batch is "unreadable", never "Loading…".
 let readsErrorState = false
+// Round-8 (J3 M4): the mocked useReadContracts batch loading flag for Pay's
+// balance/agent reads — while the batch loads the agent column is
+// "Loading…", never a false "no agent" or a 1970 expiry date.
+let readsLoadingState = false
 // Round-4 MED-2 (DrawHero): the mocked useLimits result; a safe suggest lets
 // the hero pre-fill an amount so wei > 0 and the preview actually runs.
 let limitsState: Record<string, unknown> = {}
@@ -96,7 +100,7 @@ vi.mock('wagmi', () => ({
   useAccount: () => walletState,
   usePublicClient: () => null,
   useReadContract: (a: any) => (a?.functionName === 'walletsOf' ? walletsState : a?.functionName === 'appPolicy' ? policyState : a?.functionName === 'previewDraw' ? previewState : a?.functionName === 'getBorrowingFee' ? feeState : { data: undefined }),
-  useReadContracts: () => ({ data: readsState, isError: readsErrorState }),
+  useReadContracts: () => ({ data: readsState, isError: readsErrorState, isLoading: readsLoadingState }),
   useWalletClient: () => ({ data: undefined }),
   useWriteContract: () => ({ writeContractAsync: vi.fn() }),
   useSignTypedData: () => ({ signTypedDataAsync: vi.fn() }),
@@ -120,7 +124,8 @@ vi.mock('../useTrove', () => ({
   TROVE_STATUS_LABEL: { 0: 'No trove', 1: 'Active', 2: 'Closed by owner', 3: 'Liquidated', 4: 'Closed by redemption' },
   useTrove: () => ({
     address: walletState.address, isConnected: walletState.isConnected, hasTrove: false, troveStatusKnown: true, governor: undefined,
-    loading: false, sysLoading: false, sysError: false, sysSlotError: false, error: false, coreError: false, govError: false, gvError: false, gvSlotError: false,
+    loading: false, govLoading: false, gvLoading: false, sysLoading: false, sysError: false, sysSlotError: false, recoverySlotError: false, tcrSlotError: false,
+    error: false, coreError: false, coreSlotError: false, govError: false, gvError: false, gvSlotError: false,
     balances: { btc: undefined, musd: undefined, smusd: undefined, mezo: undefined },
     ...troveState,
   }),
@@ -131,6 +136,7 @@ vi.mock('../api', () => ({ useApiList: () => ({ state: 'off', items: [] }), useS
 import Close from './Close'
 import Open from './Open'
 import Apps from './Apps'
+import Activity from './Activity'
 import Pay, { PayRow } from './Pay'
 import Draw from './Draw'
 import Home from './Home'
@@ -204,6 +210,7 @@ beforeEach(() => {
   policyState = { data: undefined, isError: false }
   walletsState = { data: [SPEND_WALLET], isError: false }
   readsErrorState = false
+  readsLoadingState = false
   limitsState = {}
   cleanup()
 })
@@ -1330,7 +1337,7 @@ describe('Round 7 — per-slot failures are visible to the gvError/sysError gate
     viewedState = { ...LIVE_VIEWED }
     troveState = {
       ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
-      error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true, recoveryMode: undefined,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true, recoverySlotError: true, recoveryMode: undefined,
     }
     const c = await renderPage(<Home />)
     expect(c.textContent).toContain('Recovery Mode')
@@ -1343,7 +1350,7 @@ describe('Round 7 — per-slot failures are visible to the gvError/sysError gate
     viewedState = { ...LIVE_VIEWED }
     troveState = {
       ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
-      error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true, recoveryMode: undefined,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true, recoverySlotError: true, recoveryMode: undefined,
     }
     const c = await renderPage(<Watch />)
     expect(c.textContent).toContain('Recovery Mode')
@@ -1559,5 +1566,477 @@ describe('Round 7 — hasTrove definition: unknown status holds, never flashes "
     troveState = { ...KNOWN_EMPTY_TROVE }
     const c = await renderPage(<Draw />)
     expect(c.textContent).toContain('Open one at testnet.mezo.org first')
+  })
+})
+
+describe('Round 8 — J3 H1: Watch (connected) never flashes "No trove" / "Not connected" while loading', () => {
+  it('ICR card shows a skeleton, never "No trove", while the core read loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { loading: true, govLoading: true, icr: undefined, coll: undefined, debt: undefined, hasTrove: false, troveStatus: undefined, troveStatusKnown: false, governor: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.querySelector('[aria-label="Loading ICR"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('Standby card shows a skeleton + "Checking…", never "Not connected", while the Governor batch loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, gvLoading: true, standby: undefined, frozen: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.querySelector('[aria-label="Loading standby"]')).not.toBeNull()
+    expect(c.textContent).toContain('Checking standby state…')
+    expect(c.textContent).not.toContain('Not connected')
+  })
+
+  it('Standby still says "Not connected" when the wallet is genuinely not connected', async () => {
+    walletState = { isConnected: false }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: undefined, standby: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Not connected')
+    expect(c.querySelector('[aria-label="Loading standby"]')).toBeNull()
+  })
+})
+
+describe('Round 8 — J3 H2: Home (connected) rows never flash "No trove" / "Not connected" while loading', () => {
+  it('Collateral/Debt rows + nonce row show skeletons, never "No trove" / "Not connected", while core loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, loading: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('No trove')
+    expect(c.textContent).not.toContain('Not connected')
+  })
+
+  it('Plotted-course + Governor card hold on skeletons and CreateGovernor stays hidden while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, hasTrove: true, govLoading: true, governor: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[aria-label="Loading Governor"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No Governor yet')
+    expect(c.textContent).not.toContain('None yet')
+    expect(c.textContent).not.toContain('Set your floor')
+    expect(c.textContent).toContain('Checking your trove…')
+  })
+
+  it('nonce row shows "Unavailable", never "Not connected", when the getNonce slot fails (coreSlotError)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, coreSlotError: true, nonce: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Not connected')
+    // Same batch failure leaves the Wallet balances "unreadable", never perpetual "Loading…".
+    expect(c.textContent).toContain('unreadable')
+  })
+})
+
+describe('Round 8 — J3 M1: Governor-batch LOADING gates (not just failure)', () => {
+  it('Home Floor/Standby show skeletons + Governor card "Checking…", never "Not configured" / "DISARMED" / "active", while the batch loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, gvLoading: true, floor: undefined, standby: undefined, frozen: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Checking…')
+    expect(c.textContent).not.toContain('Not configured')
+    expect(c.textContent).not.toContain('DISARMED')
+    expect(c.textContent).not.toContain('active')
+  })
+
+  it('Revoke Unfreeze/standby show "Checking…" / "checking…", never "active" / "not armed", while the batch loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, gvLoading: true, frozen: undefined, standby: undefined }
+    const c = await renderPage(<Revoke />)
+    expect(c.textContent).toContain('Checking…')
+    expect(c.textContent).toContain('checking…')
+    expect(c.textContent).not.toContain('active')
+    expect(c.textContent).not.toContain('not armed')
+  })
+})
+
+describe('Round 8 — J3 M2: "No Governor yet" empties hold while governorOf loads', () => {
+  const GOV_LOADING_TROVE = {
+    ...TROVE_NUMBERS, hasTrove: true, governor: undefined, govLoading: true,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+
+  it('Draw shows a skeleton, never "No Governor yet", while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...GOV_LOADING_TROVE }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('[aria-label="Loading Governor"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No Governor yet')
+  })
+
+  it('Apps shows a skeleton, never "No Governor yet", while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...GOV_LOADING_TROVE }
+    const c = await renderPageWithClient(<Apps />)
+    expect(c.querySelector('[aria-label="Loading Governor"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No Governor yet')
+  })
+
+  it('Revoke shows a skeleton, never "No Governor yet", while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...GOV_LOADING_TROVE }
+    const c = await renderPage(<Revoke />)
+    expect(c.querySelector('[aria-label="Loading Governor"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No Governor yet')
+    expect(c.textContent).not.toContain('Nothing to revoke')
+  })
+
+  it('DrawHero holds the CTA on "Checking your trove…", never "Set your floor below", while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...GOV_LOADING_TROVE }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Checking your trove…')
+    expect(c.textContent).not.toContain('Set your floor below')
+  })
+})
+
+describe('Round 8 — J3 M3: Revoke has an error surface; Watch Shield never says "no Governor yet" on govError', () => {
+  it('Revoke shows the RPC error plate, never "No Governor yet", when governorOf fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: undefined, hasTrove: true, error: true, govError: true }
+    const c = await renderPage(<Revoke />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('No Governor yet')
+    expect(c.textContent).not.toContain('Nothing to revoke')
+  })
+
+  it('Watch Shield says "unknown", never "no Governor yet", when governorOf fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: undefined, govError: true, error: true }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Policy on your Governor')
+    expect(c.textContent).toContain('unknown')
+    expect(c.textContent).not.toContain('no Governor yet')
+  })
+})
+
+describe('Round 8 — J3 M4: Pay loading states', () => {
+  it('shows a skeleton, never "No spend wallets", while walletsOf loads', async () => {
+    walletsState = { data: undefined, isError: false, isLoading: true }
+    const c = await renderPage(<Pay />)
+    expect(c.querySelector('[aria-label="Loading spend wallets"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No spend wallets')
+  })
+
+  it('agent column shows "Loading…", never "no agent" or a 1970 date, while the per-wallet batch loads', async () => {
+    readsState = []
+    readsLoadingState = true
+    const c = await renderPage(<Pay />)
+    expect(c.textContent).toContain('Loading…')
+    expect(c.textContent).not.toContain('no agent')
+    expect(c.textContent).not.toContain('1970')
+  })
+
+  it('agent column shows "Loading…", never a 1970 date, when the agent resolved but its expiry has not', async () => {
+    readsState = [{ result: 5_000_000_000_000_000_000_000n }, { result: AGENT }, {}]
+    readsLoadingState = false
+    const c = await renderPage(<Pay />)
+    expect(c.textContent).toContain('Loading…')
+    expect(c.textContent).not.toContain('1970')
+    expect(c.textContent).not.toContain('no agent')
+  })
+})
+
+describe('Round 8 — J3 M5 + J1 LOW-2: status 5 is "Unavailable", never "No trove"; Watch shield null-status line', () => {
+  const STATUS_5 = {
+    ...TROVE_NUMBERS, debt: 0n, icr: 2n ** 255n, troveStatus: 5, troveStatusKnown: false, hasTrove: false,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+
+  it('Draw shows "Unavailable", never "No trove", for a status-5 trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...STATUS_5 }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Trove status Unavailable')
+    expect(c.textContent).not.toContain('No trove')
+    expect(c.textContent).not.toContain('Open one at testnet.mezo.org first')
+  })
+
+  it('Home shows "Unavailable", never "No trove", for a status-5 trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...STATUS_5 }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Trove status Unavailable')
+    expect(c.textContent).not.toContain('No trove on this wallet')
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('DrawHero shows "Trove status Unavailable", never "Open a trove on Mezo first", for a status-5 trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...STATUS_5 }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Trove status Unavailable')
+    expect(c.textContent).not.toContain('Open a trove on Mezo first')
+    expect(c.textContent).not.toContain('Checking your trove…')
+  })
+
+  it('Watch shield line says "Unavailable — the trove status could not be read", never "No trove", when getTroveStatus failed but policy/needed() succeeded', async () => {
+    acctState = { data: { ...ZERO_DEBT_ACTIVE_SNAP, troveStatus: null }, isLoading: false, isError: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable — the trove status could not be read')
+    expect(c.textContent).not.toContain('No trove')
+  })
+})
+
+describe('Round 8 — J2 MED-1 + J3 M6: retained Recovery data never renders in DEMO mode', () => {
+  it('Home (demo): radar error with retained recoveryMode=true shows only "Unavailable", never the ON banner', async () => {
+    radarState = { data: { recoveryMode: true, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Recovery Mode')
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).toContain('system-health read failed')
+    expect(c.textContent).not.toContain('draws are paused on-chain')
+  })
+
+  it('Home (demo): radar error with retained recoveryMode=false shows only "Unavailable", never "Recovery Mode is off"', async () => {
+    radarState = { data: { recoveryMode: false, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).toContain('system-health read failed')
+    expect(c.textContent).not.toContain('Recovery Mode is off')
+  })
+
+  it('Watch (demo): radar error with retained recoveryMode=true shows only "Unavailable", never "Recovery Mode is ON"', async () => {
+    radarState = { data: { recoveryMode: true, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Recovery Mode is ON')
+  })
+
+  it('Watch (demo): radar error with retained recoveryMode=false shows only "Unavailable", never "Recovery Mode is off"', async () => {
+    radarState = { data: { recoveryMode: false, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Recovery Mode is off')
+  })
+
+  it('Close: radar error with retained recoveryMode=true shows only "Unavailable", never "ON — closeAccount() would revert"', async () => {
+    radarState = { data: { recoveryMode: true, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('Recovery Mode')
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('ON — closeAccount()')
+  })
+
+  it('Close: radar error with retained recoveryMode=false shows only "Unavailable", never "off"', async () => {
+    radarState = { data: { recoveryMode: false, tcr: 2_320_369_306_368_630_978n }, isLoading: false, isError: true }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('Recovery Mode')
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Recovery Mode off')
+  })
+})
+
+describe('Round 8 — J3 L2: per-slot sys flags — a getTCR-only failure hides nothing', () => {
+  const TCR_ONLY = {
+    ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true, tcrSlotError: true, recoverySlotError: false,
+    recoveryMode: true, tcr: undefined,
+  }
+
+  it('Home still shows the KNOWN Recovery ON banner when only the getTCR slot failed', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TCR_ONLY }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('below 150%')
+    expect(c.textContent).not.toContain('system-health read failed')
+  })
+
+  it('Watch shows TCR "Unavailable" AND the KNOWN Recovery ON banner when only the getTCR slot failed', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TCR_ONLY, recoveryMode: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Recovery Mode is off')
+    expect(c.textContent).not.toContain('system-health read failed')
+    // The TCR card reads "Unavailable" (slot failure), never "No data".
+    expect(c.textContent).toContain('Unavailable')
+  })
+})
+
+describe('Round 8 — J3 L4 + J2 LOW-4: limits unavailable signal + retained floor', () => {
+  it('DrawHero renders an explicit "limits unavailable" line when the fee read fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true }
+    limitsState = { feeError: true }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="limits-unavailable"]')).not.toBeNull()
+    expect(c.textContent).toContain('Draw limits unavailable')
+    expect(c.textContent).not.toContain('Max safe')
+  })
+
+  it('Draw renders no Max-safe chip and no gauge floor when the Governor batch failed but the floor is retained', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, gvError: true, floor: 2_500_000_000_000_000_000n }
+    limitsState = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).not.toContain('Max safe')
+    expect(c.textContent).not.toContain('Floor 250%')
+  })
+
+  it('DrawHero renders no retained floor marker when the Governor batch failed', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, gvError: true, floor: 2_500_000_000_000_000_000n }
+    limitsState = {}
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('floor 250%')
+    expect(c.textContent).not.toContain('Max safe')
+  })
+})
+
+describe('Round 8 — J3 L5: DrawHero never stalls on "Checking your trove…" when the core read failed', () => {
+  it('shows the RPC error in the hero, never "Checking your trove…"', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { error: true, coreError: true, govError: false, gvError: false, hasTrove: false, governor: undefined, coll: undefined, debt: undefined, icr: undefined, troveStatus: undefined, troveStatusKnown: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('Checking your trove…')
+  })
+})
+
+describe('Round 8 — J3 L6: coll 0 + debt > 0 is NOT "No trove"', () => {
+  const COLL0_DEBT = {
+    hasTrove: false, coll: 0n, debt: 100_000_000_000_000_000_000n,
+    price: 64_608_796_300_000_000_000_000n, icr: 0n,
+    troveStatus: 1, troveStatusKnown: true, governor: GOVERNOR,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+
+  it('Draw never renders "No trove" for a coll-0 / debt>0 trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...COLL0_DEBT }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).not.toContain('No trove')
+    expect(c.textContent).not.toContain('Open one at testnet.mezo.org first')
+  })
+
+  it('Home never renders "No trove" / "Open a trove" for a coll-0 / debt>0 trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...COLL0_DEBT }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('No trove')
+    expect(c.textContent).not.toContain('No trove on this wallet')
+    expect(c.textContent).not.toContain('Open a trove on Mezo first')
+    expect(c.textContent).toContain('Set your floor below')
+  })
+})
+
+describe('Round 8 — J3 L7: a core-slot failure never renders "No trove"', () => {
+  it('Home shows "Unavailable", never "No trove", when the getEntireDebtAndColl slot fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, coll: undefined, debt: undefined, icr: undefined, hasTrove: false, coreSlotError: true, troveStatus: 1, troveStatusKnown: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('Draw holds on a skeleton, never "No trove", when the core slot fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, coll: undefined, debt: undefined, icr: undefined, hasTrove: false, coreSlotError: true, troveStatus: 1, troveStatusKnown: true }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('[aria-label="Loading trove position"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No trove')
+  })
+})
+
+describe('Round 8 — J1 LOW-1: Draw surfaces a persistent sys failure instead of holding a skeleton forever', () => {
+  it('shows the RPC error plate, never the skeleton, when the sys batch persistently fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, troveStatusKnown: false, troveStatus: undefined,
+      coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      governor: undefined, error: false, coreError: false, govError: false, gvError: false, sysError: true, sysSlotError: false,
+    }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.querySelector('[aria-label="Loading trove position"]')).toBeNull()
+  })
+})
+
+describe('Round 8 — J1 LOW-3: Home Dial holds its skeleton while sys is in flight', () => {
+  it('shows the Dial skeleton, never "Unavailable", while the status is unknown and sys loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, troveStatusKnown: false, troveStatus: undefined,
+      coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      governor: undefined, sysLoading: true, error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[aria-label="Loading collateral ratio"]')).not.toBeNull()
+  })
+})
+
+describe('Round 8 — J3 L1: Draw gauges never aria-label "no trove" when icr is undefined', () => {
+  it('Current + After-draw gauges aria-label "Unavailable" when the price slot failed', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, price: undefined, icr: undefined }
+    limitsState = {}
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('figure[aria-label="Current: Unavailable"]')).not.toBeNull()
+    expect(c.querySelector('figure[aria-label="After draw: Unavailable"]')).not.toBeNull()
+    expect(c.querySelector('figure[aria-label="Current: no trove"]')).toBeNull()
+  })
+})
+
+describe('Round 8 — J2 LOW-6: Draw preview-returns-while-fee-loads shows the previewed number', () => {
+  it('Draw: once the preview returns, the previewed number shows even while the fee still loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, error: false, coreError: false, govError: false, gvError: false, sysError: false }
+    limitsState = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+    feeState = { data: undefined, isError: false }
+    previewState = { data: [true, '', 1_600_000_000_000_000_000n], isLoading: false, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('[data-testid="draw-after"]')?.textContent).toContain('160.0%')
+  })
+})
+
+describe('Round 8 — grep audit: Activity was the last ungated "No Governor yet" in app/src', () => {
+  it('shows a skeleton, never "No Governor yet", while governorOf loads', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, hasTrove: true, governor: undefined, govLoading: true }
+    const c = await renderPageWithClient(<Activity />)
+    expect(c.querySelector('[aria-label="Loading Governor"]')).not.toBeNull()
+    expect(c.textContent).not.toContain('No Governor yet')
+  })
+
+  it('shows the RPC error plate, never "No Governor yet", when governorOf fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...TROVE_NUMBERS, hasTrove: true, governor: undefined, govError: true, error: true }
+    const c = await renderPageWithClient(<Activity />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('No Governor yet')
   })
 })

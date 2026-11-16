@@ -61,15 +61,29 @@ export default function Draw() {
   // Round 7 (LOW-4): the After-draw gauge headlines the CURRENT ICR while
   // the adjacent number is blanked on a preview/fee error — needle, centre
   // text and aria-label all assert a number the page just said it does not
-  // know. Blank the gauge exactly when the After-draw number is blank
-  // (an amount entered and no projection), mirroring the number cell.
+  // know. Blank the gauge exactly when an amount is entered and no
+  // projection exists (at wei === 0n the number cell is "—" while the gauge
+  // correctly shows the current ICR — a zero draw leaves ICR unchanged —
+  // so the blanking rule is "amount entered, no projection", not "the
+  // number cell is blank").
   const afterBlank = wei > 0n && projected === undefined
   // Round 7 (hasTrove definition): hasTrove is false while the trove
   // status is unknown — the "No trove" empty must not flash for a real
   // zero-debt trove whose sys batch is still in flight. It renders only
   // once the status is known, or once the core read proves coll 0; until
   // then the page holds on a skeleton.
-  const noTroveKnown = !t.hasTrove && (t.troveStatusKnown || t.coll === 0n)
+  // Round 8 (J3 M5 + L6 + L7): noTroveKnown is the shared definition —
+  // the status is understood-and-not-active, or the core read proves coll 0
+  // AND debt 0 (a coll-0 / debt>0 trove is liquidatable, not non-existent),
+  // and no core slot failed. A status value outside the known 0–4 enum
+  // renders "Unavailable" explicitly (statusOutOfRange, below), never
+  // "No trove" and never a skeleton held forever on a settled unknown.
+  const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
+  const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
+  // Round 8 (J2 LOW-4): a retained floor after a Governor-batch failure
+  // must not drive the gauge floor marks — the floor is unknown, not the
+  // last good value.
+  const gaugeFloor = t.gvError || t.gvSlotError ? undefined : toPct(t.floor) ?? undefined
   const lim = useLimits(t, appAddr)
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const pick = (v: string) => { setTouched(true); setAmount(v) }
@@ -85,10 +99,27 @@ export default function Draw() {
       ) : <DemoDraw acct={acct} viewed={viewed} />) : (
       <NeedsWallet what="draw MUSD">
         {t.error ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
-          : !t.hasTrove ? (noTroveKnown
+          : !t.hasTrove ? (statusOutOfRange
+            ? <Empty title="Trove status Unavailable">The trove status could not be understood, so this page cannot say whether a trove exists.</Empty>
+            : noTroveKnown
             ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
+            // Round 8 (J1 LOW-1): Draw never read t.sysError / t.sysSlotError
+            // (zero references in the file) — a zero-debt trove whose sys
+            // batch persistently fails held on the skeleton FOREVER, never
+            // reached the draw form and never saw an error (at parent
+            // a83da1d the same state rendered the form, so this is a
+            // failure-mode regression from round 7). A persistent sys
+            // failure is an RPC error plate, mirroring DemoDraw's
+            // acct.isError branch. Transient failures self-heal on the
+            // 15 s refetch; debt>0 troves are unaffected (hasTrove true).
+            : (t.sysError || t.sysSlotError)
+            ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
             : <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading trove position" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>)
-          : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty> : (
+          : !t.governor ? (t.govLoading
+            // Round 8 (J3 M2): while governorOf is in flight the Governor
+            // is unknown — a skeleton, never "No Governor yet".
+            ? <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading Governor" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>
+            : <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty>) : (
           <div className="grid lg:grid-cols-[1fr_420px] gap-8">
             <Card>
               <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
@@ -98,9 +129,17 @@ export default function Draw() {
                     zero-debt trove whose sys batch is pending/failed would
                     claim "No debt". Gate the label on troveStatus === 1,
                     mirroring the Home Dial (round 5); unknown renders
-                    "Unavailable" instead. */}
-                <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
-                <div className="text-center"><Gauge value={afterBlank ? null : toPct(t.icr)} projected={afterBlank ? undefined : toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={afterBlank ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+                    "Unavailable" instead.
+                    Round 8 (J3 L1): a debt>0 trove with the fetchPrice slot
+                    failed has t.icr undefined — the Current gauge value is
+                    null with an undefined emptyLabel, so the centre text is
+                    "—" but the aria-label is "Current: no trove" (the Gauge
+                    default). Pass an explicit "Unavailable" emptyLabel
+                    whenever icr is undefined; never rely on the default.
+                    The floor marks use gaugeFloor (undefined on a failed
+                    Governor batch — a retained floor is not a live one). */}
+                <div className="text-center"><Gauge value={toPct(t.icr)} floor={gaugeFloor} size={250} label="Current" emptyLabel={t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+                <div className="text-center"><Gauge value={afterBlank ? null : toPct(t.icr)} projected={afterBlank ? undefined : toPct(projected)} floor={gaugeFloor} size={250} label="After draw" emptyLabel={afterBlank || t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
               </div>
               <div className="grid grid-cols-2 text-center mt-4">
                 <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</div></div>

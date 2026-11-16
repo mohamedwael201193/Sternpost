@@ -63,7 +63,7 @@ export default function Pay() {
  * A live button needs an explicit `demo={false}` opt-out (see Pay above).
  */
 function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
-  const { data: wallets, isError: walletsError } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
+  const { data: wallets, isError: walletsError, isLoading: walletsLoading } = useReadContract({ address: STERNPOST.factory, abi: factoryAbi, functionName: 'walletsOf', args: [owner], query: { enabled: !!STERNPOST.factory } })
   const list = (wallets ?? []) as Address[]
   const reads = useReadContracts({
     allowFailure: true,
@@ -77,7 +77,10 @@ function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
   // Round 7 (LOW-9): a failed walletsOf read is an error, never "No spend
   // wallets" — the user may already have wallets. A failed balance/agent
   // slot is "unreadable", never perpetual "Loading…" or a false "no agent".
+  // Round 8 (J3 M4): while walletsOf is still in flight the list is empty
+  // — a skeleton, never the "No spend wallets" empty.
   if (walletsError) return <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+  if (walletsLoading) return <div className="space-y-3"><Skeleton className="h-4 w-full" label="Loading spend wallets" /><Skeleton className="h-4 w-2/3" label="Loading spend wallets" /></div>
   if (!list.length) return <Empty title="No spend wallets">Create one from the SDK with factory.createSpendWallet(agent, expiry), then draw into it.</Empty>
   return (
     <Card title="Spend wallets">
@@ -89,7 +92,14 @@ function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
           <div key={w} className="py-3 border-t border-ink/15 grid sm:grid-cols-3 gap-2 text-sm items-center">
             <a className="ink-link mono text-xs" href={addrUrl(w)} target="_blank" rel="noreferrer">{w.slice(0, 10)}…{w.slice(-4)}</a>
             <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : reads.isError || bal?.status === 'failure' ? 'unreadable' : 'Loading…'}</b> MUSD</span>
-            <span className="text-xs">{agentUnreadable ? 'agent unreadable' : !a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
+            {/* Round 8 (J3 M4): the balance column gates on loading; the
+                agent column had no equivalent branch — while the per-wallet
+                batch loads, `agent` is undefined and the column flashed "no
+                agent", and if `agent` resolved one tick before
+                `agentExpiry`, `exp?.result ?? 0n` rendered new Date(0) —
+                1/1/1970. Gate on reads.isLoading ("Loading…") and render the
+                expiry date only when exp.result is defined. */}
+            <span className="text-xs">{reads.isLoading ? 'Loading…' : agentUnreadable ? 'agent unreadable' : !a || a === zeroAddress ? 'no agent' : exp?.result !== undefined ? <>agent {a.slice(0, 8)}… until {new Date(Number(exp.result as bigint) * 1000).toLocaleDateString()}</> : 'Loading…'}</span>
             <PayRow wallet={w} agent={a} demo={demo} />
           </div>
         )
