@@ -87,6 +87,23 @@ export function troveStatusUnknown(status: number | null | undefined): boolean {
   return status === null || status === undefined || status < 0 || status > 4
 }
 
+/** True when a trove status value is outside the known 0–4 enum (a future status this code does not understand) — it settled, but it is UNKNOWN, never "no trove". */
+export function statusOutOfRange(status: number | null | undefined): boolean {
+  return status !== undefined && status !== null && (status < 0 || status > 4)
+}
+
+/**
+ * Shared "no trove is KNOWN" definition (round 9 — J1 LOW-1 / J2 LOW-2 /
+ * J3 L5): the status is understood-and-not-active, or the core read proves
+ * coll 0 AND debt 0. A coll-0 / debt>0 trove is liquidatable, not
+ * non-existent, and a failed core slot is the same unknown — both keep
+ * this false. Single-sourced here so Home, Draw and DrawHero cannot drift
+ * apart; useTrove returns the value, and the render sites read it off `t`.
+ */
+export function noTroveKnown(t: { hasTrove: boolean; coreSlotError: boolean; troveStatusKnown: boolean; troveStatus?: number; coll?: bigint; debt?: bigint }): boolean {
+  return !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
+}
+
 /** Short status word for the demo/preview account lines (Close/Open/ProveIt): 'active' for 1, 'Unavailable' for an unknown status, 'not active' for a known non-active status (0/2/3/4). */
 export function troveStatusText(status: number | null | undefined): string {
   if (status === 1) return 'active'

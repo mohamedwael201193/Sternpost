@@ -41,11 +41,18 @@ export function useLimits(t: Trove, app?: Address) {
   // q.data is truthy when all three slots failed.
   const polError = pol?.status === 'failure' || rem?.status === 'failure'
   // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
-  const safe = floorRoom !== undefined && q.data && !feeError && !polError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
+  // Round 9 (J3 M3): the batch refetches every 15 s and TanStack RETAINS
+  // q.data on a failed refetch — without the !q.isError gate, `safe` kept
+  // computing from stale policy/fee data and the "Max safe" chip + prefill
+  // kept rendering as live after the read died. A failed batch fails the
+  // safe draw (the on-chain previewDraw gate still rules); `isError` is
+  // returned so Limits can say so explicitly.
+  const safe = floorRoom !== undefined && q.data && !q.isError && !feeError && !polError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
   // Round 8 (J3 L4): `loaded` was dead and misleading — no consumer reads
   // it, and it was true while `safe` was undefined whenever `floorRoom`
   // was missing. Gate it on floorRoom: loaded now means the limits read
   // finished AND there is room to bound (a missing floor means no safe
-  // draw can be computed at all).
-  return { loaded: floorRoom !== undefined && !!q.data && !feeError && !polError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
+  // draw can be computed at all). Round 9 (J3 M3): a failed batch is not
+  // loaded, even with retained data.
+  return { loaded: floorRoom !== undefined && !!q.data && !q.isError && !feeError && !polError, isError: q.isError, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, polError, safe }
 }

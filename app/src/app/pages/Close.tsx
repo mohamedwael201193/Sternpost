@@ -118,8 +118,8 @@ function ClosePosition({ address, title, badge, readOnlyNote }: { address: Addre
           {/* MED-1 (round 4): pct() says "No debt" for any zero-debt ICR —
               never pair "not active" with "No debt": a known non-active
               trove reads "No trove", an unreadable status "Unavailable". */}
-          <div>Trove <b>{troveStatusText(a.troveStatus)}</b> · ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
-          <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'Unavailable'}</b></div>
+          <div>Trove <b>{troveStatusText(a.troveStatus)}</b> · ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{a.balances.musd !== null ? `${fmt(a.balances.musd)} MUSD` : 'unknown'}</b></div>
+          <div>Recovery Mode <b>{recovery === true ? 'ON — closeAccount() would revert' : recovery === false ? 'off' : 'Unavailable'}</b> · system health (TCR) <b className="mono">{radar.isError || !radar.data ? 'Unavailable' : pct(radar.data.tcr, 1)}</b></div>
           {radar.isError && <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>}
           <p className="text-muted">
             {a.troveStatus === 1

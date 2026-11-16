@@ -169,6 +169,16 @@ describe("readAccount (Multicall3 batch)", () => {
     expect(snap.balances.btc).toBeNull();
   });
 
+  it("a failed MUSD/sMUSD balance slot is null (unreadable), never a silent 0 (round 9, J2 LOW-7)", async () => {
+    const slots = base();
+    slots[3] = fail; // MUSD balanceOf reverts
+    slots[4] = fail; // sMUSD balanceOf reverts
+    const snap = await readAccount(mockClient(slots), ACCOUNT);
+    expect(snap.balances.musd).toBeNull();
+    expect(snap.balances.smusd).toBeNull();
+    expect(snap.balances.btc).toBe(0n);
+  });
+
   it("reads against the deployed Mezo addresses by default", async () => {
     const client = mockClient(base());
     await readAccount(client, ACCOUNT);

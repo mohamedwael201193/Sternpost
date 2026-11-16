@@ -6,7 +6,7 @@ import { Gauge } from '../../ui/Gauge'
 import { Skeleton } from '../../ui/Skeleton'
 import { BtcSignNote, Card, ConnectButton, Empty, NeedsWallet, TxStatus, useIsBtcAccount } from '../kit'
 import { useTrove } from '../useTrove'
-import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '../useAccount'
+import { RPC_ERROR_TEXT, SLOT_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '../useAccount'
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
@@ -67,19 +67,11 @@ export default function Draw() {
   // so the blanking rule is "amount entered, no projection", not "the
   // number cell is blank").
   const afterBlank = wei > 0n && projected === undefined
-  // Round 7 (hasTrove definition): hasTrove is false while the trove
-  // status is unknown — the "No trove" empty must not flash for a real
-  // zero-debt trove whose sys batch is still in flight. It renders only
-  // once the status is known, or once the core read proves coll 0; until
-  // then the page holds on a skeleton.
-  // Round 8 (J3 M5 + L6 + L7): noTroveKnown is the shared definition —
-  // the status is understood-and-not-active, or the core read proves coll 0
-  // AND debt 0 (a coll-0 / debt>0 trove is liquidatable, not non-existent),
-  // and no core slot failed. A status value outside the known 0–4 enum
-  // renders "Unavailable" explicitly (statusOutOfRange, below), never
-  // "No trove" and never a skeleton held forever on a settled unknown.
-  const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
-  const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
+  // Round 9 (J1 LOW-1 / J2 LOW-2 / J3 L5): noTroveKnown and
+  // statusOutOfRange are computed once in useTrove (lib/icr.ts) and read
+  // off `t` — the three inline copies are gone.
+  const statusOutOfRange = t.statusOutOfRange
+  const noTroveKnown = t.noTroveKnown
   // Round 8 (J2 LOW-4): a retained floor after a Governor-batch failure
   // must not drive the gauge floor marks — the floor is unknown, not the
   // last good value.
@@ -87,6 +79,46 @@ export default function Draw() {
   const lim = useLimits(t, appAddr)
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const pick = (v: string) => { setTouched(true); setAmount(v) }
+  // Round 9 (J1 MED-1 / J3 H1): the draw form is hoisted out of the
+  // !hasTrove ternary so a KNOWN-active trove (troveStatus === 1) reaches
+  // it even when hasTrove is false — a coll-0 / debt>0 trove is active and
+  // liquidatable, and the old structure could only show it a skeleton.
+  const position = !t.governor ? (t.govLoading
+    // Round 8 (J3 M2): while governorOf is in flight the Governor
+    // is unknown — a skeleton, never "No Governor yet".
+    ? <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading Governor" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>
+    : <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty>) : (
+  <div className="grid lg:grid-cols-[1fr_420px] gap-8">
+    <Card>
+      <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
+        {/* LOW-3 (round 6): the own-account gauges must not assert
+            "No debt" on an unknown status — hasTrove counts
+            statusNum === undefined as active (useTrove), so a
+            zero-debt trove whose sys batch is pending/failed would
+            claim "No debt". Gate the label on troveStatus === 1,
+            mirroring the Home Dial (round 5); unknown renders
+            "Unavailable" instead.
+            Round 8 (J3 L1): a debt>0 trove with the fetchPrice slot
+            failed has t.icr undefined — the Current gauge value is
+            null with an undefined emptyLabel, so the centre text is
+            "—" but the aria-label is "Current: no trove" (the Gauge
+            default). Pass an explicit "Unavailable" emptyLabel
+            whenever icr is undefined; never rely on the default.
+            The floor marks use gaugeFloor (undefined on a failed
+            Governor batch — a retained floor is not a live one). */}
+        <div className="text-center"><Gauge value={toPct(t.icr)} floor={gaugeFloor} size={250} label="Current" emptyLabel={t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+        <div className="text-center"><Gauge value={afterBlank ? null : toPct(t.icr)} projected={afterBlank ? undefined : toPct(projected)} floor={gaugeFloor} size={250} label="After draw" emptyLabel={afterBlank || t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+      </div>
+      <div className="grid grid-cols-2 text-center mt-4">
+        <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</div></div>
+        <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`} data-testid="draw-after">{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
+      </div>
+      <Verdict ok={ok} reason={reason} loading={preview.isLoading} error={previewError} />
+    </Card>
+    <Sign t={t} wei={wei} app={appAddr} payee={payeeAddr} ok={!!ok}
+      limits={<Limits t={t} l={lim} onPick={pick} />} fields={{ amount, setAmount: pick, app, setApp, payee, setPayee }} />
+  </div>
+  )
 
   return (
     <div className="space-y-8">
@@ -112,45 +144,22 @@ export default function Draw() {
             // failure is an RPC error plate, mirroring DemoDraw's
             // acct.isError branch. Transient failures self-heal on the
             // 15 s refetch; debt>0 troves are unaffected (hasTrove true).
-            : (t.sysError || t.sysSlotError)
-            ? <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+            // Round 9 (J1 MED-2 / J3 H1): the identical logic applies to a
+            // persistent CORE-slot failure — a reverted getEntireDebtAndColl
+            // or fetchPrice slot leaves coll/debt undefined with no
+            // transport error, so without this branch the page held the
+            // skeleton forever. The plate copy is slot-aware (J2 LOW-3):
+            // only a transport error claims the RPC could not be reached.
+            : (t.sysError || t.sysSlotError || t.coreSlotError)
+            ? <p className="text-sm text-signal" role="alert">{t.sysError ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
+            // Round 9 (J1 MED-1 / J3 H1): a known-active status reaches the
+            // draw form even when hasTrove is false (coll-0 / debt>0) —
+            // the skeleton below is only for a status that is still
+            // genuinely unknown.
+            : t.troveStatus === 1
+            ? position
             : <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading trove position" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>)
-          : !t.governor ? (t.govLoading
-            // Round 8 (J3 M2): while governorOf is in flight the Governor
-            // is unknown — a skeleton, never "No Governor yet".
-            ? <Card><div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading Governor" /><Skeleton className="h-4 w-2/3 mx-auto" /></div></Card>
-            : <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty>) : (
-          <div className="grid lg:grid-cols-[1fr_420px] gap-8">
-            <Card>
-              <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
-                {/* LOW-3 (round 6): the own-account gauges must not assert
-                    "No debt" on an unknown status — hasTrove counts
-                    statusNum === undefined as active (useTrove), so a
-                    zero-debt trove whose sys batch is pending/failed would
-                    claim "No debt". Gate the label on troveStatus === 1,
-                    mirroring the Home Dial (round 5); unknown renders
-                    "Unavailable" instead.
-                    Round 8 (J3 L1): a debt>0 trove with the fetchPrice slot
-                    failed has t.icr undefined — the Current gauge value is
-                    null with an undefined emptyLabel, so the centre text is
-                    "—" but the aria-label is "Current: no trove" (the Gauge
-                    default). Pass an explicit "Unavailable" emptyLabel
-                    whenever icr is undefined; never rely on the default.
-                    The floor marks use gaugeFloor (undefined on a failed
-                    Governor batch — a retained floor is not a live one). */}
-                <div className="text-center"><Gauge value={toPct(t.icr)} floor={gaugeFloor} size={250} label="Current" emptyLabel={t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
-                <div className="text-center"><Gauge value={afterBlank ? null : toPct(t.icr)} projected={afterBlank ? undefined : toPct(projected)} floor={gaugeFloor} size={250} label="After draw" emptyLabel={afterBlank || t.icr === undefined ? 'Unavailable' : isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
-              </div>
-              <div className="grid grid-cols-2 text-center mt-4">
-                <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</div></div>
-                <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`} data-testid="draw-after">{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
-              </div>
-              <Verdict ok={ok} reason={reason} loading={preview.isLoading} error={previewError} />
-            </Card>
-            <Sign t={t} wei={wei} app={appAddr} payee={payeeAddr} ok={!!ok}
-              limits={<Limits t={t} l={lim} onPick={pick} />} fields={{ amount, setAmount: pick, app, setApp, payee, setPayee }} />
-          </div>
-        )}
+          : position}
       </NeedsWallet>
       )}
     </div>
@@ -248,6 +257,10 @@ function Sign({ t, wei, app, payee, ok, fields, limits }: {
         <label className="caps text-[11px] text-muted">Payee<input className={f} value={fields.payee} onChange={(e) => fields.setPayee(e.target.value.trim())} placeholder="this wallet" /></label>
         <p className="text-xs text-muted">Two signatures: first a standby repay for the next nonce (valid 24 h), then a withdraw that can only pay your Governor. Mezo's withdraw window is short by design: the Governor rejects deadlines more than 120 s ahead, and this app uses {String(DRAW_WINDOW_S)} s counted from chain time at the moment you sign it. {self ? 'The draw transaction is sent right after the second signature; confirm it in your wallet before the countdown ends.' : 'Hand the bundle to the app before the countdown ends.'}</p>
         <button className="pill self-start" disabled={!ok || t.nonce === undefined || busy || btcAcct} onClick={go}>{self ? 'Sign & send' : 'Sign for app'}</button>
+        {/* Round 9 (J3 L7): a disabled Sign button with no explanation is a
+            dead end — when the nonce is unreadable because a core slot
+            failed, say so: the form cannot be signed until the read heals. */}
+        {t.nonce === undefined && t.coreSlotError && <p className="text-sm text-signal" role="alert">Nonce unreadable — cannot sign</p>}
         {step && <p className="text-sm" role="status">{step}</p>}
         {deadline && !sent && !err && <Countdown deadline={deadline} skew={skew} />}
         {err && <p className="text-sm text-signal" role="alert">{err}</p>}

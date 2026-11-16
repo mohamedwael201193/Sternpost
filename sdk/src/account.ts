@@ -84,15 +84,15 @@ export type AccountSnapshot = {
    */
   policyError: boolean;
   /**
-   * Token balances. BTC is `null` when the balance read itself fails — a failed
-   * read must render as "unreadable" in the UI, never as 0 (a 0 BTC balance on
-   * a funded account would be a fake fact). MUSD/sMUSD fall back to 0n only
-   * when their in-batch slot fails: `balanceOf` never reverts for a real
-   * address on the live tokens, and a dead transport throws first (the core
-   * TroveManager/PriceFeed slots above throw), so a failed slot here is
-   * unreachable in practice — it would mean the token contract itself broke.
+   * Token balances. Every balance is `null` when its read itself fails — a
+   * failed read must render as "unreadable" in the UI, never as 0 (a 0 MUSD
+   * balance on a funded account would be a fake fact). BTC was already
+   * nullable for exactly this reason; MUSD/sMUSD used to fall back to 0n
+   * on the theory that `balanceOf` never reverts for a real address — but
+   * the type then promised a number the read had not produced, and the UI
+   * could never render "unreadable" for them (round 9, J2 LOW-7).
    */
-  balances: { btc: bigint | null; musd: bigint; smusd: bigint };
+  balances: { btc: bigint | null; musd: bigint | null; smusd: bigint | null };
 };
 
 type CallResult<T> = { status: "success"; result: T } | { status: "failure"; error?: unknown };
@@ -221,6 +221,6 @@ export async function readAccount(
     needed,
     pendingYield: ok(yieldR) ?? null,
     policyError,
-    balances: { btc, musd: ok(musdR) ?? 0n, smusd: ok(smusdR) ?? 0n },
+    balances: { btc, musd: ok(musdR) ?? null, smusd: ok(smusdR) ?? null },
   };
 }

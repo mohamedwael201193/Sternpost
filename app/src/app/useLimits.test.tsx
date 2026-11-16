@@ -56,6 +56,7 @@ async function renderLimits(trove: Trove = TROVE) {
       <div
         data-limits={JSON.stringify({
           loaded: l.loaded,
+          isError: l.isError,
           authorized: l.authorized,
           feeError: l.feeError,
           polError: l.polError,
@@ -74,6 +75,7 @@ async function renderLimits(trove: Trove = TROVE) {
   container.remove()
   return out as {
     loaded: boolean
+    isError: boolean
     authorized: boolean
     feeError: boolean
     polError: boolean
@@ -142,5 +144,13 @@ describe('useLimits (round 7, J2 F2 + J3 LOW-5)', () => {
     expect(l.safe).toBeNull()
     expect(l.feeError).toBe(false)
     expect(l.polError).toBe(false)
+  })
+
+  it('a failed batch (transport error) with retained data fails the safe draw: safe is null, loaded is false, isError is true (round 9, J3 M3 — TanStack retains q.data on a failed refetch, so safe must gate on isError, not just on the per-slot flags)', async () => {
+    mockState.q = { data: [okPol(), okRem(), okFee()], isLoading: false, isError: true }
+    const l = await renderLimits()
+    expect(l.isError).toBe(true)
+    expect(l.safe).toBeNull()
+    expect(l.loaded).toBe(false)
   })
 })

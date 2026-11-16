@@ -86,7 +86,7 @@ function ProveIt() {
                 never "not active". The lab account is live status 1 with
                 debt, so this only changes the failure-mode rendering. */}
             <p>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{troveStatusText(a.troveStatus)}</b></p>
-            <p>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'} · MUSD on the account {fmt(a.balances.musd)} · sMUSD {fmt(a.balances.smusd)}</p>
+            <p>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'} · MUSD on the account {a.balances.musd !== null ? fmt(a.balances.musd) : 'unknown'} · sMUSD {a.balances.smusd !== null ? fmt(a.balances.smusd) : 'unknown'}</p>
             <p className="text-muted">Read live from Mezo testnet with one Multicall3 batch; refreshes every 12 s. The same demo account demo mode shows on every app page — unless you preview another account with ?account=, which shows that account instead.</p>
           </div>
         ) : <p className="text-sm text-muted">Account not readable.</p>}

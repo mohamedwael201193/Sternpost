@@ -15,8 +15,10 @@ export function Limits({ t, l, onPick }: { t: Trove; l: ReturnType<typeof useLim
   // failed, the chip and pre-fill silently vanish — render an explicit
   // "unavailable" signal instead of nothing. (No error: the Governor may
   // simply be missing or the app unauthorized — still null, as before.)
+  // Round 9 (J3 M3): a failed batch (transport error, retained data) is
+  // the same unknown — the line surfaces it.
   if (!l.safe) {
-    if (l.feeError || l.polError) return <p data-testid="limits-unavailable" className="mt-2 text-xs text-signal">Draw limits unavailable — the policy or fee read failed, so the max safe draw is unknown.</p>
+    if (l.feeError || l.polError || l.isError) return <p data-testid="limits-unavailable" className="mt-2 text-xs text-signal">Draw limits unavailable — the policy or fee read failed, so the max safe draw is unknown.</p>
     return null
   }
   const { max, limit } = l.safe

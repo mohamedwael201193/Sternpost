@@ -1,8 +1,9 @@
 import { useAccount, useBalance, useReadContract, useReadContracts } from 'wagmi'
+import { keepPreviousData } from '@tanstack/react-query'
 import { zeroAddress, type Address } from 'viem'
 import { MEZO, STERNPOST } from '../lib/chain'
 import { erc20Abi, factoryAbi, governorAbi, priceFeedAbi, signaturesAbi, troveManagerAbi } from '../lib/abi'
-import { icr, troveTotals } from '../lib/icr'
+import { icr, noTroveKnown, statusOutOfRange, troveTotals } from '../lib/icr'
 
 const live = { refetchInterval: 15_000 }
 
@@ -68,6 +69,12 @@ export function useTrove() {
   const p = price?.result as bigint | undefined
   // Trove status + system health need the live price, so they run as a second batch once it is known.
   // A closed trove reports a max ICR (zero debt), so the status must be read explicitly (C7).
+  // Round 9 (J3 M1): the query key carries the live price (the args are
+  // part of the key), so every price tick used to mint a NEW key with no
+  // cached data — sys.isLoading true, troveStatusKnown false — and the Dial,
+  // the TCR card and the Recovery banner all flashed on every price move.
+  // keepPreviousData holds the last sys batch across a price-tick refetch,
+  // so the gates below see retained (one-tick-stale) data, never a flash.
   const sys = useReadContracts({
     allowFailure: true,
     contracts: [
@@ -75,7 +82,7 @@ export function useTrove() {
       { address: MEZO.troveManager, abi: troveManagerExtraAbi, functionName: 'checkRecoveryMode', args: [p as bigint] },
       { address: MEZO.troveManager, abi: troveManagerExtraAbi, functionName: 'getTCR', args: [p as bigint] },
     ],
-    query: { enabled: enabled && p !== undefined, ...live },
+    query: { enabled: enabled && p !== undefined, placeholderData: keepPreviousData, ...live },
   })
   const [troveStatus, recoveryMode, tcr] = sys.data ?? []
   const statusNum = troveStatus?.result as number | undefined
@@ -135,14 +142,27 @@ export function useTrove() {
   return {
     address, isConnected, governor, hasTrove, troveStatusKnown,
     coll, debt, price: p,
-    // ICR is a function of coll/debt/price, not of the status read: a
-    // zero-debt trove whose status is unknown still has ICR 2**255, and
-    // the render sites translate it via demoIcrLabel (unknown status ->
-    // "Unavailable") instead of via an undefined ICR ("No trove"). Gating
-    // icr on hasTrove would reintroduce the false-inactive flash the
-    // definition change removes.
-    icr: coll !== undefined && debt !== undefined && p && coll > 0n ? icr(coll, p, debt) : undefined,
+    // Round 9 (J2 HIGH-1 / J3 H2 — the headline defect): the ICR of a
+    // coll-0 / debt>0 trove is genuinely 0 (icr(0, p, debt) = 0n), and the
+    // round-8 render code already expects it — but the old `coll > 0n`
+    // guard never called icr() for coll 0, so the connected path yielded
+    // undefined and every "0%" render was fictional (the Dial fell through
+    // to its default "No trove", Draw to a skeleton). Allow coll 0 whenever
+    // debt > 0; coll-0/debt-0 stays undefined (a never-opened trove has no
+    // ICR — useTrove.test.tsx:185 locks that in). The ICR still does not
+    // depend on the status read: a zero-debt trove whose status is unknown
+    // keeps ICR 2**255, and the render sites translate it via demoIcrLabel
+    // (unknown status -> "Unavailable") instead of via an undefined ICR
+    // ("No trove"). Gating icr on hasTrove would reintroduce the
+    // false-inactive flash the definition change removes.
+    icr: coll !== undefined && debt !== undefined && p && (coll > 0n || debt > 0n) ? icr(coll, p, debt) : undefined,
     troveStatus: statusNum,
+    // Round 9 (J1 LOW-1 / J2 LOW-2 / J3 L5): noTroveKnown and
+    // statusOutOfRange are computed once, here, from the shared helpers in
+    // lib/icr.ts — Home, Draw and DrawHero read them off `t` instead of
+    // each inlining the formula.
+    noTroveKnown: noTroveKnown({ hasTrove, coreSlotError, troveStatusKnown, troveStatus: statusNum, coll, debt }),
+    statusOutOfRange: statusOutOfRange(statusNum),
     recoveryMode: recoveryMode?.result as boolean | undefined,
     tcr: tcr?.result as bigint | undefined,
     floor: floor?.result as bigint | undefined,
@@ -151,6 +171,8 @@ export function useTrove() {
     standby: standby?.result as readonly [bigint, bigint, bigint, boolean] | undefined,
     nonce: nonce?.result as bigint | undefined,
     balances: { btc: btc.data?.value, musd: musd?.result as bigint | undefined, smusd: smusd?.result as bigint | undefined, mezo: mezo?.result as bigint | undefined },
+    /** Round 9 (J3 L4): the BTC balance comes from the independent useBalance read, not the core batch — a failed getNonce slot must not render BTC "unreadable" while it is merely pending, and a failed BTC read must not render perpetual "Loading…". The Wallet balances gate BTC on this, the other three on coreSlotError. */
+    btcError: btc.isError,
     loading: core.isLoading || gov.isLoading,
     /** The governorOf read alone is still in flight (round 8, J3 M2): Governor rows gate on this — a debt>0 trove whose core read already returned must not flash "No Governor yet" while governorOf is pending. */
     govLoading: gov.isLoading,

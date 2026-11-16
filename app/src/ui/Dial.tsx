@@ -11,7 +11,11 @@ const arc = (a0: number, a1: number, r: number) => {
 /** Chartroom collateral-ratio dial: hairline bezel, magenta health arc, spring needle, floor mark. Percentages in. */
 export function Dial({ value, floor, size = 260, emptyLabel = 'No trove' }: { value: number | null; floor?: number; size?: number; emptyLabel?: string }) {
   const reduce = useReducedMotion()
-  const healthy = value != null && (floor == null || value >= floor + 20)
+  // Round 9 (J1 MED-4): never call a sub-liquidation value healthy — with
+  // no Governor there is no floor, so the old `floor == null` arm labelled
+  // a 0% ICR (a liquidatable trove) "Healthy". Healthy requires the ratio
+  // to clear the 110% liquidation line AND sit 20 points above the floor.
+  const healthy = value != null && value >= 110 && (floor == null || value >= floor + 20)
   // Labelled empty states (plan §6.3): never a bare "—" where a number belongs.
   const state = value == null ? '' : floor != null && value < floor ? 'Below floor' : healthy ? 'Healthy' : 'Near floor'
   return (

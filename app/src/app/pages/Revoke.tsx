@@ -59,8 +59,8 @@ export default function Revoke() {
               {/* Round 7 (MED-1): with a Governor present but the Governor
                   batch failed, frozen is undefined — rendering "active"
                   would claim the Governor is unfrozen about an unknown
-                  batch. Gate on the Governor errors, mirroring Watch
-                  standby (:139–140). The Unfreeze button stays gated on
+                  batch. Gate on the Governor errors, mirroring the Watch
+                  standby card. The Unfreeze button stays gated on
                   !t.frozen, so an unknown state can never unfreeze.
                   Round 8 (J3 M1): the same applies while the batch is
                   merely in flight — "Checking…", never "active". */}

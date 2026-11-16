@@ -66,6 +66,9 @@ async function renderTrove() {
           troveStatusKnown: t.troveStatusKnown,
           troveStatus: t.troveStatus ?? null,
           icr: t.icr?.toString() ?? null,
+          noTroveKnown: t.noTroveKnown,
+          statusOutOfRange: t.statusOutOfRange,
+          btcError: t.btcError,
           error: t.error,
           coreError: t.coreError,
           govError: t.govError,
@@ -96,6 +99,9 @@ async function renderTrove() {
     troveStatusKnown: boolean
     troveStatus: number | null
     icr: string | null
+    noTroveKnown: boolean
+    statusOutOfRange: boolean
+    btcError: boolean
     error: boolean
     coreError: boolean
     govError: boolean
@@ -183,6 +189,51 @@ describe('useTrove hasTrove (L8)', () => {
     const t = await renderTrove()
     expect(t.hasTrove).toBe(false)
     expect(t.icr).toBeNull()
+  })
+
+  it('a coll-0 / debt>0 trove does NOT count as a trove, but its ICR is genuinely 0 through the REAL hook (round 9, J2 HIGH-1 / J3 H2: the hook used to emit undefined here, so every "0%" render downstream was fictional)', async () => {
+    mockState.core = { data: coreData(0n, 100_000_000_000_000_000_000n, 0n), isLoading: false, isError: false }
+    mockState.sys = { data: sysData(1), isLoading: false, isError: false }
+    const t = await renderTrove()
+    expect(t.icr).toBe('0')
+    expect(t.hasTrove).toBe(false)
+    expect(t.troveStatusKnown).toBe(true)
+    expect(t.troveStatus).toBe(1)
+    expect(t.noTroveKnown).toBe(false)
+  })
+
+  it('noTroveKnown is true for a known non-active status, false for an unknown status, false for a future status, and false while a core slot failed (round 9, J1 LOW-1 / J2 LOW-2 / J3 L5 — the shared definition, returned by the hook)', async () => {
+    // Known non-active (status 0, coll 0 / debt 0): known empty.
+    mockState.core = { data: coreData(0n, 0n, 0n), isLoading: false, isError: false }
+    mockState.sys = { data: sysData(0), isLoading: false, isError: false }
+    expect((await renderTrove()).noTroveKnown).toBe(true)
+    // Unknown status (sys in flight) with a NON-empty core read: not known.
+    // (A coll-0/debt-0 core read proves the trove empty on its own, so that
+    // case stays known even while sys is in flight — the second arm of the
+    // definition is status-independent by design.)
+    mockState.core = { data: coreData(50_000_000_000_000_000n, 2_016_156_232_562_500_000_000n, 52_322_888_132_253_551n), isLoading: false, isError: false }
+    mockState.sys = { data: undefined, isLoading: true, isError: false }
+    expect((await renderTrove()).noTroveKnown).toBe(false)
+    // Future status 5 with a non-empty core read: settled but not
+    // understood — not known.
+    mockState.sys = { data: sysData(5), isLoading: false, isError: false }
+    expect((await renderTrove()).noTroveKnown).toBe(false)
+    expect((await renderTrove()).statusOutOfRange).toBe(true)
+    // Core slot failed (getEntireDebtAndColl reverted, status known 0): not known.
+    mockState.sys = { data: sysData(0), isLoading: false, isError: false }
+    mockState.core = {
+      data: [
+        { status: 'failure' },
+        { status: 'success', result: PRICE },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+        { status: 'success', result: 0n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    expect((await renderTrove()).noTroveKnown).toBe(false)
   })
 })
 

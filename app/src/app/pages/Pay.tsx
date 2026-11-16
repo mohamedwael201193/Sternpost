@@ -98,8 +98,10 @@ function Wallets({ owner, demo = true }: { owner: Address; demo?: boolean }) {
                 agent", and if `agent` resolved one tick before
                 `agentExpiry`, `exp?.result ?? 0n` rendered new Date(0) —
                 1/1/1970. Gate on reads.isLoading ("Loading…") and render the
-                expiry date only when exp.result is defined. */}
-            <span className="text-xs">{reads.isLoading ? 'Loading…' : agentUnreadable ? 'agent unreadable' : !a || a === zeroAddress ? 'no agent' : exp?.result !== undefined ? <>agent {a.slice(0, 8)}… until {new Date(Number(exp.result as bigint) * 1000).toLocaleDateString()}</> : 'Loading…'}</span>
+                expiry date only when exp.result is defined. Round 9 (J3 L3):
+                a failed batch is "agent unreadable", never a false "no
+                agent" — the balance column already gates on reads.isError. */}
+            <span className="text-xs">{reads.isLoading ? 'Loading…' : reads.isError ? 'agent unreadable' : agentUnreadable ? 'agent unreadable' : !a || a === zeroAddress ? 'no agent' : exp?.result !== undefined ? <>agent {a.slice(0, 8)}… until {new Date(Number(exp.result as bigint) * 1000).toLocaleDateString()}</> : 'Loading…'}</span>
             <PayRow wallet={w} agent={a} demo={demo} />
           </div>
         )

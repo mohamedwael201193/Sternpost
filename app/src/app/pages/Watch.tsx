@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Card } from '../kit'
 import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
-import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
+import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, SLOT_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
 import { fmt, icrPct as toPct, isNoDebtIcr, pct, demoIcrLabel, troveStatusUnknown } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -55,8 +55,14 @@ export default function Watch() {
   // error plate (t.error), never a silent 'No trove' empty. Round 8 (J2
   // LOW-3): the sys batch failed too — same plate, one line, mirroring
   // Home (the failure is already surfaced via the Recovery banner + the
-  // ICR/TCR "Unavailable", so this is cosmetic).
-  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError || t.sysSlotError
+  // ICR/TCR "Unavailable", so this is cosmetic). Round 9 (J2 LOW-3,
+  // DECIDED + J3 L6): the plate stays for slot failures — a
+  // getTroveStatus-only failure has no other surface — but the copy must
+  // not claim the RPC could not be reached when it answered and one view
+  // reverted (slot-only failures get SLOT_ERROR_TEXT, pinned by the L2
+  // tests); a core-slot failure shows the plate too, mirroring Home.
+  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError || t.sysSlotError || t.coreSlotError
+  const transportError = demo ? acct.isError || radar.isError : t.error || t.sysError
   // L6: the demo numbers are not settled while wagmi reconnects — hold the
   // demo cards on skeletons (Close/Open hold their first card the same way).
   // An explicit ?account= preview is the user's choice and shows at once.
@@ -88,15 +94,26 @@ export default function Watch() {
   // Round 8 (J3 L7): a failed core slot (e.g. fetchPrice) leaves icr
   // undefined with no transport error — "No trove" would be a false claim
   // about a trove whose numbers merely failed to read. Unavailable, like
-  // the RPC-error case.
-  const icrLabel = rpcError || (!demo && t.coreSlotError) ? 'Unavailable'
-    : icrVal === undefined ? 'No trove'
+  // the RPC-error case. Round 9 (J1 MED-3): icrLabel gates on the ICR's
+  // OWN inputs only — the old `rpcError` gate blanked this card on a
+  // TCR-only sys slot failure, where the ICR is fully computable. The top
+  // plate keeps sysSlotError (J2 LOW-3); this card does not. Round 9
+  // (J3 L5): the undefined-ICR branch routes through the shared
+  // noTroveKnown — an unknown status is "Unavailable", never "No trove".
+  const icrError = demo ? acct.isError : t.error
+  const icrLabel = icrError || (!demo && t.coreSlotError) ? 'Unavailable'
+    : icrVal === undefined ? (!demo && !t.noTroveKnown ? 'Unavailable' : 'No trove')
     : isNoDebtIcr(icrVal) ? demoIcrLabel(icrVal, icrStatus)
     : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`
+  // Round 9 (J3 M2): the ICR card holds its skeleton while the sys batch
+  // is still in flight and the status is unknown — core resolves a round
+  // trip before sys, so without this a zero-debt trove flashed
+  // "Unavailable" on first load. Mirrors the Home Dial hold.
+  const icrLoading = loading || (!demo && !t.troveStatusKnown && t.sysLoading)
   return (
     <div className="space-y-8">
       {rpcError && (
-        <div className="plate rounded-xl p-4 text-sm" role="alert">{RPC_ERROR_TEXT}</div>
+        <div className="plate rounded-xl p-4 text-sm" role="alert">{transportError ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</div>
       )}
       {recoveryKnown === true && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
@@ -125,7 +142,7 @@ export default function Watch() {
 
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
-          {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
+          {icrLoading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
             <div className="display text-3xl">{icrLabel}</div>
           )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
@@ -174,8 +191,10 @@ export default function Watch() {
                   connected" / "No Governor yet". (Core loading alone does
                   not hide a standby value the Governor batch already
                   returned.) Only a wallet that is genuinely not connected
-                  (loading false, isConnected false) reads "Not connected". */}
-              <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.govLoading || t.gvLoading ? <Skeleton className="h-9 w-28" label="Loading standby" /> : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+                  (loading false, isConnected false) reads "Not connected".
+                  Round 9 (J1 LOW-6): a CONNECTED wallet with no Governor
+                  reads "No Governor" — "Not connected" is false for it. */}
+              <div className="display text-3xl">{t.govError || t.gvError || t.gvSlotError ? 'Unavailable' : t.govLoading || t.gvLoading ? <Skeleton className="h-9 w-28" label="Loading standby" /> : !standbyKnown ? (t.isConnected ? 'No Governor' : 'Not connected') : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
               <p className="text-xs text-muted mt-1">{t.govError || t.gvError || t.gvSlotError ? RPC_ERROR_TEXT : t.govLoading || t.gvLoading ? 'Checking standby state…' : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}

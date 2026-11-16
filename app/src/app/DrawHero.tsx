@@ -7,7 +7,7 @@ import { Token } from '../ui/Token'
 import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
 import { useDrawSend, type Route } from './useDrawSend'
-import { RPC_ERROR_TEXT } from './useAccount'
+import { RPC_ERROR_TEXT, SLOT_ERROR_TEXT } from './useAccount'
 import { EnableRoutes, useRoutesReady } from './EnableRoutes'
 import { useLimits } from './useLimits'
 import { Limits } from './Limits'
@@ -66,18 +66,15 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const blocked = route !== 'keep' && !routesReady.ready
   const btcAcct = useIsBtcAccount()
   const ready = t.isConnected && t.hasTrove && !!t.governor
-  // Round 7 (hasTrove definition): hasTrove is false while the trove
-  // status is unknown — the "Open a trove" link would flash for a real
-  // zero-debt trove whose sys batch is still in flight. Hold on a disabled
-  // button until the status is known or the core read proves coll 0.
-  // Round 8 (J3 L5 + M5 + L6 + M2): a failed core read is NOT "checking"
-  // (it failed — the hero must surface the error, below), a status value
-  // outside the known 0–4 enum is NOT "checking" either (it settled
-  // unknown — the hero must say "Unavailable", below), and a coll-0 /
-  // debt>0 trove is NOT "no trove" (liquidatable, not non-existent).
-  const statusOutOfRange = t.troveStatus !== undefined && (t.troveStatus < 0 || t.troveStatus > 4)
-  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n && !statusOutOfRange && !t.error
-  const noTroveKnown = !t.hasTrove && !t.coreSlotError && ((t.troveStatusKnown && t.troveStatus !== 1) || (t.coll === 0n && t.debt === 0n))
+  // Round 9 (J1 LOW-1 / J2 LOW-2 / J3 L5): both values are computed once
+  // in useTrove (lib/icr.ts) and read off `t` — the three inline copies
+  // are gone. Round 9 (J1 LOW-4 / J3 H3): a settled core-SLOT failure is
+  // not "checking" either — troveUnknown excludes coreSlotError, and the
+  // CTA branch below surfaces the RPC plate for it, exactly like a
+  // transport error.
+  const statusOutOfRange = t.statusOutOfRange
+  const troveUnknown = !t.hasTrove && !t.troveStatusKnown && t.coll !== 0n && !statusOutOfRange && !t.error && !t.coreSlotError
+  const noTroveKnown = t.noTroveKnown
   // Round 8 (J3 M2): while governorOf is in flight a debt>0 trove has no
   // Governor yet — hold the "Set your floor below" CTA, which would lead
   // to Draw's false "No Governor yet" empty.
@@ -108,7 +105,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
           <span className="caps text-[12px]">MUSD</span>
         </div>
         <div id="hero-avail" className="flex justify-between mt-2 text-xs">
-          <span className="text-muted" data-testid="hero-fee">Mezo fee {feeError ? 'unavailable' : fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD${lim.feeError ? '' : ` (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)`}` : '—'}</span>
+          <span className="text-muted" data-testid="hero-fee">Mezo fee {feeError ? 'unavailable' : fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD${!lim.loaded ? '' : ` (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)`}` : '—'}</span>
           {over > 0n && <span className="text-signal" data-testid="hero-over">{fmt(over)} MUSD over max safe</span>}
         </div>
         <Limits t={t} l={lim} onPick={(v) => { setTouched(true); setAmount(v) }} />
@@ -130,7 +127,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
               is pending/failed would claim "No debt" on the Home page
               itself. Gate the no-debt label on troveStatus === 1, mirroring
               the Home Dial (round 5). */}
-          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{!t.icr ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
+          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
           <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${floorForDisplay && after < floorForDisplay ? ' · below floor' : ''}` : '—'}</dd>
           <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>
@@ -169,8 +166,14 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             // Round 8 (J3 L5): a failed core/Governor read surfaces the RPC
             // error in the hero itself — "Checking your trove…" would stall
             // forever on a read that already failed (Home's top plate
-            // explains, the hero itself never did).
-            : !ready ? (t.error ? <p role="alert" className="text-sm text-signal flex-1">{RPC_ERROR_TEXT}</p>
+            // explains, the hero itself never did). Round 9 (J1 LOW-4 /
+            // J3 H3): the same applies to a settled core-SLOT failure —
+            // under allowFailure a reverted price slot leaves t.error
+            // false and the status unknown, so without this the hero
+            // claimed "Checking your trove…" forever. The plate copy is
+            // slot-aware (J2 LOW-3): only a transport error claims the
+            // RPC could not be reached.
+            : !ready ? (t.error || t.coreSlotError ? <p role="alert" className="text-sm text-signal flex-1">{t.error ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
               : troveUnknown || govUnknown
               ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Checking your trove…</button>
               : statusOutOfRange
