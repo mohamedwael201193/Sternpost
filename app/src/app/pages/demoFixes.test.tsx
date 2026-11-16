@@ -35,6 +35,13 @@ let ownState: { data?: `0x${string}` | null; isLoading: boolean; isError: boolea
 let logsState: { data?: { rows: any[]; fromBlock: bigint }; isLoading: boolean; isError: boolean } = { isLoading: false, isError: false }
 let readsState: { result: unknown }[] = []
 let troveState: Record<string, unknown> = {}
+// Round-4 MED-2: the mocked previewDraw result, mutable so a test can flip a
+// success into a stale-data error and re-render (TanStack Query v5 retains
+// data on error — the component must not trust it).
+let previewState: { data?: unknown; isLoading: boolean; isError: boolean } = { data: undefined, isLoading: false, isError: false }
+// Round-4 MED-2 (DrawHero): the mocked useLimits result; a safe suggest lets
+// the hero pre-fill an amount so wei > 0 and the preview actually runs.
+let limitsState: Record<string, unknown> = {}
 
 const GOVERNOR = '0x1bF45cFE654a397F4FF3B33bC1b157c88Ee71F38' as const
 
@@ -58,10 +65,25 @@ const SNAP = {
   balances: { btc: 0n, musd: 2_433_090_442_561_969_120n, smusd: 61_554_608_535_561_276_641n },
 }
 
+/** Round-4 MED-1 fixtures: zero-debt snapshots whose ICR is 2**255 purely
+ *  from debt === 0 — status 0 (never opened) and status 2 (closed by owner)
+ *  must NEVER render "No debt"; status 1 with debt 0 still must. */
+const NO_TROVE_SNAP = {
+  ...SNAP, troveStatus: 0, coll: 0n, debt: 0n, icr: 2n ** 255n,
+  floorICR: null, shieldICR: null, targetICR: null, bounty: null, needed: null,
+}
+const CLOSED_SNAP = {
+  ...SNAP, troveStatus: 2, coll: 10_000_000_000_000_000n, debt: 0n, icr: 2n ** 255n,
+  needed: { icr: 2n ** 255n, repayWanted: 0n, collWanted: 0n, reason: null },
+}
+const ZERO_DEBT_ACTIVE_SNAP = {
+  ...SNAP, troveStatus: 1, coll: 50_000_000_000_000_000n, debt: 0n, icr: 2n ** 255n,
+}
+
 vi.mock('wagmi', () => ({
   useAccount: () => walletState,
   usePublicClient: () => null,
-  useReadContract: (a: any) => (a?.functionName === 'walletsOf' ? { data: [SPEND_WALLET] } : { data: undefined }),
+  useReadContract: (a: any) => (a?.functionName === 'walletsOf' ? { data: [SPEND_WALLET] } : a?.functionName === 'previewDraw' ? previewState : { data: undefined }),
   useReadContracts: () => ({ data: readsState }),
   useWalletClient: () => ({ data: undefined }),
   useWriteContract: () => ({ writeContractAsync: vi.fn() }),
@@ -91,7 +113,7 @@ vi.mock('../useTrove', () => ({
     ...troveState,
   }),
 }))
-vi.mock('../useLimits', () => ({ useLimits: () => ({}) }))
+vi.mock('../useLimits', () => ({ useLimits: () => limitsState }))
 vi.mock('../api', () => ({ useApiList: () => ({ state: 'off', items: [] }), useSetRequestStatus: () => vi.fn() }))
 
 import Close from './Close'
@@ -116,6 +138,20 @@ async function renderPage(el: ReactElement) {
   return container as HTMLDivElement
 }
 
+/** Re-render into the SAME root (round-4 MED-2): flip a mocked hook result and
+ *  assert the page reacts, e.g. a previewDraw success turning into an error. */
+async function rerenderPage(el: ReactElement) {
+  await act(async () => {
+    root!.render(<MemoryRouter>{el}</MemoryRouter>)
+  })
+  await act(async () => { await new Promise((r) => setTimeout(r, 10)) })
+  return container as HTMLDivElement
+}
+
+function signButton(c: HTMLDivElement) {
+  return Array.from(c.querySelectorAll('button')).find((b) => b.textContent?.includes('Sign & send')) as HTMLButtonElement | undefined
+}
+
 function cleanup() {
   if (root) act(() => root!.unmount())
   root = null
@@ -132,6 +168,8 @@ beforeEach(() => {
   logsState = { isLoading: false, isError: false }
   readsState = []
   troveState = {}
+  previewState = { data: undefined, isLoading: false, isError: false }
+  limitsState = {}
   cleanup()
 })
 
@@ -489,5 +527,181 @@ describe('J1 LOW-2 — Watch never asserts "None" without a needed() read', () =
     const c = await renderPage(<Watch />)
     expect(c.textContent).toContain('Unknown')
     expect(c.textContent).not.toContain('NothingToDo')
+  })
+})
+
+describe('MED-1 (round 4) — demo "No debt" is gated on troveStatus === 1', () => {
+  it('Home shows "No trove", never "No debt", for a ?account= preview of a never-opened address (status 0)', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Home shows "No trove", never "No debt", for a closed preview (status 2, coll > 0 / debt 0)', async () => {
+    acctState = { data: CLOSED_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).toContain('Closed by owner')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Home still shows "No debt" for the zero-debt ACTIVE demo trove (status 1)', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('No debt')
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('Watch ICR card shows "No trove", never "No debt", for a status-0 preview', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Watch never asserts "No debt is above the shield line" for a closed trove with a policy', async () => {
+    acctState = { data: CLOSED_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+    expect(c.textContent).not.toContain('is above the shield line')
+  })
+
+  it('Watch still shows "No debt" for the zero-debt ACTIVE demo trove (status 1)', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('No debt')
+  })
+
+  it('Draw "Now" shows "No trove", never "No debt", for a status-0 preview', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Draw "Now" still shows "No debt" for the zero-debt ACTIVE demo trove (status 1)', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('No debt')
+  })
+
+  it('Close shows "ICR No trove", never "No debt", for a status-0 preview', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Close shows "ICR No trove", never "No debt", for a closed preview (status 2)', async () => {
+    acctState = { data: CLOSED_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Close />)
+    expect(c.textContent).toContain('not active')
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+})
+
+describe('MED-2 (round 4) — previewDraw error is fail-CLOSED, never fail-open', () => {
+  const CONNECTED_TROVE = {
+    ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+  const PREVIEW_OK = { data: [true, '', 1_600_000_000_000_000_000n], isLoading: false, isError: false }
+  const PREVIEW_STALE_ERROR = { data: [true, '', 1_600_000_000_000_000_000n], isLoading: false, isError: true }
+
+  it('Draw: a failed refetch after a success disables Sign and shows the error, never the stale "Safe."', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    previewState = { ...PREVIEW_OK }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Safe.')
+    expect(signButton(c)?.disabled).toBe(false)
+    previewState = { ...PREVIEW_STALE_ERROR }
+    const c2 = await rerenderPage(<Draw />)
+    expect(c2.textContent).toContain('Preview failed.')
+    expect(c2.textContent).not.toContain('Safe.')
+    expect(signButton(c2)?.disabled).toBe(true)
+  })
+
+  it('Draw: a never-succeeded preview shows the error plate, not "Checking…" forever (L-g)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    previewState = { data: undefined, isLoading: false, isError: true }
+    const c = await renderPage(<Draw />)
+    expect(c.textContent).toContain('Preview failed.')
+    expect(c.textContent).not.toContain('Checking with your Governor…')
+    expect(signButton(c)?.disabled).toBe(true)
+  })
+
+  it('DrawHero: a failed refetch after a success disables Sign and shows the error', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+    previewState = { ...PREVIEW_OK }
+    const c = await renderPage(<Home />)
+    expect(signButton(c)?.disabled).toBe(false)
+    previewState = { ...PREVIEW_STALE_ERROR }
+    const c2 = await rerenderPage(<Home />)
+    expect(c2.textContent).toContain('Preview failed')
+    expect(signButton(c2)?.disabled).toBe(true)
+  })
+
+  it('DrawHero: a never-succeeded preview shows the error plate (L-g)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+    previewState = { data: undefined, isLoading: false, isError: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Preview failed')
+    expect(signButton(c)?.disabled).toBe(true)
+  })
+})
+
+describe('L-a (round 4) — gov/gv rows gate on the Governor batches, never the core read', () => {
+  const CORE_FAILED = {
+    ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, frozen: false,
+    floor: 2_500_000_000_000_000_000n,
+    standby: [30_000_000_000_000_000_000n, 1790000000n, 0n, true] as const,
+    error: true, coreError: true, govError: false, gvError: false, sysError: false,
+  }
+
+  it('Home still shows the Spend route, Floor and Standby heal when only the core read fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CORE_FAILED }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Governed')
+    expect(c.textContent).toContain('250%')
+    expect(c.textContent).toContain('30.00 MUSD armed')
+  })
+
+  it('Watch still shows the armed standby when only the core read fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CORE_FAILED }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('30.00 MUSD')
+  })
+})
+
+describe('L-b (round 4) — a sys-batch-only failure surfaces on Home', () => {
+  it('shows the RPC plate and "Recovery Mode: Unavailable" when only the sys batch fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+      error: false, coreError: false, govError: false, gvError: false, sysError: true, recoveryMode: undefined,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).toContain('Recovery Mode')
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('draws are paused on-chain')
   })
 })

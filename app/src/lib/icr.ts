@@ -63,6 +63,22 @@ export function isNoDebtIcr(v?: bigint | null): boolean {
 }
 
 /**
+ * Demo/preview ICR text (round-4 MED-1): "No debt" is only ever true for a
+ * KNOWN-active zero-debt trove. The SDK computes icr = 2**255 purely from
+ * debt === 0, so a never-opened address (status 0, coll 0 / debt 0) or a
+ * closed trove (status 2/3/4, coll > 0 / debt 0) would otherwise render
+ * "No debt" — wrong. A known non-active status renders "No trove"; an
+ * unreadable status (null/undefined — the getTroveStatus slot failed) renders
+ * "Unavailable", never a claim about the trove. Callers that show a Dial or
+ * Gauge instead gate the "No debt" emptyLabel on hasTrove (status === 1).
+ */
+export function demoIcrLabel(icr: bigint, troveStatus: number | null | undefined, digits = 1): string {
+  if (troveStatus === 1) return pct(icr, digits)
+  if (troveStatus === null || troveStatus === undefined) return 'Unavailable'
+  return 'No trove'
+}
+
+/**
  * Gauge percent for a 1e18 ICR, or null when there is no value or no debt.
  * Mirrors pct()'s "No debt" label: a zero-debt ICR (≥ 2**200) is null here,
  * never 999 — the dial/gauge renders its empty state ("No debt") instead of

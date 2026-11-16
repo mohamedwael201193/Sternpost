@@ -83,7 +83,16 @@ export type AccountFactoryDeployment = { address: Address; deployBlock: bigint }
 const accountFactory = (v: any): AccountFactoryDeployment | null => {
   const address = at(v)
   const block = v?.block
-  const blockOk = typeof block === 'number' || (typeof block === 'string' && /^\d+$/.test(block))
+  // L-c (round 4): a float block (16803285.5) is `typeof number`, so the old
+  // check accepted it — then BigInt(16803285.5) throws RangeError and the
+  // ACCOUNT_FACTORIES IIFE below takes the whole app down at import. Only
+  // integers are blocks; anything else is warned about and skipped.
+  const blockOk =
+    (typeof block === 'number' && Number.isInteger(block) && block >= 0) ||
+    (typeof block === 'string' && /^\d+$/.test(block))
+  if (address && block !== undefined && !blockOk) {
+    console.warn(`[chain] ignoring factory entry with a non-integer block: ${JSON.stringify(v)}`)
+  }
   return address && blockOk ? { address, deployBlock: BigInt(block) } : null
 }
 const factoriesFromArray = (v: any): AccountFactoryDeployment[] | null => {
@@ -98,11 +107,25 @@ const factoriesFromArray = (v: any): AccountFactoryDeployment[] | null => {
 }
 export const ACCOUNT_FACTORIES: AccountFactoryDeployment[] = (() => {
   const fromArray = factoriesFromArray((d.accounts as any)?.factories)
-  if (fromArray && fromArray.length > 0) return [...fromArray].reverse()
-  return [
-    accountFactory(d.accounts.factory),
-    accountFactory(d.accounts.previous?.factory),
-  ].filter((f): f is AccountFactoryDeployment => f !== null)
+  const list = fromArray && fromArray.length > 0
+    ? [...fromArray].reverse()
+    : [
+        accountFactory(d.accounts.factory),
+        accountFactory(d.accounts.previous?.factory),
+      ].filter((f): f is AccountFactoryDeployment => f !== null)
+  // L-d (round 4): the same factory address twice (e.g. a redeploy entry
+  // that kept the old address) must scan from the EARLIEST block — scannedTo
+  // is keyed by address, so the later entry would otherwise silently drop
+  // the earlier range. Keep first-occurrence order, earliest block.
+  const byAddress = new Map<string, AccountFactoryDeployment>()
+  for (const f of list) {
+    const key = f.address.toLowerCase()
+    const prev = byAddress.get(key)
+    if (!prev) { byAddress.set(key, { ...f }); continue }
+    console.warn(`[chain] duplicate factory address ${f.address}: keeping the earliest block ${prev.deployBlock < f.deployBlock ? prev.deployBlock : f.deployBlock}`)
+    if (f.deployBlock < prev.deployBlock) prev.deployBlock = f.deployBlock
+  }
+  return [...byAddress.values()]
 })()
 
 /**

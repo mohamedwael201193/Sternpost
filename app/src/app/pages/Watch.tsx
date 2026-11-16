@@ -43,6 +43,12 @@ export default function Watch() {
   const tcrError = demo ? radar.isError : t.sysError
   const shield = a?.needed
   const shieldNeeded = !!shield && (shield.repayWanted > 0n || shield.collWanted > 0n)
+  // MED-1 (round 4): "No debt" only for a known-active trove. In demo mode
+  // the ICR is 2**255 for any zero-debt address — including a never-opened
+  // (status 0) or closed (status 2/3/4) one — so the label gates on
+  // troveStatus === 1, mirroring demo hasTrove on Home.
+  const demoHasTrove = demo && !!a && a.troveStatus === 1
+  const hasTrove = demo ? demoHasTrove : t.hasTrove
   return (
     <div className="space-y-8">
       {rpcError && (
@@ -62,7 +68,7 @@ export default function Watch() {
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
           {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
-            <div className="display text-3xl">{rpcError ? 'Unavailable' : isNoDebtIcr(demo ? a?.icr : t.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
+            <div className="display text-3xl">{rpcError ? 'Unavailable' : hasTrove && isNoDebtIcr(demo ? a?.icr : t.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
           )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
@@ -87,14 +93,16 @@ export default function Watch() {
                       ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
                       : a?.needed == null
                         ? 'Shield need unknown — the needed() read failed, so this page cannot say whether the shield would fire.'
-                        : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
+                        : !hasTrove
+                          ? 'No trove — there is no ICR to compare with the shield line, so shield() has nothing to defend.'
+                          : `ICR ${demo && isNoDebtIcr(a?.icr) ? 'No debt' : icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
                 </p>
               </>
             )
           ) : (
             <>
-              <div className="display text-3xl">{t.error || t.gvError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-              <p className="text-xs text-muted mt-1">{t.error || t.gvError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+              <div className="display text-3xl">{t.govError || t.gvError ? 'Unavailable' : !standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+              <p className="text-xs text-muted mt-1">{t.govError || t.gvError ? RPC_ERROR_TEXT : !standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
             </>
           )}
         </Card>

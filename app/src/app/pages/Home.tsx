@@ -10,7 +10,7 @@ import { Skeleton } from '../../ui/Skeleton'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
 import { useTrove, TROVE_STATUS_LABEL } from '../useTrove'
 import { RPC_ERROR_TEXT, useAccount, useOwnAccount, useRadar, useViewedAccount } from '../useAccount'
-import { fmt, icrPct, isNoDebtIcr, pct, WAD } from '../../lib/icr'
+import { fmt, icrPct, isNoDebtIcr, pct, demoIcrLabel, WAD } from '../../lib/icr'
 import { DEMO_ACCOUNT_BADGE, STERNPOST } from '../../lib/chain'
 import { factoryAbi } from '../../lib/abi'
 import { addrUrl } from '../../lib/proofs'
@@ -44,7 +44,10 @@ export default function Home() {
   // only on the account read — a radar failure leaves them readable.
   // LOW-8: outside demo mode a failed useTrove core read shows this plate
   // (t.error), never a silent 'No trove'/'No Governor' empty.
-  const rpcError = demo ? acct.isError || radar.isError : t.error
+  // L-b (round 4): the sys batch (getTroveStatus / checkRecoveryMode /
+  // getTCR) failing must surface too — otherwise recoveryMode is undefined,
+  // no Recovery banner renders, and the failure passes silently.
+  const rpcError = demo ? acct.isError || radar.isError : t.error || t.sysError
   // L1/L5: the dial + trove numbers gate on the CORE read only — a
   // governorOf-only failure must not mask readable trove numbers as
   // 'Unavailable' (that is what t.govError is for, below).
@@ -77,6 +80,13 @@ export default function Home() {
           <b>Recovery Mode</b> — Mezo system health is below 150%, so draws are paused on-chain. Repay or add collateral to continue; the guard cannot draw until the system recovers.
         </div>
       )}
+      {/* L-b (round 4): a failed system-health batch leaves the recovery
+          state unknown — say so explicitly instead of rendering no banner. */}
+      {!demo && t.sysError && recoveryMode !== true && (
+        <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
+          Recovery Mode: <b>Unavailable</b> — the system-health read failed, so this page cannot say whether Recovery Mode is on.
+        </div>
+      )}
       {troveClosed && !loading && (
         <div className="plate rounded-xl p-4 mb-6 text-sm" role="alert">
           <b>Trove {TROVE_STATUS_LABEL[troveStatus ?? 0] ?? 'closed'}</b> — draws are blocked. The trove no longer exists on Mezo, so the dashboard numbers above are stale.
@@ -99,10 +109,14 @@ export default function Home() {
         <div className="xl:col-start-3 xl:row-start-1 flex flex-col items-center">
           <div className="caps text-[11px] tracking-[.24em] mb-2">Collateral ratio</div>
           <div ref={dial}>
+            {/* MED-1 (round 4): "No debt" only for a known-active trove —
+                demo hasTrove is gated on troveStatus === 1, so a ?account=
+                preview of a no-trove or closed address falls through to
+                the Dial's default "No trove" empty label. */}
             {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
-              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={isNoDebtIcr(icrV) ? 'No debt' : undefined} />
+              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={hasTrove && isNoDebtIcr(icrV) ? 'No debt' : undefined} />
             )}
           </div>
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
@@ -116,7 +130,7 @@ export default function Home() {
           <StatCard ref={sRoute} icon="M4 18c4 0 4-12 8-12s4 12 8 12M4 18h0M20 18h0" k="Spend route"
             v={demo
               ? (loading ? <Skeleton className="h-7 w-24" /> : acctError ? 'Unavailable' : 'Credit account')
-              : t.error || t.gvError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
+              : t.govError || t.gvError ? 'Unavailable' : t.governor ? (t.frozen ? 'Frozen' : 'Governed') : t.isConnected ? 'No Governor' : 'Not connected'}
             sub={demo
               ? (a?.floorICR != null && a?.shieldICR != null
                 ? <span className="text-magenta">Floor {pct(a.floorICR)} · shield {pct(a.shieldICR)}</span>
@@ -150,8 +164,8 @@ export default function Home() {
               <Row k="Plotted course" v={t.govError ? 'Unavailable' : t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
               <Row k="Collateral" v={acctError ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={acctError ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={t.error || t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
-              <Row k="Standby heal" v={t.error || t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
+              <Row k="Floor" v={t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Standby heal" v={t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
               <Row k="Mezo nonce" v={acctError ? 'Unavailable' : t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
           )}
@@ -247,7 +261,10 @@ function DemoHero({ acct, viewed }: { acct: ReturnType<typeof useAccount>; viewe
           <p className="text-sm text-signal mt-5" role="alert">{RPC_ERROR_TEXT}</p>
         ) : a ? (
           <>
-            <div className="display text-4xl mt-5">{pct(a.icr, 1)}</div>
+            {/* MED-1 (round 4): pct() says "No debt" for any zero-debt ICR —
+                gate the headline on troveStatus so a no-trove / closed
+                preview reads "No trove", never "No debt". */}
+            <div className="display text-4xl mt-5">{demoIcrLabel(a.icr, a.troveStatus)}</div>
             <p className="text-sm text-muted mt-1">Collateral ratio · {fmt(a.coll, 18, 6)} BTC backing {fmt(a.debt)} MUSD of debt</p>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-1 mt-4 text-sm">
               <dt className="text-muted">Floor</dt><dd className="mono text-right">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</dd>

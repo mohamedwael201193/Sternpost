@@ -10,7 +10,7 @@ import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
-import { REASONS, WAD, icrPct as toPct, isNoDebtIcr, pct, projectedIcr } from '../../lib/icr'
+import { REASONS, WAD, icrPct as toPct, isNoDebtIcr, pct, demoIcrLabel, projectedIcr } from '../../lib/icr'
 import { DRAW_WINDOW_S } from '../../lib/sig'
 import { addrUrl } from '../../lib/proofs'
 import { useLimits } from '../useLimits'
@@ -37,7 +37,13 @@ export default function Draw() {
   const fee = useReadContract({ address: MEZO.borrowerOperations, abi: borrowerOpsAbi, functionName: 'getBorrowingFee', args: [wei], query: { enabled: wei > 0n } })
   const preview = useReadContract({ address: t.governor, abi: governorAbi, functionName: 'previewDraw', args: [appAddr, wei, payeeAddr], query: { enabled: !!t.governor, refetchInterval: 15_000 } })
   const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
-  const [ok, reason, icrAfter] = preview.data ?? [undefined, '', undefined]
+  // MED-2 (round 4): TanStack Query v5 RETAINS data on error, so after one
+  // successful preview a failed 15 s refetch would leave the stale success
+  // in preview.data — the verdict would keep saying "Safe." and the Sign
+  // button would stay enabled. Gate everything on isError: on error the
+  // verdict, the button and the projection all act as if no preview exists.
+  const previewError = preview.isError
+  const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
   const projected = icrAfter ?? local
   const lim = useLimits(t, appAddr)
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
@@ -66,7 +72,7 @@ export default function Draw() {
                 <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr ? pct(t.icr) : '—'}</div></div>
                 <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`}>{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
               </div>
-              <Verdict ok={ok} reason={reason} loading={preview.isLoading} />
+              <Verdict ok={ok} reason={reason} loading={preview.isLoading} error={previewError} />
             </Card>
             <Sign t={t} wei={wei} app={appAddr} payee={payeeAddr} ok={!!ok}
               limits={<Limits t={t} l={lim} onPick={pick} />} fields={{ amount, setAmount: pick, app, setApp, payee, setPayee }} />
@@ -94,7 +100,10 @@ function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; v
               <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" /></div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 text-center mt-4 gap-4">
-              <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{pct(a.icr, 1)}</div></div>
+              {/* MED-1 (round 4): the Gauge above has no emptyLabel, so it
+                  shows "—" for a zero-debt ICR — the "Now" number must agree
+                  and never claim "No debt" for a no-trove / closed preview. */}
+              <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{demoIcrLabel(a.icr, a.troveStatus)}</div></div>
               <div><div className="caps text-[11px] text-muted">Floor</div><div className="display text-3xl">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</div></div>
               <div><div className="caps text-[11px] text-muted">Debt</div><div className="display text-3xl">{fmt(a.debt)} MUSD</div></div>
               <div><div className="caps text-[11px] text-muted">Collateral</div><div className="display text-3xl">{fmt(a.coll, 18, 4)} BTC</div></div>
@@ -115,7 +124,17 @@ function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; v
   )
 }
 
-function Verdict({ ok, reason, loading }: { ok?: boolean; reason: string; loading: boolean }) {
+function Verdict({ ok, reason, loading, error }: { ok?: boolean; reason: string; loading: boolean; error?: boolean }) {
+  // MED-2 / L-g (round 4): a failed preview is an error plate, never the
+  // "Checking…" stall (never-succeeded case) and never the stale verdict
+  // (success-then-error case) — the Sign button is disabled while error is
+  // true because ok is forced undefined by the caller.
+  if (error) return (
+    <div role="alert" className="mt-6 border-l-2 border-signal pl-3">
+      <b className="text-signal">Preview failed.</b>{' '}
+      <span className="text-sm">{RPC_ERROR_TEXT} The preview retries automatically — do not sign on the last verdict.</span>
+    </div>
+  )
   if (loading || ok === undefined) return <p className="mt-6 text-sm text-muted">Checking with your Governor…</p>
   return (
     <div role="status" className={`mt-6 border-l-2 pl-3 ${ok ? 'border-safe' : 'border-signal'}`}>

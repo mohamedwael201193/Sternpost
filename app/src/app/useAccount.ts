@@ -148,6 +148,12 @@ export type OwnAccountClient = Pick<typeof testnetClient, 'getBlockNumber' | 'ge
   readContract?: typeof testnetClient.readContract
   /** Optional eth_getCode: when the client supports it, a factory entry with no code is skipped with a warning (MED). */
   getCode?: (args: { address: Address }) => Promise<string | undefined>
+  /**
+   * Optional block read (L-e, round 4): when the client supports it, the hash
+   * of the last scanned block is stored per factory and a same-height reorg
+   * (hash changed at a height already scanned) clears the scan cache.
+   */
+  getBlock?: (args: { blockNumber: bigint }) => Promise<{ hash: string | null } | null | undefined>
 }
 
 const troveManagerStatusAbi = [
@@ -181,11 +187,15 @@ function defaultReadLabOwner(client: OwnAccountClient): FetchOwnAccountOpts['rea
 }
 
 const CHUNK = 9500n
-const ownScanCache = new Map<string, { candidates: OwnAccountCandidate[]; scannedTo: Map<string, bigint> }>()
+const ownScanCache = new Map<string, { candidates: OwnAccountCandidate[]; scannedTo: Map<string, bigint>; scannedHash: Map<string, { block: bigint; hash: string }> }>()
+
+/** L-f (round 4): a never-scanned future-block factory warns on EVERY 30 s refetch — remember which ones already warned, per address + block. */
+const warnedFutureBlock = new Set<string>()
 
 /** Test-only: drop the forward-only scan cache (vitest calls this in beforeEach). */
 export function clearOwnAccountCache() {
   ownScanCache.clear()
+  warnedFutureBlock.clear()
 }
 
 /** All candidates for an owner, newest first, de-duplicated by account. */
@@ -211,11 +221,63 @@ export async function scanOwnAccounts(
     }
   }
   if (!entry) {
-    entry = { candidates: [], scannedTo: new Map() }
+    entry = { candidates: [], scannedTo: new Map(), scannedHash: new Map() }
+    ownScanCache.set(key, entry)
+  }
+  // L-d (round 4): the same factory address twice with differing blocks —
+  // scannedTo is keyed by address, so scanning the later entry second would
+  // start after `latest` and silently drop the earlier range. Scan each
+  // address once, from its EARLIEST block. (chain.ts dedupes the production
+  // list too; this covers any caller-supplied list.) Copies are scanned so a
+  // merged block never mutates the shared ACCOUNT_FACTORIES list.
+  const factories: typeof ACCOUNT_FACTORIES = []
+  const factoryByAddress = new Map<string, (typeof ACCOUNT_FACTORIES)[number]>()
+  for (const f of ACCOUNT_FACTORIES) {
+    const addr = (f as { address?: unknown } | null)?.address
+    if (typeof addr !== 'string') { factories.push(f); continue }
+    const prev = factoryByAddress.get(addr.toLowerCase())
+    if (!prev) {
+      const copy = { ...f }
+      factoryByAddress.set(addr.toLowerCase(), copy)
+      factories.push(copy)
+      continue
+    }
+    const prevBlock = (prev as { deployBlock?: unknown }).deployBlock
+    const thisBlock = (f as { deployBlock?: unknown }).deployBlock
+    console.warn(`[scanOwnAccounts] duplicate factory address ${addr}: scanning from the earliest block`)
+    if (typeof thisBlock === 'bigint' && typeof prevBlock === 'bigint' && thisBlock < prevBlock) {
+      (prev as { deployBlock: bigint }).deployBlock = thisBlock
+    }
+  }
+  // L-e (round 4): a same-height reorg — the chain did NOT come back below
+  // the scanned block, but the block hash at a height already scanned changed,
+  // so logs recorded at that height may be gone. Compare the stored hash per
+  // factory; on a mismatch drop the cache and rescan. A client without
+  // getBlock (or a failed hash read) simply skips the check.
+  if (entry && typeof client.getBlock === 'function') {
+    for (const f of factories) {
+      const stored = entry.scannedHash.get(f.address)
+      if (!stored) continue
+      let current: { hash: string | null } | null | undefined
+      try {
+        current = await client.getBlock({ blockNumber: stored.block })
+      } catch {
+        current = undefined // unverifiable: keep the cache, never clear on a read failure
+      }
+      if (current?.hash && current.hash !== stored.hash) {
+        console.warn(`[scanOwnAccounts] block ${stored.block} hash changed for factory ${f.address} (reorg?) — clearing the scan cache for ${owner}`)
+        ownScanCache.delete(key)
+        entry = undefined
+        break
+      }
+    }
+  }
+  if (!entry) {
+    entry = { candidates: [], scannedTo: new Map(), scannedHash: new Map() }
     ownScanCache.set(key, entry)
   }
   try {
-    for (const f of ACCOUNT_FACTORIES) {
+    for (const f of factories) {
       // MED: a bad factory entry must never fail silently — skip it AND warn,
       // with the address and the reason, so a bad testnet.json entry (or a
       // redeploy that left a stale address) shows up instead of silently
@@ -236,7 +298,15 @@ export async function scanOwnAccounts(
       // data, not an empty result — warn. (An already-scanned factory with
       // from0 > latest is the normal forward-only case: no new blocks yet.)
       if (from0 > latest) {
-        if (scanned === undefined) console.warn(`[scanOwnAccounts] skipping factory ${addr}: deploy block ${deployBlock} is after latest block ${latest}`)
+        // L-f (round 4): warn once per factory — a never-scanned future-block
+        // factory otherwise warns on EVERY 30 s refetch.
+        if (scanned === undefined) {
+          const warnKey = `${addr.toLowerCase()}:${String(deployBlock)}`
+          if (!warnedFutureBlock.has(warnKey)) {
+            warnedFutureBlock.add(warnKey)
+            console.warn(`[scanOwnAccounts] skipping factory ${addr}: deploy block ${deployBlock} is after latest block ${latest}`)
+          }
+        }
         continue
       }
       // A factory address with no code on testnet cannot have emitted logs.
@@ -263,6 +333,14 @@ export async function scanOwnAccounts(
         }
       }
       entry.scannedTo.set(f.address, latest)
+      // L-e (round 4): remember the hash of the last scanned block so a
+      // same-height reorg is detectable on the next call.
+      if (typeof client.getBlock === 'function') {
+        try {
+          const head = await client.getBlock({ blockNumber: latest })
+          if (head?.hash) entry.scannedHash.set(f.address, { block: latest, hash: head.hash })
+        } catch { /* unverifiable: the hash check simply does not apply */ }
+      }
     }
   } catch (e) {
     // L7: a failed scan must not leave a half-advanced cache behind — a

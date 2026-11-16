@@ -7,6 +7,7 @@ import { Token } from '../ui/Token'
 import { BtcSignNote, ConnectButton, TxStatus, useIsBtcAccount } from './kit'
 import type { Trove } from './useTrove'
 import { useDrawSend, type Route } from './useDrawSend'
+import { RPC_ERROR_TEXT } from './useAccount'
 import { EnableRoutes, useRoutesReady } from './EnableRoutes'
 import { useLimits } from './useLimits'
 import { Limits } from './Limits'
@@ -34,7 +35,12 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   const self = (t.address ?? '0x0000000000000000000000000000000000000000') as Address
   const fee = useReadContract({ address: MEZO.borrowerOperations, abi: borrowerOpsAbi, functionName: 'getBorrowingFee', args: [wei], query: { enabled: wei > 0n } })
   const preview = useReadContract({ address: t.governor, abi: governorAbi, functionName: 'previewDraw', args: [self, wei, self], query: { enabled: !!t.governor && wei > 0n, refetchInterval: 15_000 } })
-  const [ok, reason, icrAfter] = preview.data ?? [undefined, '', undefined]
+  // MED-2 (round 4): TanStack Query v5 RETAINS data on error — same fail-open
+  // as Draw.tsx. Gate the verdict and the Sign button on isError so a failed
+  // refetch never leaves a stale "Safe." with an enabled button. The error
+  // plate only applies while a preview is actually running (wei > 0n).
+  const previewError = preview.isError && wei > 0n
+  const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
   const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
   const after = icrAfter ?? local
   const lim = useLimits(t, t.address)
@@ -103,6 +109,10 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
           </fieldset>
         )}
         {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}{reason === 'OVER_PER_DRAW' && lim.perDraw !== undefined ? ` The cap is ${fmt(lim.perDraw)} MUSD.` : ''}</p>}
+        {/* MED-2 / L-g (round 4): a failed preview is an error plate, never a
+            stale verdict — and the Sign button below is disabled while ok is
+            forced undefined by the error gate above. */}
+        {ready && previewError && <p role="alert" className="mt-2 text-xs text-signal">Preview failed: {RPC_ERROR_TEXT} The preview retries automatically — do not sign on the last verdict.</p>}
 
         <div className="mt-5 flex items-center gap-4">
           {!t.isConnected ? <ConnectButton className="pill flex-1 justify-center py-3.5 text-[13px]" />

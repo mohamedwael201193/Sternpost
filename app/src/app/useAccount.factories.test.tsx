@@ -42,6 +42,9 @@ let latestBlock = 16810643n
 let eventsByFactory: Record<string, Ev[]> = {}
 let throwOnEvents = false
 let codeByFactory: Record<string, string> = {}
+// L-e: block hash by height, mutable so a test can reorg one height.
+const DEFAULT_BLOCK_HASH = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+let hashByBlock: Record<string, string> = {}
 let warnSpy: ReturnType<typeof vi.spyOn>
 
 function makeClient() {
@@ -52,6 +55,7 @@ function makeClient() {
       return eventsByFactory[a.address.toLowerCase()] ?? []
     }),
     getCode: vi.fn(async (a: { address: string }) => codeByFactory[a.address.toLowerCase()] ?? '0x60006000'),
+    getBlock: vi.fn(async (a: { blockNumber: bigint }) => ({ hash: hashByBlock[a.blockNumber.toString()] ?? DEFAULT_BLOCK_HASH })),
   }
 }
 
@@ -62,6 +66,7 @@ beforeEach(() => {
   eventsByFactory = {}
   throwOnEvents = false
   codeByFactory = {}
+  hashByBlock = {}
   clearOwnAccountCache()
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -193,5 +198,72 @@ describe('L6 — the reconnect hold times out and falls back to demo', () => {
       vi.useRealTimers()
       walletStatus = 'disconnected'
     }
+  })
+})
+
+describe('L-d (round 4) — a duplicated factory address scans once, from the earliest block', () => {
+  it('scans the address once from the earliest block when the duplicate lists a later block', async () => {
+    mockedFactories.push({ address: F_OLD, deployBlock: 16805000n })
+    eventsByFactory = {
+      [F_OLD]: [{ blockNumber: 16803290n, logIndex: 1, args: { account: ACCT_OLD } }],
+    }
+    const client = makeClient()
+    const cands = await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    expect(cands).toHaveLength(1)
+    expect(cands[0].account).toBe(ACCT_OLD)
+    const oldCalls = client.getContractEvents.mock.calls.filter((c) => (c[0].address as string).toLowerCase() === F_OLD)
+    expect(oldCalls).toHaveLength(1)
+    expect((oldCalls[0][0] as unknown as { fromBlock: bigint }).fromBlock).toBe(16803285n)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('duplicate factory address'))
+  })
+
+  it('uses the earlier block when the duplicate entry lists it second', async () => {
+    mockedFactories.push({ address: F_NEW, deployBlock: 16804000n })
+    eventsByFactory = {
+      [F_NEW]: [{ blockNumber: 16805010n, logIndex: 0, args: { account: ACCT_NEW } }],
+    }
+    const client = makeClient()
+    const cands = await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    expect(cands).toHaveLength(1)
+    expect(cands[0].account).toBe(ACCT_NEW)
+    const newCalls = client.getContractEvents.mock.calls.filter((c) => (c[0].address as string).toLowerCase() === F_NEW)
+    expect(newCalls).toHaveLength(1)
+    expect((newCalls[0][0] as unknown as { fromBlock: bigint }).fromBlock).toBe(16804000n)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('duplicate factory address'))
+  })
+})
+
+describe('L-e (round 4) — a same-height reorg clears the cache', () => {
+  it('clears the cache when the block hash at an already-scanned height changes', async () => {
+    const client = makeClient()
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    // Same height, different hash: the chain reorganised without coming back below the scanned block.
+    hashByBlock['16810643'] = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    const before = client.getContractEvents.mock.calls.length
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    const fresh = client.getContractEvents.mock.calls.slice(before)
+    expect(fresh.map((c) => (c[0] as unknown as { fromBlock: bigint }).fromBlock)).toContain(16803285n)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reorg'))
+  })
+
+  it('does not clear the cache when the hash is unchanged', async () => {
+    const client = makeClient()
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    const before = client.getContractEvents.mock.calls.length
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    // Forward-only: no new blocks, so no new log calls at all.
+    expect(client.getContractEvents.mock.calls.length).toBe(before)
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('reorg'))
+  })
+})
+
+describe('L-f (round 4) — a future-block factory warns once, not on every refetch', () => {
+  it('warns once across two scans', async () => {
+    mockedFactories.push({ address: '0x4444444444444444444444444444444444444444', deployBlock: 99999999n })
+    const client = makeClient()
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    const futureWarns = warnSpy.mock.calls.filter((c) => String(c[0]).includes('after latest block'))
+    expect(futureWarns).toHaveLength(1)
   })
 })
