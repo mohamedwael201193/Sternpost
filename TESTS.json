@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T00:19:07.777Z",
-  "commit": "c5f0a325c82306632c73476b363931d5b5afd69c",
+  "generatedAt": "2026-11-16T00:37:28.782Z",
+  "commit": "a5aad4737d9bfb35748a12be0eb9e547bbf86338",
   "inputs": {
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b"
   },
@@ -138,8 +138,8 @@
   "reconciliation": {
     "nonForkDeclared": 519,
     "forkDeclared": 10,
-    "passedInclFork": 512,
-    "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). Do not read total.passed as 'N in total'."
+    "passedInclFork": 505,
+    "note": "total.passed is a NON-FORK subtotal (fork suites listed separately, never added twice). Distinct declared tests = nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties). passedInclFork counts each distinct fork test once, via the testnet run — the mainnet run's passed tests are a subset of the testnet run's, so they are not added again. Do not read total.passed as 'N in total'."
   },
   "forkNote": "fork suites listed separately, never added twice"
 }

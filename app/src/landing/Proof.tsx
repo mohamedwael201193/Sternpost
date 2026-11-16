@@ -4,7 +4,7 @@ import { Plate, Reveal } from './Plate'
 // Counted by running each suite on 2026-11-16; see README "Tests".
 const COUNTS = [
   ['312', 'Contract tests: unit, fuzz, invariant'],
-  ['17', 'Fork tests on live Mezo testnet + mainnet'],
+  ['10', 'Fork tests on live Mezo testnet + mainnet'],
   ['80', 'Backend tests (API, x402, bot)'],
   ['47', 'SDK + app unit tests'],
   ['16', 'Txs in the live testnet flow'],
