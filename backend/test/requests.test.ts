@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { getAddress } from "viem";
 import { json, testApp } from "./helpers.js";
 
 const SANDBOX = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -7,6 +8,7 @@ const AGENT = "0xcccccccccccccccccccccccccccccccccccccccc" as const;
 const MUSD = (n: number) => (BigInt(n) * 10n ** 18n).toString();
 
 const opts = (over: any = {}) => ({
+  chainId: 31611,
   sandboxAccount: SANDBOX,
   dailyCapMusd: "5",
   maxDays: 7,
@@ -45,6 +47,27 @@ describe("POST /v1/session-requests", () => {
     expect(b.request.status).toBe("sandbox_granted");
   });
 
+  it("sandbox: accepts a checksummed SANDBOX_ACCOUNT_ADDRESS (comparison is case-insensitive)", async () => {
+    const checksummed = getAddress(SANDBOX);
+    expect(checksummed).not.toBe(SANDBOX); // fixture guard: the input really is mixed-case
+    const { app } = await testApp({ sessionRequests: opts({ sandboxAccount: checksummed }) });
+    const res = await app.request("/v1/session-requests", json(body({ sandbox: true })));
+    expect(res.status).toBe(201);
+    expect((await res.json()).status).toBe("sandbox_granted");
+  });
+
+  it("sandbox: the daily cap applies to the aggregate — a second grant that stacks past 5 MUSD/day is refused", async () => {
+    const { app } = await testApp({ sessionRequests: opts() });
+    const first = await app.request("/v1/session-requests", json(body({ sandbox: true, budget: MUSD(3), days: 1 })));
+    expect(first.status).toBe(201);
+    // 3 MUSD/day already granted today; another 3 MUSD/day would make 6 > 5.
+    const second = await app.request("/v1/session-requests", json(body({ sandbox: true, budget: MUSD(3), days: 1 })));
+    expect(second.status).toBe(400);
+    const b: any = await second.json();
+    expect(b.error).toBe("sandbox_cap_exceeded");
+    expect(b.reason).toContain("aggregate");
+  });
+
   it("sandbox: budget spread over days still respects the daily cap", async () => {
     const { app } = await testApp({ sessionRequests: opts() });
     const ok = await app.request("/v1/session-requests", json(body({ sandbox: true, budget: MUSD(10), days: 2 })));
@@ -72,11 +95,22 @@ describe("POST /v1/session-requests", () => {
     expect(b.approveUrl).toBe(`https://sternpost-pink.vercel.app/app/crew?request=${b.request.id}`);
   });
 
-  it("non-sandbox: refuses non-factory accounts when the factory is configured", async () => {
+  it("non-sandbox: refuses non-factory accounts (the factory gate always applies)", async () => {
     const { app } = await testApp({ sessionRequests: opts() });
     const res = await app.request("/v1/session-requests", json(body({ account: OTHER })));
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ error: "not_factory_account" });
+  });
+
+  it("non-sandbox: fails closed with 503 when no factory checker is configured", async () => {
+    const { app } = await testApp({ sessionRequests: opts({ isAccount: undefined }) });
+    const res = await app.request("/v1/session-requests", json(body()));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: "factory_not_configured" });
+  });
+
+  it("refuses to build the route on any chain but testnet (31611)", async () => {
+    await expect(testApp({ sessionRequests: opts({ chainId: 31612 }) })).rejects.toThrow(/testnet-only/);
   });
 
   it("validates addresses and budget", async () => {

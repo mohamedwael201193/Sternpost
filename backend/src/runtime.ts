@@ -6,13 +6,16 @@ import { migrate } from "./db/migrate.js";
 import { createApp } from "./app.js";
 import { Indexer } from "./indexer/indexer.js";
 import { createFactoryChecker } from "./relayer/factory.js";
-import { liveRelayerClients, type RelayerDeps } from "./relayer/relayer.js";
+import { assertTestnetChain, liveRelayerClients, RelayRateLimiter, type RelayerDeps } from "./relayer/relayer.js";
 import { telegramApi } from "./telegram/api.js";
 import { viemChain, type Hex } from "./telegram/chain.js";
 import { createBot } from "./telegram/bot.js";
 
 /** Builds the full runtime (db, chain client, app, optional indexer) from config. Shared by server and serverless entries. */
 export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {}) {
+  // Fail fast at startup: no env (CHAIN_ID=31612 + mainnet RPC) may ever
+  // enable a mainnet relay or a mainnet sandbox grant.
+  assertTestnetChain(cfg.CHAIN_ID);
   if (!cfg.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const chain = defineChain({ id: cfg.CHAIN_ID, name: "Mezo", nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 }, rpcUrls: { default: { http: [cfg.RPC_URL] } } });
   const client = createPublicClient({ chain, transport: http(cfg.RPC_URL) });
@@ -47,6 +50,7 @@ export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {})
     relayer: buildRelayer(cfg, client),
     muster: { team: cfg.TEAM_ADDRESSES.split(",").map((s) => s.trim()).filter(Boolean) },
     sessionRequests: {
+      chainId: cfg.CHAIN_ID,
       sandboxAccount: (cfg.SANDBOX_ACCOUNT_ADDRESS ?? null) as `0x${string}` | null,
       dailyCapMusd: cfg.SANDBOX_DAILY_CAP_MUSD,
       maxDays: cfg.SANDBOX_MAX_DAYS,
@@ -75,9 +79,13 @@ export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {})
  * Relayer deps (task 2.4). The factory checker is built only when an account
  * factory is configured; without it the relay fails closed. The wallet client
  * exists only when RELAYER_PRIVATE_KEY is set — the key value is never logged.
- * Mainnet is refused inside relayDraw regardless of configuration.
+ * Exactly ONE RelayRateLimiter is constructed here and shared by every
+ * request the runtime serves; a per-call limiter could never fill, so the
+ * 429 could never fire. Mainnet is refused at startup (assertTestnetChain)
+ * and again per request inside relayDraw.
  */
-function buildRelayer(cfg: Config, client: ReturnType<typeof createPublicClient>): RelayerDeps {
+export function buildRelayer(cfg: Config, client: ReturnType<typeof createPublicClient>): RelayerDeps {
+  assertTestnetChain(cfg.CHAIN_ID);
   const wallet = cfg.RELAYER_PRIVATE_KEY
     ? createWalletClient({
         account: privateKeyToAccount(cfg.RELAYER_PRIVATE_KEY as `0x${string}`),
@@ -99,5 +107,6 @@ function buildRelayer(cfg: Config, client: ReturnType<typeof createPublicClient>
     relayerAddress: live.relayerAddress,
     simulate: live.simulate,
     send: live.send,
+    rateLimit: new RelayRateLimiter(),
   };
 }

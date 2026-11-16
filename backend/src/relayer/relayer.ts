@@ -8,15 +8,22 @@ import type { FactoryChecker } from "./factory.js";
  * Hard refusals, in order:
  *  1. chainId 31612 (mainnet) -> 403 `mainnet_refused`. No env override exists:
  *     mainnet relaying is off by design (a mainnet draw costs real BTC gas and
- *     the 10 bps fee cannot cover a micro-payment; plan 3.4).
+ *     the 10 bps fee cannot cover a micro-payment; plan 3.4). The configured
+ *     chain is additionally pinned to 31611 at startup (loadConfig /
+ *     buildRuntime / buildRelayer), so no env can enable a mainnet relay.
  *  2. any other chainId -> 400 `unsupported_network`.
  *  3. no account factory configured -> 503 `factory_not_configured`.
  *  4. account not created by the Factory (`isAccount` false, incl. RPC errors)
  *     -> 403 `not_factory_account`.
- *  5. per-agent rate limit (20/hour, plan 5.3) -> 429 `relay_rate_limited`.
- *  6. no relayer key configured -> 503 `relayer_unavailable`.
- *  7. eth_call simulation of `drawBySig` reverts -> 422 `simulation_failed`
+ *  5. no relayer key configured -> 503 `relayer_unavailable`.
+ *  6. eth_call simulation of `drawBySig` reverts -> 422 `simulation_failed`
  *     (the tx is never sent; the revert reason is returned verbatim).
+ *  7. per-agent rate limit (20/hour, plan 5.3) -> 429 `relay_rate_limited`.
+ *     The limit is taken AFTER simulation on purpose: refused requests
+ *     (factory / simulation failures) never burn quota, and only a request
+ *     that is about to be sent consumes one unit.
+ *  8. send failure (RPC / nonce / broadcast error) -> 502 `relay_send_failed`
+ *     with the reason, not a generic 500.
  *
  * Only after all of the above does the relayer sign and send. Responses are
  * labelled `relayedBy: "sternpost-relayer"` and `network: "eip155:31611"`.
@@ -24,6 +31,22 @@ import type { FactoryChecker } from "./factory.js";
 
 export const RELAYER_CHAIN_ID = 31611;
 export const MAINNET_CHAIN_ID = 31612;
+
+/**
+ * Fail fast at startup when the configured chain is anything but Mezo
+ * testnet (31611). Per-request validation in validateRelayDraw is not
+ * enough on its own: the runtime builds both viem clients from the
+ * configured CHAIN_ID, so CHAIN_ID=31612 + a mainnet RPC would broadcast
+ * on mainnet. Called by buildRuntime and buildRelayer; loadConfig enforces
+ * the same rule via a zod refinement on CHAIN_ID.
+ */
+export function assertTestnetChain(chainId: number): void {
+  if (chainId !== RELAYER_CHAIN_ID) {
+    throw new Error(
+      `CHAIN_ID must be ${RELAYER_CHAIN_ID} (Mezo testnet); got ${chainId} — mainnet relaying is refused`,
+    );
+  }
+}
 export const RELAY_RATE_LIMIT_PER_HOUR = 20;
 export const RELAY_GAS_LIMIT = 6_000_000n; // one drawBySig measures ~4M gas on Mezo; 6M leaves headroom under the 10M block limit
 
@@ -61,7 +84,15 @@ export function validateRelayDraw(input: RelayDrawInput, nowSec: number): RelayR
   return null;
 }
 
-/** Fixed-window per-agent limiter (20/hour). `now` is injectable for tests. */
+/** Fixed-window per-agent limiter (20/hour). `now` is injectable for tests.
+ *
+ * LIMITATION (documented, not fixed): the limit key is the unauthenticated,
+ * body-supplied `agent` address — anyone can burn a victim agent's quota by
+ * submitting draws naming that agent. There is no authenticated identity
+ * available to key on (the relay request carries no signature over the
+ * caller), so no authenticated key exists to switch to without inventing
+ * auth. The limit still bounds the relayer's total spend per named agent.
+ */
 export class RelayRateLimiter {
   private hits = new Map<string, { count: number; reset: number }>();
   constructor(
@@ -95,18 +126,25 @@ export interface RelayerDeps {
   simulate: (input: RelayDrawInput) => Promise<void>;
   /** Submits drawBySig and returns the tx hash. */
   send: (input: RelayDrawInput) => Promise<`0x${string}`>;
-  rateLimit?: RelayRateLimiter;
+  /**
+   * REQUIRED, and exactly one instance per runtime (built by buildRelayer).
+   * It must NOT be defaulted per call (`?? new RelayRateLimiter()`): a fresh
+   * limiter per request can never fill, so the 429 could never fire.
+   */
+  rateLimit: RelayRateLimiter;
   nowSec?: () => number;
 }
 
-/** Full relay pipeline: validate -> factory gate -> rate limit -> simulate -> send. */
+/**
+ * Full relay pipeline: validate -> factory gate -> simulate -> rate limit
+ * (taken only once the request is about to be sent, so refusals never burn
+ * quota) -> send. The rate limit is keyed on the unauthenticated
+ * body-supplied `agent` address — see RelayRateLimiter.
+ */
 export async function relayDraw(deps: RelayerDeps, input: RelayDrawInput): Promise<RelayResult> {
   const bad = validateRelayDraw(input, deps.nowSec?.() ?? Math.floor(Date.now() / 1000));
   if (bad) return { ok: false, ...bad };
   if (!deps.factory) return { ok: false, error: "factory_not_configured", status: 503 };
-  if (!(deps.rateLimit ?? new RelayRateLimiter()).take(input.agent)) {
-    return { ok: false, error: "relay_rate_limited", status: 429 };
-  }
   // Fail closed: any factory-read error (incl. RPC outage) refuses the relay.
   let isFactoryAccount = false;
   try {
@@ -123,8 +161,15 @@ export async function relayDraw(deps: RelayerDeps, input: RelayDrawInput): Promi
   } catch (err) {
     return { ok: false, error: "simulation_failed", status: 422, reason: String(err) };
   }
-  const txHash = await deps.send(input);
-  return { ok: true, txHash, relayedBy: "sternpost-relayer", network: "eip155:31611" };
+  if (!deps.rateLimit.take(input.agent)) {
+    return { ok: false, error: "relay_rate_limited", status: 429 };
+  }
+  try {
+    const txHash = await deps.send(input);
+    return { ok: true, txHash, relayedBy: "sternpost-relayer", network: "eip155:31611" };
+  } catch (err) {
+    return { ok: false, error: "relay_send_failed", status: 502, reason: String(err) };
+  }
 }
 
 export function encodeDrawBySig(input: RelayDrawInput): Hex {

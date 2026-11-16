@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Db } from "../db/pool.js";
 import { address, parseBody, uintString } from "../lib/validate.js";
 import type { FactoryChecker } from "../relayer/factory.js";
+import { RELAYER_CHAIN_ID } from "../relayer/relayer.js";
 
 /**
  * Session requests (plan 5.1 `request_session`, task 5.2 sandbox auto-approve).
@@ -20,21 +21,38 @@ import type { FactoryChecker } from "../relayer/factory.js";
  *
  * Testnet only: the sandbox account lives on chain 31611 and this route
  * never touches mainnet (31612) — there is no mainnet sandbox account and
- * no mainnet auto-approve path. When no sandbox account is configured
+ * no mainnet auto-approve path. The chain is enforced at route construction
+ * (`chainId` must be 31611, so the `network: "testnet"` in the sandbox
+ * response is backed by a check, not a hardcoded label) and again at
+ * startup by loadConfig / buildRuntime. When no sandbox account is configured
  * (SANDBOX_ACCOUNT_ADDRESS unset — the case today: no sandbox TroveAccount
  * is deployed yet) sandbox requests return 503 `sandbox_not_configured`.
+ *
+ * The daily cap is enforced on the AGGREGATE: prior `sandbox_granted` grants
+ * for the same agent on the same (database) calendar day are summed, and
+ * prior + new must fit within the cap — otherwise N successive requests
+ * would grant 5N MUSD/day.
+ *
+ * Non-sandbox requests fail CLOSED when no factory checker is configured
+ * (503 `factory_not_configured`, same as the relay): an unset checker must
+ * never silently accept any account as pending.
  *
  * NOTE: this is deliberately NOT /v1/requests — that path is the Wave 1
  * draw-request inbox (routes/apps.ts).
  */
 
 export interface SessionRequestOpts {
+  /** Chain the route serves. Must be 31611 (Mezo testnet); anything else throws at construction (startup). */
+  chainId: number;
   /** Team sandbox TroveAccount, or null while undeployed. */
   sandboxAccount: `0x${string}` | null;
   dailyCapMusd: string; // whole MUSD, e.g. "5"
   maxDays: number;
   appUrl: string;
-  /** When set, non-sandbox requests for non-factory accounts are refused. */
+  /**
+   * Factory checker for non-sandbox requests. When unset the route fails
+   * CLOSED (503 `factory_not_configured`) instead of accepting any account.
+   */
   isAccount?: FactoryChecker;
 }
 
@@ -53,6 +71,14 @@ const requestSchema = z.object({
 const CAP = (musd: string) => BigInt(musd) * 10n ** 18n;
 
 export function sessionRequestRoutes(db: Db, opts: SessionRequestOpts) {
+  if (opts.chainId !== RELAYER_CHAIN_ID) {
+    throw new Error(
+      `session requests are testnet-only: chainId must be ${RELAYER_CHAIN_ID} (Mezo testnet), got ${opts.chainId}`,
+    );
+  }
+  // Lowercased on both sides: body.account is lowercased by the zod address
+  // transform, so a checksummed SANDBOX_ACCOUNT_ADDRESS must compare equal.
+  const sandboxAccount = opts.sandboxAccount?.toLowerCase() as `0x${string}` | null;
   const r = new Hono();
 
   r.get("/session-requests", async (c) => {
@@ -75,9 +101,9 @@ export function sessionRequestRoutes(db: Db, opts: SessionRequestOpts) {
     const effectiveDaily = dailyLimit ?? (budget + BigInt(body.days) - 1n) / BigInt(body.days);
 
     if (body.sandbox) {
-      if (!opts.sandboxAccount) return c.json({ error: "sandbox_not_configured" }, 503);
-      if (body.account !== opts.sandboxAccount) {
-        return c.json({ error: "sandbox_account_mismatch", sandboxAccount: opts.sandboxAccount }, 400);
+      if (!sandboxAccount) return c.json({ error: "sandbox_not_configured" }, 503);
+      if (body.account !== sandboxAccount) {
+        return c.json({ error: "sandbox_account_mismatch", sandboxAccount }, 400);
       }
       if (body.days > opts.maxDays) {
         return c.json({ error: "sandbox_cap_exceeded", reason: `days > ${opts.maxDays}` }, 400);
@@ -87,6 +113,23 @@ export function sessionRequestRoutes(db: Db, opts: SessionRequestOpts) {
       }
       if (perTx !== null && perTx > effectiveDaily) {
         return c.json({ error: "sandbox_cap_exceeded", reason: "perTx > daily limit" }, 400);
+      }
+      // Aggregate cap: prior sandbox_granted grants for this agent today
+      // count against the same daily cap, so successive requests cannot
+      // stack past it. Day boundary is the database calendar day (UTC in
+      // production). daily_limit is stored as a wei string; sum in BigInt.
+      const { rows: prior } = await db.query(
+        `SELECT daily_limit FROM session_requests
+          WHERE agent = $1 AND sandbox = TRUE AND status = 'sandbox_granted'
+            AND created_at >= CURRENT_DATE`,
+        [body.agent],
+      );
+      const priorDaily = (prior as any[]).reduce((s, r) => s + BigInt(r.daily_limit), 0n);
+      if (priorDaily + effectiveDaily > cap) {
+        return c.json({
+          error: "sandbox_cap_exceeded",
+          reason: `aggregate daily grants (${(priorDaily / 10n ** 18n).toString()} MUSD already granted today) + this request (${(effectiveDaily / 10n ** 18n).toString()} MUSD/day) exceed the ${opts.dailyCapMusd} MUSD/day cap`,
+        }, 400);
       }
       const expiry = Math.floor(Date.now() / 1000) + body.days * 86_400;
       const { rows } = await db.query(
@@ -99,7 +142,7 @@ export function sessionRequestRoutes(db: Db, opts: SessionRequestOpts) {
         request: rows[0],
         status: "sandbox_granted",
         session: {
-          account: opts.sandboxAccount,
+          account: sandboxAccount,
           agent: body.agent,
           budget: body.budget,
           perTx: body.perTx ?? null,
@@ -111,7 +154,10 @@ export function sessionRequestRoutes(db: Db, opts: SessionRequestOpts) {
       }, 201);
     }
 
-    if (opts.isAccount && !(await opts.isAccount(body.account as `0x${string}`))) {
+    if (!opts.isAccount) {
+      return c.json({ error: "factory_not_configured" }, 503);
+    }
+    if (!(await opts.isAccount(body.account as `0x${string}`))) {
       return c.json({ error: "not_factory_account" }, 403);
     }
     const { rows } = await db.query(

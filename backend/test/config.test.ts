@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { getAddress } from "viem";
 import { loadConfig } from "../src/config.js";
+
+// Shield-redeploy TroveAccountFactory (shared/deployments/testnet.json
+// `accounts.factory`, block 16804466), pinned as the config default.
+const SHIELD_FACTORY = "0x46442898c022e1fAa2BD05a23600C1Ec89DcA200" as const;
 
 // C8 (plan §3.14): X402_PAY_TO is REQUIRED — there is no default payee.
 // src/index.ts and src/serverless.ts call loadConfig() at startup, so a
@@ -44,9 +49,21 @@ describe("config: P3 backend vars (tasks 2.4, 2.6, 5.2)", () => {
     expect(() => loadConfig({ X402_PAY_TO: PAY_TO, RELAYER_PRIVATE_KEY: "0x1234" })).toThrow(/RELAYER_PRIVATE_KEY/);
   });
 
-  it("keeps P3 defaults: no factory/sandbox/relayer until configured, 5 MUSD/day sandbox cap", () => {
+  it("refuses any chain but testnet 31611 at load (no env can enable a mainnet relay)", () => {
+    expect(() => loadConfig({ X402_PAY_TO: PAY_TO, CHAIN_ID: 31612 })).toThrow(/CHAIN_ID/);
+    expect(() => loadConfig({ X402_PAY_TO: PAY_TO, CHAIN_ID: 1 })).toThrow(/CHAIN_ID/);
+  });
+
+  it("lowercases SANDBOX_ACCOUNT_ADDRESS at load so a checksummed env value compares equal", () => {
+    const checksummed = getAddress("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect(checksummed).not.toBe("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    const c = loadConfig({ X402_PAY_TO: PAY_TO, SANDBOX_ACCOUNT_ADDRESS: checksummed });
+    expect(c.SANDBOX_ACCOUNT_ADDRESS).toBe("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  });
+
+  it("keeps P3 defaults: factory pinned to the Shield redeploy, no sandbox/relayer until configured, 5 MUSD/day sandbox cap", () => {
     const c = loadConfig({ X402_PAY_TO: PAY_TO });
-    expect(c.ACCOUNT_FACTORY_ADDRESS).toBeUndefined();
+    expect(c.ACCOUNT_FACTORY_ADDRESS).toBe(SHIELD_FACTORY);
     expect(c.RELAYER_PRIVATE_KEY).toBeUndefined();
     expect(c.SANDBOX_ACCOUNT_ADDRESS).toBeUndefined();
     expect(c.SANDBOX_DAILY_CAP_MUSD).toBe("5");

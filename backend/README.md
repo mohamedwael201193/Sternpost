@@ -17,7 +17,7 @@ Live: **https://sternpost-api.vercel.app** · DB: Render Postgres 16 (`sternpost
 | GET | `/v1/receipts?payer=` · `/v1/receipts/:tx` | x402 settlement receipts |
 | GET | `/v1/paid/brief` | **x402-paid** endpoint: 402 challenge → facilitator verify → settle → content |
 | GET | `/v1/paid/price` | Current price/asset/payTo |
-| POST | `/v1/relay/draw` | Gas-sponsored `drawBySig` (testnet only; refuses mainnet 31612 and non-factory accounts; 20/h per agent; simulates first). 503 until `ACCOUNT_FACTORY_ADDRESS` / `RELAYER_PRIVATE_KEY` are set |
+| POST | `/v1/relay/draw` | Gas-sponsored `drawBySig` (testnet only; refuses mainnet 31612 and non-factory accounts; 20/h per agent on one shared limiter, taken after simulation; simulates first). Factory pinned to the Shield-redeploy factory (shared/deployments/testnet.json `accounts.factory`); 503 until `RELAYER_PRIVATE_KEY` is set |
 | GET | `/v1/muster?network=testnet` | Muster roll from indexed `AccountCreated` events: quests, EXP, team tags, outside/team/sandbox counts. 60 s cache; mainnet → 400 |
 | GET/POST | `/v1/session-requests` | Session requests. `sandbox: true` auto-approves up to 5 MUSD/day for 7 days on the team sandbox account (testnet only; 503 until `SANDBOX_ACCOUNT_ADDRESS` is set); otherwise pending + Crew approve URL |
 | POST | `/telegram/webhook` | Telegram updates (requires `X-Telegram-Bot-Api-Secret-Token`) |

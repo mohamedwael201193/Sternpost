@@ -107,7 +107,8 @@ export async function buildMuster(db: Db, teamSet: Set<string>) {
     if (r.event === "SessionOpened") {
       const agent = String(a.agent).toLowerCase();
       if (!row.agents.includes(agent)) row.agents.push(agent);
-      if (teamSet.has(agent)) row.team = true;
+      // Team tag is owner-based ONLY: an outside owner granting a session
+      // to a team agent must not flip the row to team.
       addQuest(row, "sign_agent");
     } else if (r.event === "Drawn") {
       row.draws++;
@@ -125,16 +126,18 @@ export async function buildMuster(db: Db, teamSet: Set<string>) {
   }
 
   const rows = [...byAccount.values()].sort((x, y) => Number(BigInt(x.createdBlock) - BigInt(y.createdBlock)));
-  const owners = new Set(rows.map((r) => r.owner));
-  const teamOwners = new Set(rows.filter((r) => r.team).map((r) => r.owner));
+  // Counts are of distinct ADDRESSES (rows), not owners: one owner can hold
+  // several accounts, and the field names say Addresses.
+  const outsideAddresses = rows.filter((r) => !r.team).length;
+  const teamAddresses = rows.filter((r) => r.team).length;
   const sandboxAccounts = new Set(sandbox.map((s) => String(s.account).toLowerCase()));
   return {
     network: "testnet",
     generatedAt: new Date().toISOString(),
     fromBlock: rows.length ? rows[0].createdBlock : null,
     toBlock: cursor.length ? String(cursor[0].last_block) : null,
-    outsideAddresses: owners.size - teamOwners.size,
-    teamAddresses: teamOwners.size,
+    outsideAddresses,
+    teamAddresses,
     sandboxAddresses: [...sandboxAccounts].filter((a) => byAccount.has(a)).length,
     rows,
   };

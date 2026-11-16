@@ -16,7 +16,10 @@ const relaySchema = z.object({
 /**
  * POST /v1/relay/draw — gas-sponsored drawBySig (plan 5.7, task 2.4).
  * Testnet only. Refuses mainnet and non-factory accounts before any send;
- * simulates the call first and never sends a doomed tx. Rate limit 20/h/agent.
+ * simulates the call first and never sends a doomed tx. Rate limit 20/h/agent
+ * (one shared limiter per runtime, taken only after simulation, so refusals
+ * never burn quota). The account factory is pinned to the Shield-redeploy
+ * factory in config; 503 only while RELAYER_PRIVATE_KEY is unset.
  * Free for sandbox/testnet use; the relayer key never appears in a response.
  */
 export function relayRoutes(deps: RelayerDeps) {

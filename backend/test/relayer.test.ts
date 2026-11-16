@@ -93,6 +93,29 @@ describe("relayDraw", () => {
     expect(res).toEqual({ ok: false, error: "relayer_unavailable", status: 503 });
     expect(send).not.toHaveBeenCalled();
   });
+  it("refused requests do not burn rate-limit quota (limit is taken only after simulation)", async () => {
+    let t = 1_000_000;
+    const limiter = new RelayRateLimiter(2, 3_600_000, () => t);
+    const send = vi.fn(async () => TX);
+    const deps = stubDeps({ rateLimit: limiter, send, simulate: async () => { throw new Error("BelowFloor()"); } });
+    expect(await relayDraw(deps, base())).toMatchObject({ error: "simulation_failed" });
+    expect(send).not.toHaveBeenCalled();
+    const okDeps = stubDeps({ rateLimit: limiter, send });
+    expect((await relayDraw(okDeps, base())).ok).toBe(true);
+    expect((await relayDraw(okDeps, base())).ok).toBe(true);
+    // Only the two successful relays consumed quota: the refused one did not.
+    expect(await relayDraw(okDeps, base())).toEqual({ ok: false, error: "relay_rate_limited", status: 429 });
+  });
+  it("returns 502 relay_send_failed when the broadcast fails", async () => {
+    const send = vi.fn(async () => { throw new Error("nonce too low"); });
+    const res = await relayDraw(stubDeps({ send }), base());
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toBe("relay_send_failed");
+      expect(res.status).toBe(502);
+      expect(res.reason).toContain("nonce too low");
+    }
+  });
   it("never sends when simulation reverts", async () => {
     const send = vi.fn(async () => TX);
     const res = await relayDraw(

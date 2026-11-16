@@ -102,4 +102,49 @@ describe("GET /v1/muster", () => {
     const third: any = await (await app.request("/v1/muster")).json();
     expect(third.rows.find((r: any) => r.account === TEAM_ACCT).draws).toBe(0); // refreshed, Drawn gone
   });
+
+  it("does NOT tag a row team when an outside owner grants a session to a team agent (team tag is owner-based only)", async () => {
+    const db = await memDb();
+    const ins = (tx: string, log: number, block: number, contract: string, event: string, args: any) =>
+      db.query(
+        "INSERT INTO activity (tx_hash, log_index, block_number, contract, event, args) VALUES ($1,$2,$3,$4,$5,$6)",
+        [tx, log, block, contract, event, JSON.stringify(args)],
+      );
+    // Outside-owned account; the session agent is a team address.
+    await ins("0x" + "11".repeat(32), 0, 100, OUT_ACCT, "AccountCreated",
+      { owner: OUT_OWNER, account: OUT_ACCT, salt: "0x" + "00".repeat(32),
+        floorICR: "2500000000000000000", shieldICR: "1600000000000000000", targetICR: "2000000000000000000" });
+    await ins("0x" + "12".repeat(32), 0, 101, OUT_ACCT, "SessionOpened",
+      { agent: TEAM_AGENT, budget: "2000000000000000000", perTx: "500000000000000000", dailyLimit: "2000000000000000000", expiry: 1797330675, anyPayee: false, canSignX402: false });
+    await db.query("INSERT INTO indexer_cursor (id, last_block) VALUES (1, 101)");
+    const { app } = await testApp({ db, muster: { team: [TEAM_OWNER, TEAM_AGENT] } });
+    const body: any = await (await app.request("/v1/muster")).json();
+    expect(body.rows).toHaveLength(1);
+    expect(body.rows[0].team).toBe(false);
+    expect(body.outsideAddresses).toBe(1);
+    expect(body.teamAddresses).toBe(0);
+  });
+
+  it("counts distinct addresses, not owners: one team owner with two accounts counts as two team addresses", async () => {
+    const db = await memDb();
+    const ins = (tx: string, log: number, block: number, contract: string, event: string, args: any) =>
+      db.query(
+        "INSERT INTO activity (tx_hash, log_index, block_number, contract, event, args) VALUES ($1,$2,$3,$4,$5,$6)",
+        [tx, log, block, contract, event, JSON.stringify(args)],
+      );
+    const acctArgs = (owner: string, account: string) => ({
+      owner, account, salt: "0x" + "00".repeat(32),
+      floorICR: "2500000000000000000", shieldICR: "1600000000000000000", targetICR: "2000000000000000000",
+    });
+    const SECOND_TEAM_ACCT = "0xdddddddddddddddddddddddddddddddddddddddd";
+    await ins("0x" + "21".repeat(32), 0, 100, TEAM_ACCT, "AccountCreated", acctArgs(TEAM_OWNER, TEAM_ACCT));
+    await ins("0x" + "22".repeat(32), 0, 101, SECOND_TEAM_ACCT, "AccountCreated", acctArgs(TEAM_OWNER, SECOND_TEAM_ACCT));
+    await ins("0x" + "23".repeat(32), 0, 102, OUT_ACCT, "AccountCreated", acctArgs(OUT_OWNER, OUT_ACCT));
+    await db.query("INSERT INTO indexer_cursor (id, last_block) VALUES (1, 102)");
+    const { app } = await testApp({ db, muster: { team: [TEAM_OWNER] } });
+    const body: any = await (await app.request("/v1/muster")).json();
+    expect(body.rows).toHaveLength(3);
+    expect(body.teamAddresses).toBe(2);
+    expect(body.outsideAddresses).toBe(1);
+  });
 });
