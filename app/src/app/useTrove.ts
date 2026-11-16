@@ -133,6 +133,13 @@ export function useTrove() {
   // the any-slot OR for the top error plates.
   const recoverySlotError = sys.data?.[1]?.status === 'failure'
   const tcrSlotError = sys.data?.[2]?.status === 'failure'
+  // Round 11 (J3 F1, round-10 re-check): the status slot needs its own
+  // flag too — DrawHero's plate must fire only when the slot the hero
+  // actually needs (getTroveStatus) failed. A getTCR- or
+  // checkRecoveryMode-only failure leaves the status KNOWN, and the hero
+  // must still offer the "Open a trove" link instead of plating (the
+  // round-10 any-slot OR regressed this vs round 9).
+  const statusSlotError = sys.data?.[0]?.status === 'failure'
   // Round 8 (J3 L7): the core batch has the same allowFailure hole, one
   // batch behind gv/sys — a single reverted core slot leaves coll/debt
   // undefined with core.isError false, so the Home rows and the
@@ -211,6 +218,8 @@ export function useTrove() {
     recoverySlotError,
     /** Round 8 (J3 L2): only the getTCR slot reverted — the TCR card gates on this (a getTCR slot failure reads "Unavailable", never "No data"). */
     tcrSlotError,
+    /** Round 11 (J3 F1): only the getTroveStatus slot reverted — DrawHero's plate gates on this (a getTCR/checkRecoveryMode-only failure leaves the status KNOWN, so the hero still offers the "Open a trove" link). */
+    statusSlotError,
     refetch: () => { core.refetch(); gv.refetch(); gov.refetch(); btc.refetch(); sys.refetch() },
   }
 }

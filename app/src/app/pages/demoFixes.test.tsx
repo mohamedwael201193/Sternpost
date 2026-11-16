@@ -129,7 +129,7 @@ vi.mock('../useTrove', () => ({
       address: walletState.address, isConnected: walletState.isConnected, hasTrove: false, troveStatusKnown: true, governor: undefined,
       troveStatus: undefined as number | undefined, coll: undefined as bigint | undefined, debt: undefined as bigint | undefined,
       price: undefined as bigint | undefined,
-      loading: false, govLoading: false, gvLoading: false, sysLoading: false, sysError: false, sysSlotError: false, recoverySlotError: false, tcrSlotError: false,
+      loading: false, govLoading: false, gvLoading: false, sysLoading: false, sysError: false, sysSlotError: false, statusSlotError: false, recoverySlotError: false, tcrSlotError: false,
       error: false, coreError: false, coreSlotError: false, govError: false, gvError: false, gvSlotError: false, btcError: false,
       balances: { btc: undefined, musd: undefined, smusd: undefined, mezo: undefined },
       ...troveState,
@@ -1906,6 +1906,68 @@ describe('Round 8 — J3 L2: per-slot sys flags — a getTCR-only failure hides 
   })
 })
 
+describe('Round 11 — J3 F1: DrawHero plates only on a getTroveStatus-slot failure', () => {
+  // J3 round-10 re-check F1 (regression vs round 9): a getTCR-only (or
+  // checkRecoveryMode-only) sys-slot failure plated the hero even though
+  // the trove status was KNOWN (0) and the failed slot feeds nothing the
+  // hero uses — hiding the "Open a trove" link and disagreeing with Draw
+  // (which checks noTroveKnown BEFORE its plate). The hero plate gates on
+  // the getTroveStatus slot only (statusSlotError). Home's TOP plate keeps
+  // the any-slot OR (a banner, not a replacement), so assertions scope to
+  // the hero section.
+  const NO_TROVE_KNOWN = {
+    hasTrove: false,
+    coll: 50_000_000_000_000_000n,
+    debt: 0n,
+    price: 64_608_796_300_000_000_000_000n,
+    icr: 2n ** 255n,
+    troveStatus: 0,
+    troveStatusKnown: true,
+    governor: undefined,
+    error: false, coreError: false, govError: false, gvError: false,
+    sysError: false, sysSlotError: true, statusSlotError: false,
+    tcrSlotError: true, recoverySlotError: false,
+    recoveryMode: false, tcr: undefined,
+  }
+
+  function heroSection(c: HTMLDivElement) {
+    return c.querySelector('section[aria-labelledby="draw-hero"]')!
+  }
+
+  it('status 0 known + getTCR-only failure: hero offers the "Open a trove" link, no plate', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...NO_TROVE_KNOWN }
+    const c = await renderPage(<Home />)
+    const hero = heroSection(c)
+    expect(hero.querySelector('a[href="/app/draw"]')).not.toBeNull()
+    expect(hero.textContent).toContain('Open a trove on Mezo first')
+    expect(hero.textContent).not.toContain('one or more views reverted')
+    expect(hero.textContent).not.toContain('Could not reach the Mezo testnet RPC')
+  })
+
+  it('status 0 known + checkRecoveryMode-only failure: hero offers the "Open a trove" link, no plate', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...NO_TROVE_KNOWN, tcrSlotError: false, recoverySlotError: true, recoveryMode: undefined, tcr: 2_320_369_306_368_630_978n }
+    const c = await renderPage(<Home />)
+    const hero = heroSection(c)
+    expect(hero.querySelector('a[href="/app/draw"]')).not.toBeNull()
+    expect(hero.textContent).toContain('Open a trove on Mezo first')
+    expect(hero.textContent).not.toContain('one or more views reverted')
+  })
+
+  it('getTroveStatus-only failure: hero still plates (SLOT text), no "Open a trove" link', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...NO_TROVE_KNOWN, troveStatus: undefined, troveStatusKnown: false, statusSlotError: true, tcrSlotError: false, tcr: 2_320_369_306_368_630_978n }
+    const c = await renderPage(<Home />)
+    const hero = heroSection(c)
+    expect(hero.textContent).toContain('one or more views reverted')
+    expect(hero.textContent).not.toContain('Open a trove on Mezo first')
+  })
+})
+
 describe('Round 8 — J3 L4 + J2 LOW-4: limits unavailable signal + retained floor', () => {
   it('DrawHero renders an explicit "limits unavailable" line when the fee read fails', async () => {
     walletState = { ...LIVE }
@@ -2321,7 +2383,7 @@ describe('Round 10 — J3 HIGH-1: DrawHero never stalls on "Checking your trove�
     expect(plates.length).toBe(2)
   })
 
-  it('shows the SLOT plate in the hero, never "Checking your trove…", when only a sys slot reverted', async () => {
+  it('shows the SLOT plate in the hero, never "Checking your trove…", when the getTroveStatus slot reverted', async () => {
     walletState = { ...LIVE }
     viewedState = { ...LIVE_VIEWED }
     troveState = {
@@ -2329,6 +2391,12 @@ describe('Round 10 — J3 HIGH-1: DrawHero never stalls on "Checking your trove�
       coll: 50_000_000_000_000_000n, debt: 0n,
       price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
       governor: undefined, error: false, coreError: false, govError: false, gvError: false, sysError: false, sysSlotError: true,
+      // Round 11 (J3 F1): the hero plate gates on the getTroveStatus slot
+      // specifically — the failing slot must be named, not just the any-slot
+      // OR. A getTCR/checkRecoveryMode-only failure leaves the status KNOWN
+      // and the hero offers the "Open a trove" link instead (see the Round
+      // 11 describe below).
+      statusSlotError: true, recoverySlotError: false, tcrSlotError: false,
     }
     const c = await renderPage(<Home />)
     expect(c.textContent).not.toContain('Checking your trove…')

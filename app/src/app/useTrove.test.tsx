@@ -82,6 +82,7 @@ async function renderTrove() {
           coreSlotError: t.coreSlotError,
           recoverySlotError: t.recoverySlotError,
           tcrSlotError: t.tcrSlotError,
+          statusSlotError: t.statusSlotError,
         })}
       />
     )
@@ -115,6 +116,7 @@ async function renderTrove() {
     coreSlotError: boolean
     recoverySlotError: boolean
     tcrSlotError: boolean
+    statusSlotError: boolean
   }
 }
 
@@ -343,6 +345,23 @@ describe('useTrove loading + per-slot flags (round 8)', () => {
     expect(t.error).toBe(false)
   })
 
+  it('a reverted getTroveStatus slot sets statusSlotError only (not recovery/tcrSlotError)', async () => {
+    mockState.sys = {
+      data: [
+        { status: 'failure' },
+        { status: 'success', result: false },
+        { status: 'success', result: 2_320_369_306_368_630_978n },
+      ],
+      isLoading: false,
+      isError: false,
+    }
+    const t = await renderTrove()
+    expect(t.statusSlotError).toBe(true)
+    expect(t.recoverySlotError).toBe(false)
+    expect(t.tcrSlotError).toBe(false)
+    expect(t.sysSlotError).toBe(true)
+  })
+
   it('a reverted checkRecoveryMode slot sets recoverySlotError only (not tcrSlotError)', async () => {
     mockState.sys = {
       data: [
@@ -356,6 +375,7 @@ describe('useTrove loading + per-slot flags (round 8)', () => {
     const t = await renderTrove()
     expect(t.recoverySlotError).toBe(true)
     expect(t.tcrSlotError).toBe(false)
+    expect(t.statusSlotError).toBe(false)
     expect(t.sysSlotError).toBe(true)
   })
 
@@ -372,6 +392,7 @@ describe('useTrove loading + per-slot flags (round 8)', () => {
     const t = await renderTrove()
     expect(t.tcrSlotError).toBe(true)
     expect(t.recoverySlotError).toBe(false)
+    expect(t.statusSlotError).toBe(false)
     expect(t.sysSlotError).toBe(true)
   })
 
@@ -379,6 +400,7 @@ describe('useTrove loading + per-slot flags (round 8)', () => {
     const t = await renderTrove()
     expect(t.recoverySlotError).toBe(false)
     expect(t.tcrSlotError).toBe(false)
+    expect(t.statusSlotError).toBe(false)
     expect(t.coreSlotError).toBe(false)
   })
 })

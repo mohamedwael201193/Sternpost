@@ -190,7 +190,16 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             // whose getTroveStatus read persistently fails is not
             // "checking" either, so sysError/sysSlotError join the plate
             // branch (transport → RPC text, slot-only → SLOT text).
-            : !ready ? (t.error || t.coreSlotError || t.sysError || t.sysSlotError ? <p role="alert" className="text-sm text-signal flex-1">{(t.error || t.sysError) ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
+            // Round 11 (J3 F1, round-10 re-check): the round-10 any-slot
+            // OR regressed vs round 9 — it plated on ANY sys-slot failure
+            // even when the status was KNOWN and the failed slot (getTCR,
+            // checkRecoveryMode) feeds nothing the hero uses, hiding the
+            // "Open a trove" link and disagreeing with Draw (which checks
+            // noTroveKnown BEFORE its plate). The plate gates on the
+            // getTroveStatus slot only (statusSlotError); the other slots
+            // keep their own surfaces (Recovery banner, TCR card, Home top
+            // plate). A getTroveStatus-only failure still plates, SLOT text.
+            : !ready ? (t.error || t.coreSlotError || t.sysError || t.statusSlotError ? <p role="alert" className="text-sm text-signal flex-1">{(t.error || t.sysError) ? RPC_ERROR_TEXT : SLOT_ERROR_TEXT}</p>
               : troveUnknown || govUnknown
               ? <button className="pill flex-1 justify-center py-3.5 text-[13px] disabled:opacity-50" disabled>Checking your trove…</button>
               : statusOutOfRange
