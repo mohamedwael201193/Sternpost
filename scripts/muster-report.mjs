@@ -87,12 +87,21 @@ function checkValue(flag, value) {
   // Reject values with no visible character. Stripping is test-only — the
   // value itself is never modified — so combining marks inside an
   // otherwise-visible value are unaffected. The strip set is exactly:
-  //   \s — White_Space (U+0009–U+000D, U+0020, U+0085 NEL, U+00A0, U+1680,
-  //     U+2000–U+200A, U+2028–U+2029, U+202F, U+205F, U+3000, U+FEFF)
+  //   \s — White_Space as JS defines it (U+0009–U+000D, U+0020, U+00A0,
+  //     U+1680, U+2000–U+200A, U+2028–U+2029, U+202F, U+205F, U+3000,
+  //     U+FEFF). NOTE: JS \s does NOT include U+0085 NEL
+  //     (/\s/u.test("\u0085") is false in Node); NEL is covered by
+  //     \p{Cc} below and listed explicitly in the regex.
   //   \p{Cc} — all control code points (C0 U+0000–U+001F, DEL U+007F,
-  //     C1 U+0080–U+009F)
+  //     C1 U+0080–U+009F, incl. U+0085 NEL)
   //   \p{Cf} — format chars (U+200B–U+200F, U+202A–U+202E, U+2060–U+2064,
-  //     U+061C, U+180E, U+FEFF, U+E0000–U+E007F, ...)
+  //     U+061C, U+180E, U+FEFF, U+E0001, U+E0020–U+E007F, ...).
+  //     U+E0000 is Cn, not Cf — Cf in that block starts at U+E0001.
+  //   \p{Co} — Private Use (137,468 code points: BMP PUA U+E000–U+F8FF,
+  //     PUA-A U+F0000–U+FFFFD, PUA-B U+100000–U+10FFFD). PUA has no
+  //     Unicode-defined blank rendering and its display is font-dependent,
+  //     so a PUA-only value is rejected like every other blank-rendering
+  //     class rather than trusted.
   //   \p{Mn} / \p{Me} — non-spacing / enclosing marks (variation selectors
   //     U+FE00–U+FE0F, U+034F, U+17B4–U+17B5, ...)
   //   explicit code points no property covers, or that render blank
@@ -102,10 +111,16 @@ function checkValue(flag, value) {
   //     character (So — they render as blank, not as symbols).
   // A value made solely of any of these would otherwise pass and create a
   // directory whose name renders empty. Verified by a full-code-point sweep
-  // over all 1,114,112 code points: zero genuinely-invisible survivors —
-  // every survivor is either a visible character or an unassigned (Cn)
-  // code point, which renders as a missing-glyph box, not as blank.
-  if (value.replace(/[\s\p{Cc}\p{Cf}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u2800\u3164\uFFA0\uFFFC]/gu, "") === "") {
+  // over all 1,114,112 code points: zero genuinely-invisible survivors.
+  // Survivors are exactly three classes: visible characters; unassigned
+  // (Cn) code points, which render as a missing-glyph box, not as blank
+  // (that includes the 66 Cn noncharacters — U+FDD0–U+FDEF plus U+FFFE /
+  // U+FFFF at each plane end — which survive the strip and render as a
+  // .notdef missing-glyph box on standard stacks; zero of 1,849 installed
+  // fonts define a glyph for the sampled ones, and that rendering is
+  // font-dependent); and surrogates (Cs, 2,048), which are not encodable
+  // in UTF-8 argv at all.
+  if (value.replace(/[\s\p{Cc}\p{Cf}\p{Co}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u2800\u3164\uFFA0\uFFFC]/gu, "") === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
   }
   if (value.startsWith("=")) {
@@ -139,10 +154,10 @@ let rpcUrl;
 try {
   rpcUrl = new URL(RPC);
 } catch {
-  fail(`invalid value for --rpc: '${RPC}' is not a valid URL`);
+  fail("invalid value for --rpc: not a valid URL");
 }
 if (rpcUrl.protocol !== "http:" && rpcUrl.protocol !== "https:") {
-  fail(`invalid value for --rpc: '${RPC}' must use http: or https:`);
+  fail("invalid value for --rpc: must use http: or https:");
 }
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
@@ -197,9 +212,16 @@ const topicAddr = (t) => ("0x" + t.slice(-40)).toLowerCase();
 // topics[0] string was silently classified as SpendWalletCreated), every
 // topic must be a full 32-byte word, and transactionHash must be a full
 // 32-byte hash (an arbitrary non-empty string rendered a bogus explorer
-// link). Validate first, fail cleanly — never publish a false address.
-const TOPIC = /^0x[0-9a-fA-F]{64}$/;
-const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+// link). The 0x prefix is matched case-insensitively ("0X..." is the same
+// value as "0x..."), consistent with isHex/hexToInt above — real nodes
+// return lowercase "0x", but casing variants never false-fail the shape
+// check. (topics[0] itself is still matched against the lowercase known
+// signatures; a node returning "0X"-prefixed topics[0] would fail the
+// unknown-event-topic check, which is the correct outcome for a response
+// no real node produces.) Validate first, fail cleanly — never publish a
+// false address.
+const TOPIC = /^0[xX][0-9a-fA-F]{64}$/;
+const TX_HASH = /^0[xX][0-9a-fA-F]{64}$/;
 const EXPECTED_TOPICS = {
   [TOPICS.GovernorCreated]: 2,
   [TOPICS.SpendWalletCreated]: 2,
@@ -261,9 +283,12 @@ function validateLog(l, expectedAddress) {
 // deploy. A tighter cap would false-fail: e.g. 1,000 windows = 2M blocks
 // ≈ 46 days of growth, and 10,000 windows = 20M blocks ≈ 463 days —
 // both inside a year of the deploy. The cap stays 100,000: bounded, not
-// unbounded — worst case is hours of calls against a lying, user-chosen
-// RPC. Any absurd value fails before the first eth_getLogs call (after
-// only the eth_chainId + eth_blockNumber reads), with zero eth_getLogs calls.
+// unbounded — worst case is MAX_WINDOWS calls per query, each 15 s-bounded
+// (100,000 x 15 s = 1,500,000 s ≈ 17 days per query, ≈ 34 days for both
+// queries, in the pathological all-stalled case against a lying,
+// user-chosen RPC — not "hours"). Any absurd value fails before the first
+// eth_getLogs call (after only the eth_chainId + eth_getCode +
+// eth_blockNumber reads), with zero eth_getLogs calls.
 const MAX_WINDOWS = 100000;
 async function getLogs(address, topics, fromBlock, toBlock) {
   const out = [];
@@ -322,12 +347,39 @@ try {
   // false-fail; a malformed / null chainId fails cleanly via hexToInt
   // instead of crashing. The RPC URL itself is never echoed in any error
   // message (it may contain an API key) — the message names the expected
-  // chain instead, so a wrong---rpc user gets the hint without a leak.
+  // chain instead, so a wrong --rpc user gets the hint without a leak.
   const chainId = hexToInt(await rpc("eth_chainId", []));
   if (chainId !== EXPECTED_CHAIN_ID) {
     throw new Error(
       `RPC chain id ${chainId} is not Mezo testnet 31611 (expected chain id ${EXPECTED_CHAIN_ID}, 0x7b7b) — check --rpc points at Mezo testnet 31611`
     );
+  }
+
+  // Deployment-presence check, BEFORE any getLogs call: the chainId guard
+  // only proves the RPC CLAIMS chain 31611. A fresh / reset testnet, or
+  // any chain reusing chainId 31611, would still return [] from both
+  // getLogs calls and the script would publish a vacuous "0 outside
+  // addresses" report stamped as Mezo testnet 31611. eth_getCode proves
+  // the 0.9 deployment actually exists at the queried addresses: both the
+  // factory and the governor must return non-empty code (anything other
+  // than "0x" — the actual returned value is used, not a prefix check).
+  // A null / non-string / malformed code fails the same way as empty.
+  // The RPC URL is never echoed here (it may contain an API key); the
+  // message names the expected chain and the address with no code.
+  // Boundary: this cannot close a PERFECT REPLAY (same deployer, same
+  // nonces, same addresses, zero events yet) — that is indistinguishable
+  // from "genuinely zero users" and is out of scope. The fresh-chain /
+  // reset / wrong-31611-endpoint case is what this closes.
+  for (const [name, addr] of [
+    ["SternpostFactory", FACTORY],
+    ["SternpostGovernor", GOVERNOR],
+  ]) {
+    const code = await rpc("eth_getCode", [addr, "latest"]);
+    if (typeof code !== "string" || code === "0x") {
+      throw new Error(
+        `no contract code at ${name} ${addr} on Mezo testnet 31611 — check --rpc points at Mezo testnet 31611 with the 0.9 deployment`
+      );
+    }
   }
 
   latest = hexToInt(await rpc("eth_blockNumber", []));
