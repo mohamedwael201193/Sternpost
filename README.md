@@ -79,6 +79,48 @@ await sp.rearm(borrowerWallet, governor, parseEther("5"));
 
 The script for the full live run is [`sdk/examples/e2e-testnet.ts`](sdk/examples/e2e-testnet.ts) (`npm run e2e`) — last run in full in Wave 1; on the 0.9 deployment only `defend()` was re-run.
 
+### Live proof — pay-by-borrow (2.2, 2026-11-16, Mezo testnet 31611)
+
+`payByBorrow('https://demo.vativ.io/')` → **200** — `{"ok":true,"message":"Paid! You unlocked the Mezo x402 Quickstart."}` — run against the Shield-redeploy system (Factory [`0x4644…200`](https://explorer.test.mezo.org/address/0x46442898c022e1fAa2BD05a23600C1Ec89DcA200), implementation [`0x02Dd…0B8`](https://explorer.test.mezo.org/address/0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8)), price $64,348.22/BTC at block 16814714. SDK tests 30 → **72**, all passing.
+
+| Step | Tx | Block |
+|---|---|---|
+| createAndOpen the production account (debt 1800 MUSD, coll 0.0414 BTC) | [`0x3528…dd03`](https://explorer.test.mezo.org/tx/0x352891d069c06a44afef3d9a269b766e0c4b969a5eb22e0df79c5e08a050dd03) | [16814719](https://explorer.test.mezo.org/block/16814719) |
+| setSession (agent, budget 10 / perTx 5 / daily 5 MUSD, 7d, canSignX402) | [`0xf35f…6973`](https://explorer.test.mezo.org/tx/0xf35f1e1f310bee658f9ef141af277abb3a712fc48108c55b92559a3f001f6973) | [16814720](https://explorer.test.mezo.org/block/16814720) |
+| sweepMusd (1800 MUSD to the owner — forces the refill path) | [`0xb0de…1be2`](https://explorer.test.mezo.org/tx/0xb0de48b56ce189cb5173a13a6500fa71fd262302f83ad58dcdb700cc9ef91be2) | [16814724](https://explorer.test.mezo.org/block/16814724) |
+| **refill draw 0.001 MUSD (agent → account)** | [`0x292d…a9b1`](https://explorer.test.mezo.org/tx/0x292d3705d593fae04aa329ac9768e9731ed1af385f7fcb1d1f2ba5d72c6ea9b1) | [16814727](https://explorer.test.mezo.org/block/16814727) |
+| **x402 settle 0.001 MUSD (account → demo.vativ.io payTo)** | [`0xc2f2…0c6a`](https://explorer.test.mezo.org/tx/0xc2f27c874390f58eee1c234574b8b65a2bc7e47231df396463fba17096dd0c6a) | [16814731](https://explorer.test.mezo.org/block/16814731) |
+
+Account [`0x6B88…e6a1`](https://explorer.test.mezo.org/address/0x6B88f1f2C7791cB0cc417297B4590B0392Fbe6a1) (salt `keccak256("sternpost-sdk-demo-v1")`). After open: coll 0.0414 BTC, debt 2001.8 MUSD, ICR 1.330, status 1, TCR 2.310, Recovery Mode false. After the payment: MUSD 0, ICR 1.330, session spent 0.001001 MUSD (amount + 10 bps fee). The settle tx's MUSD Transfer log moves exactly 0.001 MUSD from the account to [`0xC337…738`](https://explorer.test.mezo.org/address/0xC3376296a18ef364eA19287203EEd7a87f18e738) (demo.vativ.io's payTo). Full table: [`sdk/README.md`](sdk/README.md).
+
+Funding note: the deployer held only 0.01336 BTC, short of the 0.0414 BTC the new account needed, so 0.0285 BTC was withdrawn from the deployer's own Classic trove (ICR 2.364 → 1.619, debt unchanged 2460.09 MUSD, still above the 1.6 shield line and well above MCR 1.1). Deployer BTC after all steps: 0.000261425211416919.
+
+## Gateway (x402, 2.3)
+
+Hosted by the Sternpost backend (Hono). Prices, plan §5.3 — **PROPOSED, not market-tested**. MUSD on testnet 31611, scheme `exact`, `assetTransferMethod: permit2`, `payTo = X402_PAY_TO` (required). Verify through `https://facilitator.vativ.io`. The live price table is also served at `GET /v1/gateway/prices`.
+
+| Route | Price (MUSD) | Returns |
+|---|---|---|
+| `GET /v1/radar/:account` | 0.001 | Radar JSON (rank, debt ahead, TCR, Recovery Mode) with `network` and `synthetic` flags |
+| `GET /v1/preview-draw?account&agent&payee&amount` | 0.001 | `previewDraw` result + reason code |
+| `GET /v1/paid/brief` | 0.01 | Mezo testnet desk brief (existing demo route) |
+| `POST /v1/risk-report` `{account}` | 0.01 | JSON: ICR, rank, shield triggers, recent events |
+| `POST /v1/relay/draw` | free; sandbox/testnet; rate limit 20/h per agent | submits `drawBySig` / `Batcher.multi` from the relayer (gas sponsored; **mainnet: off**) |
+| `POST /v1/session-requests` | free | creates a session request |
+| `GET /v1/muster` | free | leaderboard JSON |
+
+### Live proof — gateway paid end-to-end (2.3, 2026-11-16, Mezo testnet 31611)
+
+Paid from the demo account [`0x6B88…e6a1`](https://explorer.test.mezo.org/address/0x6B88f1f2C7791cB0cc417297B4590B0392Fbe6a1) by its agent, through a local server running the real app code with the real facilitator (`https://facilitator.vativ.io`, `payTo` = deployer, interim). Every route answered 402 first, then 200 after settlement. The production backend is not yet redeployed with these routes.
+
+| Route | Price | Settle tx | Block |
+|---|---|---|---|
+| `GET /v1/radar/0x6B88…` | 0.001 MUSD | [`0xb520…73a0e6`](https://explorer.test.mezo.org/tx/0xb520272fde84f8e62a8d50ec12bb331b31856c9556c0a36ea73433a5d273a0e6) | [16815077](https://explorer.test.mezo.org/block/16815077) |
+| `GET /v1/preview-draw?account&agent&payee&amount` | 0.001 MUSD | [`0x4a22…75d3`](https://explorer.test.mezo.org/tx/0x4a22febbd10a246cd9ecbeadb4667c25d1134bce76c2164cce06f4cf3b4d75d3) | [16815096](https://explorer.test.mezo.org/block/16815096) |
+| `POST /v1/risk-report` | 0.01 MUSD | [`0x84b4…4652`](https://explorer.test.mezo.org/tx/0x84b45ad0e4d1764401bc74df92be58c83696f6343519f40cdcd69ad070ef4652) | [16815127](https://explorer.test.mezo.org/block/16815127) |
+
+Radar 200 body (live): price $64,366.18, TCR 2.3117, Recovery Mode false, 277 troves, rank **#67** (debt ahead 426,147.5 MUSD, 67 steps, complete), `synthetic: true`. Preview-draw 200 body: `ok: true`, reason `OK`, ICR after 1.3319, fee 0.000001 MUSD (10 bps). Risk-report 200 body: status 1, ICR 1.3321, TCR 2.3134, rank #67, policy floor 1.2 / shield 1.15 / target 1.5, `shieldWanted: false`, recent receipts listing all three gateway payments. Refill draws (the account held 0 MUSD): radar [`0x22e8…3eae`](https://explorer.test.mezo.org/tx/0x22e822fdf78f1a33a906869eebbe35c3950369aa6a9f1fda4bf6e171a7af3eae) ([16815075](https://explorer.test.mezo.org/block/16815075)), preview [`0xdf3b…d619`](https://explorer.test.mezo.org/tx/0xdf3bd737b1ccab6544dd9e16b220f4b96d0ace2b2e6aa54aea45f3310dd2d619) ([16815093](https://explorer.test.mezo.org/block/16815093)). The risk-report payment first failed honestly — facilitator `permit2_insufficient_balance` because the account was empty after the first two settles — then a 0.011 MUSD top-up draw ([`0x0a03…f92b`](https://explorer.test.mezo.org/tx/0x0a0334fa610e923cab67b9c551dc7de48e5ea71109917c5cbf41dee89e6ef92b), [16815124](https://explorer.test.mezo.org/block/16815124)) funded it and the re-pay returned 200.
+
 ## Deployments (Mezo testnet, chain 31611)
 
 | Sternpost contract | Address |
@@ -118,7 +160,7 @@ Deployer [`0xf76e…71a3`](https://explorer.test.mezo.org/address/0xf76e6B0920e9
 
 **Verification, stated honestly:** the Factory's v2 record is `is_verified: true` but also classifies it as `proxy_type: basic_implementation` pointing at the verified TroveAccount implementation — Blockscout's proxy-detector misfiring on the ERC-1167 clone bytecode (same as 1.9); the factory is NOT functionally a proxy. Radar and Batcher: `forge verify-contract` reports "already verified" (bytecode unchanged from the verified 1.9 contracts) and the Blockscout v1 `getsourcecode` API returns full source + ABI for both (compiler v0.8.24), but the v2 `is_verified` flag still reads `false` — a Blockscout indexer quirk. Independent proof: all four deployed bytecodes MATCH the local forge build (immutables masked) — Impl 22,713 B, Factory 2,539 B, Radar 3,726 B, Batcher 2,784 B. Factory immutables read from chain: implementation `0x02Dd…0B8`, feeRecipient deployer, feeBps 10.
 
-**Demo account: still BLOCKED on funding.** The deployer holds 0.013361426240716919 BTC after the redeploy; a minimum trove needs ≥0.0340 BTC at 110% MCR (≥0.0774 BTC at 250% ICR). No demo account was created and none is claimed. The new addresses flow into the frontend from [`shared/deployments/testnet.json`](shared/deployments/testnet.json) (`app/src/lib/chain.ts` `ACCOUNTS`, no hardcoded addresses); the Shield fix rounds changed the interfaces, so [`shared/abis/TroveAccount.json`](shared/abis/TroveAccount.json) (117 → 129 entries) and [`shared/abis/TroveAccountFactory.json`](shared/abis/TroveAccountFactory.json) (20 → 21, +`BadCooldown`) were refreshed from the fresh build.
+**Demo account: created 2026-11-16** (was blocked on funding at redeploy time). [`0x6B88…e6a1`](https://explorer.test.mezo.org/address/0x6B88f1f2C7791cB0cc417297B4590B0392Fbe6a1) — coll 0.0414 BTC, debt 2001.8 MUSD, ICR 1.330, policy floor 1.2 / shield 1.15 / target 1.5 / bounty 1 MUSD / cooldown 20; agent [`0x9423…5AA`](https://explorer.test.mezo.org/address/0x94233B50980343bF36A6f217150b3D98E7a785AA) with a 7-day session (budget 10 / perTx 5 / daily 5 MUSD, `canSignX402`). It paid a real outside x402 service by borrowing — see [SDK live proof](#sdk). Funding it withdrew 0.0285 BTC from the deployer's own Classic trove (ICR 2.364 → 1.619, debt unchanged 2460.09 MUSD, still above the 1.6 shield line); deployer BTC after all steps: 0.000261425211416919. The new addresses flow into the frontend from [`shared/deployments/testnet.json`](shared/deployments/testnet.json) (`app/src/lib/chain.ts` `ACCOUNTS`, no hardcoded addresses); the Shield fix rounds changed the interfaces, so [`shared/abis/TroveAccount.json`](shared/abis/TroveAccount.json) (117 → 129 entries) and [`shared/abis/TroveAccountFactory.json`](shared/abis/TroveAccountFactory.json) (20 → 21, +`BadCooldown`) were refreshed from the fresh build.
 
 ### Wave 2 account contracts (1.9, 2026-11-15, Mezo testnet 31611) — SUPERSEDED by the Shield redeploy above
 

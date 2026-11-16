@@ -26,6 +26,8 @@ export interface DeploymentAddresses {
   musd?: string;
   troveManager?: string;
   priceFeed?: string;
+  /** Wave 2 Radar (Shield redeploy) from the file's `accounts.radar`. */
+  radar?: string;
   /** Demo borrower from the file's `liveFlow` (test helper / smoke test). */
   borrower?: string;
 }
@@ -67,6 +69,7 @@ export function deploymentFileAddresses(): DeploymentAddresses {
         musd: pick(m?.MUSD),
         troveManager: pick(m?.TroveManager),
         priceFeed: pick(m?.PriceFeed),
+        radar: pick(j?.accounts?.radar?.address),
         borrower: pick(j?.liveFlow?.borrower),
       };
     } catch {

@@ -14,10 +14,12 @@ import { musterRoutes, type MusterOpts } from "./routes/muster.js";
 import { sessionRequestRoutes, type SessionRequestOpts } from "./routes/requests.js";
 import type { RelayerDeps } from "./relayer/relayer.js";
 import type { PaywallOpts } from "./x402/paywall.js";
+import type { GatewayOpts } from "./gateway/routes.js";
 import type { Indexer } from "./indexer/indexer.js";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger.js";
 import { telegramRoutes, type TelegramRouteOpts } from "./routes/telegram.js";
+import { gatewayRoutes } from "./gateway/routes.js";
 
 export interface AppDeps {
   db: Db;
@@ -34,6 +36,8 @@ export interface AppDeps {
   muster?: MusterOpts;
   /** POST /v1/session-requests opts (task 5.2). */
   sessionRequests?: SessionRequestOpts;
+  /** x402 gateway routes (task 2.3). Absent in tests that do not mount the gateway. */
+  gateway?: GatewayOpts;
 }
 
 const originAllowed = (origin: string, list: string[]) =>
@@ -82,6 +86,7 @@ export function createApp(d: AppDeps) {
   app.route("/v1", activityRoutes(d.db));
   app.route("/v1", receiptsRoutes(d.db));
   app.route("/v1", demoRoutes(d.db, d.pay, d.snapshot));
+  if (d.gateway) app.route("/v1", gatewayRoutes(d.db, d.gateway));
   if (d.relayer) app.route("/v1", relayRoutes(d.relayer));
   if (d.muster) app.route("/v1", musterRoutes(d.db, d.muster));
   if (d.sessionRequests) app.route("/v1", sessionRequestRoutes(d.db, d.sessionRequests));

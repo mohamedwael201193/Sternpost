@@ -11,6 +11,7 @@ import { assertTestnetChain, liveRelayerClients, RelayRateLimiter, type RelayerD
 import { telegramApi } from "./telegram/api.js";
 import { viemChain, type Hex } from "./telegram/chain.js";
 import { createBot } from "./telegram/bot.js";
+import { createGatewayChainReader } from "./gateway/chain.js";
 
 /** Builds the full runtime (db, chain client, app, optional indexer) from config. Shared by server and serverless entries. */
 export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {}) {
@@ -84,6 +85,25 @@ export async function buildRuntime(cfg: Config, opts: { poolMax?: number } = {})
       payTo: cfg.X402_PAY_TO as `0x${string}`,
       amount: cfg.X402_PRICE,
       confirmTx: async (hash) => (await client.waitForTransactionReceipt({ hash, timeout: 30_000 })).status === "success",
+    },
+    gateway: {
+      pay: {
+        facilitatorUrl: cfg.X402_FACILITATOR_URL,
+        network: `eip155:${cfg.CHAIN_ID}`,
+        asset: cfg.MUSD_ADDRESS as `0x${string}`,
+        payTo: cfg.X402_PAY_TO as `0x${string}`,
+        confirmTx: async (hash) => (await client.waitForTransactionReceipt({ hash, timeout: 30_000 })).status === "success",
+      },
+      amounts: {
+        radar: cfg.X402_PRICE_RADAR,
+        previewDraw: cfg.X402_PRICE_PREVIEW_DRAW,
+        riskReport: cfg.X402_PRICE_RISK_REPORT,
+      },
+      reader: createGatewayChainReader(client as any, {
+        radar: cfg.RADAR_ADDRESS as `0x${string}`,
+        troveManager: cfg.TROVE_MANAGER_ADDRESS as `0x${string}`,
+        priceFeed: cfg.PRICE_FEED_ADDRESS as `0x${string}`,
+      }),
     },
   });
   return { app, db, indexer };

@@ -55,6 +55,23 @@ const schema = z.object({
     { message: "X402_PAY_TO must not be the zero address or the burn address" },
   ),
   X402_PRICE: z.string().regex(/^\d+$/).default("10000000000000000"),
+  /**
+   * Per-route gateway prices (plan §5.3), MUSD wei. X402_PRICE stays the
+   * demo-brief price (0.01); the gateway routes each take their own amount
+   * so one global price cannot silently over- or under-charge a route.
+   */
+  X402_PRICE_RADAR: z.string().regex(/^\d+$/).default("1000000000000000"),
+  X402_PRICE_PREVIEW_DRAW: z.string().regex(/^\d+$/).default("1000000000000000"),
+  X402_PRICE_RISK_REPORT: z.string().regex(/^\d+$/).default("10000000000000000"),
+  /**
+   * Wave 2 Radar on Mezo testnet (31611). Shield redeploy Radar
+   * 0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C (block 16804467; see
+   * shared/deployments/testnet.json `accounts.radar`), superseding the 1.9
+   * Radar 0x9Cd95A420e014da798dbFB74833b9D4DEe868be2.
+   */
+  RADAR_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).default(
+    DEPLOY.radar ?? "0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
+  ),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
