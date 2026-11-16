@@ -216,12 +216,12 @@ The full 16-step flow and the router runs are in [`judges/TESTNET_TXS.md`](judge
 
 ## Tests
 
-Counts are from [`TESTS.json`](TESTS.json) @ [`c167b5e`](https://github.com/mohamedwael201193/Sternpost/commit/c167b5e6ea19b336711bdd271b131cd51c877677) (generated 2026-11-16; the `commit` field inside `TESTS.json` records `c167b5e`) — **908 passing (non-fork subtotal; E2E not counted)**, **954 distinct** declared (933 non-fork + 10 fork + 11 invariant properties), **918 incl. fork** (908 + 10 testnet; the 7 mainnet passes are the same 10 fork tests, counted once). The account row below is the TESTS.json account split (account 192 unit + 15 fuzz + 1 invariant = 208).
+Counts are from [`TESTS.json`](TESTS.json), generated from the [`c167b5e`](https://github.com/mohamedwael201193/Sternpost/commit/c167b5e6ea19b336711bdd271b131cd51c877677) test run (2026-11-16) — **908 passing (non-fork subtotal; E2E not counted)**, **954 distinct** declared (933 non-fork + 10 fork + 11 invariant properties), **918 incl. fork** (908 + 10 testnet; the 7 mainnet passes are the same 10 fork tests, counted once). The account row below is the TESTS.json account split (account 192 unit + 15 fuzz + 1 invariant = 208).
 
 | Suite | Command | Result |
 |---|---|---|
-| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **312 passing** ([TESTS.json](TESTS.json) @ `c167b5e`) — unit 87 + fuzz 7 + invariant 2 + account 192 + fuzz-account 15 + invariant-account 1 + routes 8 = 312 |
-| Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **208 passed, 0 failed, 5 skipped** ([TESTS.json](TESTS.json) @ `c167b5e`) — account 192 unit + 15 fuzz + 1 invariant |
+| Contracts: unit, branch, fuzz, invariant, reentrancy | `cd contracts && forge test` | **312 passing** ([TESTS.json](TESTS.json)) — unit 87 + fuzz 7 + invariant 2 + account 192 + fuzz-account 15 + invariant-account 1 + routes 8 = 312 |
+| Contracts: account suite (`test/account/*`) | `cd contracts && forge test --match-path "test/account/*"` | **208 passed, 0 failed, 5 skipped** ([TESTS.json](TESTS.json)) — account 192 unit + 15 fuzz + 1 invariant |
 | Fork, real Mezo **testnet** | `cd contracts && ./script/fork.sh testnet` | **10/10** (Governor 7 + Router 3) ([log](judges/logs/fork_testnet.txt)) |
 | Fork, real Mezo **mainnet** | `cd contracts && ./script/fork.sh mainnet` | **7/10** (3 skipped — Router fork skipped: no router on mainnet) ([log](judges/logs/fork_mainnet.txt)) |
 | SDK (EIP-712 digests equal Solidity) | `cd sdk && npm ci && npm test` | **72/72** |
