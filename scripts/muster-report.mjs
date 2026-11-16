@@ -84,11 +84,18 @@ function fail(msg) {
   process.exit(1);
 }
 function checkValue(flag, value) {
-  // Reject values with no visible character: String trim() misses
-  // zero-width characters (U+200B–U+200D, U+2060, U+FEFF, U+180E) and
-  // NEL (U+0085), which would otherwise pass as a value and create an
-  // invisible directory / nonsense RPC. Reject, never trim-and-accept.
-  if (value.replace(/[\s\u200B-\u200D\u2060\uFEFF\u0085\u180E]/g, "") === "") {
+  // Reject values with no visible character. Stripping is test-only — the
+  // value itself is never modified — so combining marks inside an
+  // otherwise-visible value are unaffected. The strip set must cover the
+  // full invisible class, not just the common cases: \s plus \p{Cf}
+  // (format chars: U+200B–U+200F, U+2060–U+2064, U+061C, U+180E, U+FEFF),
+  // \p{Mn} / \p{Me} (non-spacing / enclosing marks: variation selectors
+  // U+FE00–U+FE0F, U+034F, U+17B4–U+17B5), U+00AD soft hyphen, U+0085 NEL,
+  // and the Hangul fillers U+115F–U+1160, U+3164, U+FFA0 (category Lo, so
+  // no Unicode property covers them — they stay explicit). A value made
+  // solely of any of these would otherwise pass and create a directory
+  // whose name renders empty.
+  if (value.replace(/[\s\p{Cf}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u3164\uFFA0]/gu, "") === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
   }
   if (value.startsWith("=")) {
@@ -159,22 +166,51 @@ const hexToInt = (h) => {
 };
 const topicAddr = (t) => ("0x" + t.slice(-40)).toLowerCase();
 
-// Every log the RPC returns must carry the fields the report reads:
-// at least 2 topics, a transactionHash and a hex blockNumber. A stub /
-// broken node returning a short or partial log used to crash the row
-// builder with an uncaught TypeError; validate first, fail cleanly.
+// Every log the RPC returns must carry the fields the report reads, in
+// the exact shape the real events emit — a type check is not enough:
+// topics[1] = "" or "0x12" used to pass (string check only) and topicAddr's
+// blind .slice(-40) then yielded "0x" / "0x12", counted as an outside
+// address in the published report. Real shapes (verified against
+// contracts/src/SternpostFactory.sol:36-37 and
+// contracts/src/SternpostGovernor.sol:82):
+//   GovernorCreated(address indexed borrower, ...) — 1 indexed param,
+//     exactly 2 topics; topics[1] = borrower address topic.
+//   SpendWalletCreated(address indexed owner, ...) — 1 indexed param,
+//     exactly 2 topics; topics[1] = owner address topic.
+//   Drawn(address indexed app, address indexed payee, ...) — 2 indexed
+//     params, exactly 3 topics; topics[1] = app address topic.
+// topics[0] must be one of the three known signatures (an arbitrary
+// topics[0] string was silently classified as SpendWalletCreated), every
+// topic must be a full 32-byte word, and transactionHash must be a full
+// 32-byte hash (an arbitrary non-empty string rendered a bogus explorer
+// link). Validate first, fail cleanly — never publish a false address.
+const TOPIC = /^0x[0-9a-fA-F]{64}$/;
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const EXPECTED_TOPICS = {
+  [TOPICS.GovernorCreated]: 2,
+  [TOPICS.SpendWalletCreated]: 2,
+  [TOPICS.Drawn]: 3,
+};
 function validateLog(l) {
   if (!l || typeof l !== "object") throw new Error("malformed log: not an object");
-  if (
-    !Array.isArray(l.topics) ||
-    l.topics.length < 2 ||
-    typeof l.topics[0] !== "string" ||
-    typeof l.topics[1] !== "string"
-  ) {
+  if (!Array.isArray(l.topics) || l.topics.length < 2) {
     throw new Error("malformed log: topics must have at least 2 entries");
   }
-  if (typeof l.transactionHash !== "string" || l.transactionHash === "") {
-    throw new Error("malformed log: missing transactionHash");
+  if (!Object.hasOwn(EXPECTED_TOPICS, l.topics[0])) {
+    throw new Error(`malformed log: unknown event topic ${JSON.stringify(l.topics[0])}`);
+  }
+  if (l.topics.length !== EXPECTED_TOPICS[l.topics[0]]) {
+    throw new Error(
+      `malformed log: ${l.topics[0]} must have exactly ${EXPECTED_TOPICS[l.topics[0]]} topics, got ${l.topics.length}`
+    );
+  }
+  for (const t of l.topics) {
+    if (typeof t !== "string" || !TOPIC.test(t)) {
+      throw new Error(`malformed log: topic must be a 32-byte hex word, got ${JSON.stringify(t)}`);
+    }
+  }
+  if (typeof l.transactionHash !== "string" || !TX_HASH.test(l.transactionHash)) {
+    throw new Error(`malformed log: transactionHash must be a 32-byte hex hash, got ${JSON.stringify(l.transactionHash)}`);
   }
   if (!isHex(l.blockNumber)) {
     throw new Error(`malformed log: missing or invalid blockNumber ${JSON.stringify(l.blockNumber)}`);
@@ -182,9 +218,24 @@ function validateLog(l) {
 }
 
 // Windowed eth_getLogs (testnet RPCs cap ranges; 2,000 blocks per call).
+// Cap: at most MAX_WINDOWS windows per query, checked BEFORE the first
+// RPC call. Without it an absurd-but-valid-hex latest (e.g.
+// 0xFFFFFFFFFFFFFFFF) makes the window loop effectively unbounded —
+// astronomical sequential RPC calls, each 15 s-bounded but total
+// unbounded. 100,000 windows x 2,000 blocks = 200M blocks, ~12 years of
+// chain growth at ~2 s/block: far beyond any legitimate daily-report
+// range from the 0.9 deploy blocks, while any absurd value fails
+// instantly with zero RPC calls.
+const MAX_WINDOWS = 100000;
 async function getLogs(address, topics, fromBlock, toBlock) {
   const out = [];
   const STEP = 2000;
+  const windows = Math.ceil((toBlock - fromBlock + 1) / STEP);
+  if (windows > MAX_WINDOWS) {
+    throw new Error(
+      `refusing eth_getLogs range of ${windows} windows (${fromBlock}–${toBlock}): exceeds cap of ${MAX_WINDOWS} windows`
+    );
+  }
   for (let from = fromBlock; from <= toBlock; from += STEP) {
     const to = Math.min(from + STEP - 1, toBlock);
     const logs = await rpc("eth_getLogs", [
@@ -224,6 +275,17 @@ let creations;
 let draws;
 try {
   latest = hexToInt(await rpc("eth_blockNumber", []));
+
+  // latest must not predate either deploy block: a valid-hex latest
+  // below the factory/governor block makes both getLogs loops execute
+  // zero iterations and publishes a vacuous "0 outside addresses"
+  // report. Reachable via a lagging node, an --rpc pointed at a
+  // different/lower chain, or a fresh local node — fail cleanly instead.
+  if (latest < FACTORY_BLOCK || latest < GOVERNOR_BLOCK) {
+    throw new Error(
+      `latest block ${latest} is below the deploy blocks (factory ${FACTORY_BLOCK}, governor ${GOVERNOR_BLOCK})`
+    );
+  }
 
   // GovernorCreated + SpendWalletCreated from the 0.9 Factory.
   creations = await getLogs(
