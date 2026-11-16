@@ -41,7 +41,7 @@ describe("telegram ui", () => {
   });
   it("request, link and unlinked keyboards", () => {
     const kb = requestKeyboard(APP, { id: 7, app_address: "0xab", amount: "5" });
-    expect(kb[0][1]).toEqual({ text: "🔎 View in app", url: `${APP}/app/apps?request=7` });
+    expect(kb[0][1]).toEqual({ text: "🔎 View in app", url: `${APP}/app/crew?request=7` });
     expect(kb[2]).toEqual([{ text: "👥 View crew", callback_data: "m:crew" }]);
     const [, lk] = linkPrompt("msg", 10, "https://api.test/tg/link?code=c");
     expect(lk.map((r) => r[0].url ?? r[0].callback_data)).toEqual(["https://api.test/tg/link?code=c", "m:cancel"]);

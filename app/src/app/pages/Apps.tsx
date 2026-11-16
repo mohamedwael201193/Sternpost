@@ -114,7 +114,7 @@ function RequestList({ borrower }: { borrower?: string }) {
           <span><span className="mono text-xs">{r.app_address.slice(0, 10)}…</span> asks <b>{fmt(BigInt(r.amount))} MUSD</b>{r.reason && <span className="text-muted"> · {r.reason}</span>}</span>
           {r.status === 'pending' ? (
             <span className="flex gap-2 shrink-0">
-              <Link className="pill" to={`/app/apps?app=${r.app_address}&amount=${r.amount}&request=${r.id}`}>Review</Link>
+              <Link className="pill" to={`/app/crew?app=${r.app_address}&amount=${r.amount}&request=${r.id}`}>Review</Link>
               <button className="pill-ghost" onClick={async () => { await setRequestStatus(r.id, 'rejected'); setTick((n) => n + 1) }}>Reject</button>
             </span>
           ) : <span className="caps text-[11px]">{r.status}</span>}

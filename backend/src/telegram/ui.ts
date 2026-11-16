@@ -232,8 +232,8 @@ export const requestText = (r: { id: number; app_address: string; amountFmt: str
 
 export const requestKeyboard = (appUrl: string, r: { id: number; app_address: string; amount: string }): Keyboard => [
   [
-    { text: "✅ Approve in wallet", url: `${appUrl}/app/apps?app=${r.app_address}&amount=${r.amount}&request=${r.id}` },
-    { text: "🔎 View in app", url: `${appUrl}/app/apps?request=${r.id}` },
+    { text: "✅ Approve in wallet", url: `${appUrl}/app/crew?app=${r.app_address}&amount=${r.amount}&request=${r.id}` },
+    { text: "🔎 View in app", url: `${appUrl}/app/crew?request=${r.id}` },
   ],
   [{ text: "🔁 I signed, verify", callback_data: `verify:${r.id}` }, { text: "✖️ Deny", callback_data: `deny:${r.id}` }],
   [{ text: "👥 View crew", callback_data: "m:crew" }],

@@ -286,7 +286,7 @@ describe("draw request approvals", () => {
     await msg("/requests");
     expect(last().text).toContain("5 MUSD");
     expect(last().text).toContain("&lt;b&gt;x&lt;/b&gt;");
-    expect(last().kb![0][0].url).toBe(`https://app.test/app/apps?app=${APP}&amount=${5n * E18}&request=${r.id}`);
+    expect(last().kb![0][0].url).toBe(`https://app.test/app/crew?app=${APP}&amount=${5n * E18}&request=${r.id}`);
     expect(last().kb![1].map((b) => b.callback_data)).toEqual([`verify:${r.id}`, `deny:${r.id}`]);
   });
   it("deny rejects only the owner's pending request", async () => {
