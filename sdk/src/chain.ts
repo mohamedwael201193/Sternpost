@@ -1,5 +1,8 @@
 import { defineChain, type Chain } from "viem";
 
+/** Canonical Multicall3, deployed on Mezo testnet + mainnet. */
+export const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
+
 export const mezoTestnet: Chain = defineChain({
   id: 31611,
   name: "Mezo Testnet",
@@ -14,6 +17,7 @@ export const testnetAddresses = {
   factory: "0x39779A8678424CF78c841F9AfEa1EAFF3Cf7F6d8",
   signatures: "0xD757e3646AF370b15f32EB557F0F8380Df7D639e",
   troveManager: "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0",
+  priceFeed: "0x86bCF0841622a5dAC14A313a15f96A95421b9366",
   musd: "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
   smusd: "0x6f461c68B2c5492C0F5CCEc5a264d692aA7A8e16",
   permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",

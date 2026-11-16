@@ -18,6 +18,7 @@ const deployment = JSON.parse(
   mezo: {
     BorrowerOperationsSignatures: string;
     TroveManager: string;
+    PriceFeed: string;
     MUSD: string;
     sMUSD: string;
     Permit2: string;
@@ -40,6 +41,9 @@ describe("SDK default addresses match the deployment record", () => {
     );
     expect(testnetAddresses.troveManager.toLowerCase()).toBe(
       deployment.mezo.TroveManager.toLowerCase(),
+    );
+    expect(testnetAddresses.priceFeed.toLowerCase()).toBe(
+      deployment.mezo.PriceFeed.toLowerCase(),
     );
     expect(testnetAddresses.musd.toLowerCase()).toBe(deployment.mezo.MUSD.toLowerCase());
     expect(testnetAddresses.smusd.toLowerCase()).toBe(deployment.mezo.sMUSD.toLowerCase());

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NavLink, Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
 import { wagmiConfig } from './wagmi'
 import { ConnectButton } from './kit'
+import { DemoBanner } from './DemoBanner'
 import { Token } from '../ui/Token'
 import { NetBadge } from '../ui/NetBadge'
 import Home from './pages/Home'
@@ -166,6 +167,7 @@ export default function Dashboard() {
             </div>
           </aside>
           <main className="min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-10 lg:py-8 max-w-[1440px] w-full">
+            <DemoBanner />
             <div className="lg:hidden flex items-center justify-between gap-3 mb-4">
               <Link to="/" className="flex items-center gap-2 min-w-0" aria-label="Sternpost home">
                 <svg viewBox="0 0 32 32" className="w-7 h-7 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="16" cy="6" r="2.6" /><path d="M16 8.6V28M10 13h12M5 19c0 5 5 9 11 9s11-4 11-9" /></svg>

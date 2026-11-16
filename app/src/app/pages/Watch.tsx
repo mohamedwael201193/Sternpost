@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Card } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
+import { MAINNET_RPC_ERROR_TEXT, RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
 import { fmt, pct, WAD } from '../../lib/icr'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -13,39 +15,103 @@ const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : 
 
 export default function Watch() {
   const t = useTrove()
-  const tcrPct = toPct(t.tcr)
-  const icrPct = toPct(t.icr)
+  const viewed = useViewedAccount()
+  const demo = viewed.demoMode
+  // Demo mode: ICR + shield need come from the public demo account, system health from the Radar (plan §6.3).
+  const acct = useAccount(demo ? viewed.address : undefined)
+  const radar = useRadar('testnet', demo ? viewed.address : undefined)
+  const radarMainnet = useRadar('mainnet')
+  const a = acct.data
+  const icrPct = demo ? toPct(a?.icr) : toPct(t.icr)
+  const tcrPct = demo ? toPct(radar.data?.tcr) : toPct(t.tcr)
+  const mainnetTcrPct = toPct(radarMainnet.data?.tcr)
+  const recoveryMode = demo ? radar.data?.recoveryMode : t.recoveryMode
   // Standby state is UNKNOWN until a wallet is connected, a Governor exists, and the read returns —
   // unknown must never render as "Disarmed".
   const standbyKnown = t.isConnected && !!t.governor && t.standby !== undefined
   const standbyArmed = standbyKnown && !!t.standby?.[3]
+  const loading = demo ? acct.isLoading || radar.isLoading : false
+  const rpcError = demo ? acct.isError || radar.isError : false
+  const shield = a?.needed
+  const shieldNeeded = !!shield && (shield.repayWanted > 0n || shield.collWanted > 0n)
   return (
     <div className="space-y-8">
-      {t.recoveryMode === true && (
+      {rpcError && (
+        <div className="plate rounded-xl p-4 text-sm" role="alert">{RPC_ERROR_TEXT}</div>
+      )}
+      {recoveryMode === true && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
           <b>Recovery Mode is ON</b> — Mezo system health (TCR) is below 150%, so draws are paused on-chain. Repay or add collateral to continue.
         </div>
       )}
-      {t.recoveryMode === false && (
+      {recoveryMode === false && (
         <div className="plate rounded-xl p-4 text-sm">
           <b>Recovery Mode is off.</b> Mezo system health (TCR){tcrPct !== null ? ` is ${tcrPct.toFixed(1)}%` : ''} — above the 150% line, so draws are live.
         </div>
       )}
 
       <div className="grid sm:grid-cols-3 gap-4">
-        <Card title="Your ICR">
-          <div className="display text-3xl">{icrPct === null ? '—' : `${icrPct.toFixed(1)}%`}</div>
+        <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
+          {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
+            <div className="display text-3xl">{rpcError ? 'Unavailable' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
+          )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>
         <Card title="System health (TCR)">
-          <div className="display text-3xl">{tcrPct === null ? '—' : `${tcrPct.toFixed(1)}%`}</div>
+          {radar.isLoading ? <Skeleton className="h-9 w-28" label="Loading system health" /> : (
+            <div className="display text-3xl">{radar.isError ? 'Unavailable' : tcrPct === null ? 'No data' : `${tcrPct.toFixed(1)}%`}</div>
+          )}
           <p className="text-xs text-muted mt-1">Recovery Mode below 150% (Mezo CCR)</p>
+          <p className="text-xs text-muted mt-1">
+            {radarMainnet.isLoading ? 'Mainnet (read-only): loading…' : radarMainnet.isError ? 'Mainnet (read-only): unreachable' : mainnetTcrPct !== null ? `Mainnet (read-only): TCR ${mainnetTcrPct.toFixed(1)}%` : 'Mainnet (read-only): no data'}
+          </p>
         </Card>
-        <Card title="Standby heal">
-          <div className="display text-3xl">{!standbyKnown ? '—' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
-          <p className="text-xs text-muted mt-1">{!standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+        <Card title={demo ? 'Shield need' : 'Standby heal'}>
+          {demo ? (
+            loading ? <Skeleton className="h-9 w-28" label="Loading shield state" /> : (
+              <>
+                <div className="display text-3xl">{rpcError ? 'Unavailable' : shieldNeeded ? `Repay ${fmt(shield!.repayWanted)}` : 'None'}</div>
+                <p className="text-xs text-muted mt-1">
+                  {rpcError ? RPC_ERROR_TEXT : shieldNeeded
+                    ? `Shield would repay ${fmt(shield!.repayWanted)} MUSD${shield!.collWanted > 0n ? ` and add ${fmt(shield!.collWanted, 18, 6)} BTC` : ''} to reach the ${a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : ''} target`
+                    : a?.shieldICR == null
+                      ? 'This account has no Governor policy, so there is no shield line for shield() to defend.'
+                      : `ICR ${icrPct !== null ? `${icrPct.toFixed(1)}%` : ''} is above the shield line ${pct(a.shieldICR)} — shield() would revert NothingToDo`}
+                </p>
+              </>
+            )
+          ) : (
+            <>
+              <div className="display text-3xl">{!standbyKnown ? 'Not connected' : standbyArmed && t.standby ? `${fmt(t.standby[0])} MUSD` : 'Disarmed'}</div>
+              <p className="text-xs text-muted mt-1">{!standbyKnown ? (t.isConnected ? 'No Governor yet — standby lives on your Governor' : 'Connect a wallet to read standby state') : standbyArmed ? 'Armed — defend() can fire' : 'Re-arm on Bridge to enable defend'}</p>
+            </>
+          )}
         </Card>
       </div>
+
+      {demo && (
+        <Card title="Sonar — redemption order (live)">
+          {radar.isLoading ? (
+            <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+          ) : radar.isError ? (
+            <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+          ) : radar.data ? (
+            <div className="text-sm leading-relaxed space-y-2">
+              <p>
+                {radar.data.rank?.complete
+                  ? <>The demo account sits <b>#{String(radar.data.rank.rank)} of {String(radar.data.troveCount)}</b> from redemption, with <b>{fmt(radar.data.rank.debtAhead)} MUSD</b> of redeemable debt ahead of it.</>
+                  : <>The demo account&apos;s rank did not resolve within the walked steps — its position is unknown, not safe.</>}
+              </p>
+              <p className="text-muted">
+                Frontier trove{' '}
+                {radar.data.frontier ? <><a className="ink-link mono text-xs" href={addrUrl(radar.data.frontier.trove)} target="_blank" rel="noreferrer">{radar.data.frontier.trove.slice(0, 6)}…{radar.data.frontier.trove.slice(-4)}</a> at {pct(radar.data.frontier.icr, 1)} with {fmt(radar.data.frontier.debt)} MUSD of debt</> : 'unknown'}.
+                Testnet ranks are synthetic: one 426M MUSD trove sits at the frontier. See Mainnet for the real picture.
+              </p>
+              <p className="text-muted">Mainnet (read-only): {radarMainnet.data ? `${String(radarMainnet.data.troveCount)} troves, TCR ${mainnetTcrPct !== null ? `${mainnetTcrPct.toFixed(1)}%` : 'unknown'}` : radarMainnet.isError ? MAINNET_RPC_ERROR_TEXT : 'loading…'}</p>
+            </div>
+          ) : <p className="text-sm text-muted">Radar not readable.</p>}
+        </Card>
+      )}
 
       <Card title="Shield — a stranger defends your trove" aside={<span className="caps text-[10px] text-magenta">In progress · task 1.4</span>}>
         <p className="text-sm leading-relaxed">
@@ -62,9 +128,15 @@ export default function Watch() {
           percentage points or the value added is at least 10× the bounty, and at most once per cooldown.
         </p>
         <p className="text-sm leading-relaxed mt-3">
-          Policy on the live 0.9 Governor:{' '}
-          <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(GOVERNOR)} target="_blank" rel="noreferrer">{GOVERNOR}</a>
-          {' '}— floor {t.floor ? pct(t.floor) : '250% (policy)'} · defend line {t.defend ? pct(t.defend) : '160% (policy)'}.
+          {demo ? (
+            <>Policy on the demo account:{' '}
+              <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address}</a>
+              {' '}— floor {a?.floorICR !== null && a?.floorICR !== undefined ? pct(a.floorICR) : 'unknown'} · shield line {a?.shieldICR !== null && a?.shieldICR !== undefined ? pct(a.shieldICR) : 'unknown'} · target {a?.targetICR !== null && a?.targetICR !== undefined ? pct(a.targetICR) : 'unknown'}.</>
+          ) : (
+            <>Policy on the live 0.9 Governor:{' '}
+              <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(GOVERNOR)} target="_blank" rel="noreferrer">{GOVERNOR}</a>
+              {' '}— floor {t.floor ? pct(t.floor) : '250% (policy)'} · defend line {t.defend ? pct(t.defend) : '160% (policy)'}.</>
+          )}
         </p>
       </Card>
 

@@ -1,5 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { addrUrl, txUrl } from '../../lib/proofs'
+import { DEMO_ACCOUNT, DEMO_ACCOUNT_BADGE } from '../../lib/chain'
+import { fmt, pct } from '../../lib/icr'
+import { Skeleton } from '../../ui/Skeleton'
+import { RPC_ERROR_TEXT, useAccount } from '../useAccount'
 import deployments from '../../../../shared/deployments/testnet.json'
 
 const FACTORY = deployments.sternpost.SternpostFactory.address
@@ -43,7 +49,19 @@ function Tx({ h }: { h: string }) {
   return <a className="mono ink-link text-magenta text-xs break-all" href={txUrl(h)} target="_blank" rel="noreferrer">{h} ↗</a>
 }
 
-export default function ProveIt() {
+/** ProveIt renders outside the Dashboard providers, so it owns a small QueryClient for its one live read. */
+export default function ProveItPage() {
+  const [qc] = useState(() => new QueryClient())
+  return (
+    <QueryClientProvider client={qc}>
+      <ProveIt />
+    </QueryClientProvider>
+  )
+}
+
+function ProveIt() {
+  const acct = useAccount(DEMO_ACCOUNT)
+  const a = acct.data
   return (
     <main className="min-h-screen">
       <div className="mx-auto max-w-[900px] px-6 py-10">
@@ -51,6 +69,23 @@ export default function ProveIt() {
         <div className="caps text-[11px] tracking-[.24em] text-magenta mt-8">Proof</div>
         <h1 className="display text-5xl mt-2">Prove it</h1>
         <p className="text-muted mt-3 max-w-2xl">Every number Sternpost claims, with the transaction or the test run behind it. Mezo testnet 31611 unless labelled otherwise.</p>
+
+        <h2 className="display text-3xl mt-12 mb-4">Demo account — live</h2>
+        {acct.isLoading ? (
+          <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+        ) : acct.isError ? (
+          <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+        ) : a ? (
+          <div className="text-sm leading-relaxed space-y-2">
+            <p>
+              <a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(DEMO_ACCOUNT)} target="_blank" rel="noreferrer">{DEMO_ACCOUNT} ↗</a>
+              {DEMO_ACCOUNT_BADGE && <span className="caps rounded-sm border border-ink/40 px-2 py-0.5 text-[10px] ml-3">{DEMO_ACCOUNT_BADGE}</span>}
+            </p>
+            <p>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></p>
+            <p>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'} · MUSD on the account {fmt(a.balances.musd)} · sMUSD {fmt(a.balances.smusd)}</p>
+            <p className="text-muted">Read live from Mezo testnet with one Multicall3 batch; refreshes every 12 s. The same account demo mode shows on every app page.</p>
+          </div>
+        ) : <p className="text-sm text-muted">Account not readable.</p>}
 
         <h2 className="display text-3xl mt-12 mb-4">Tests</h2>
         <p className="text-sm leading-relaxed">

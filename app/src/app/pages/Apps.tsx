@@ -4,18 +4,24 @@ import { useQuery } from '@tanstack/react-query'
 import { usePublicClient, useReadContract, useReadContracts, useWriteContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Card, Empty, NeedsWallet, TxStatus, useTx } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
+import { RPC_ERROR_TEXT, useAccount, useViewedAccount } from '../useAccount'
+import { useAccountLogs } from '../useLogs'
 import { governorAbi } from '../../lib/abi'
-import { fmt } from '../../lib/icr'
+import { fmt, pct } from '../../lib/icr'
 import { DEPLOY_BLOCK } from '../../lib/chain'
-import { addrUrl } from '../../lib/proofs'
+import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 import { useSetRequestStatus, useApiList } from '../api'
 
 export default function Apps() {
   const t = useTrove()
+  const viewed = useViewedAccount()
+  const demo = viewed.demoMode
   const [params] = useSearchParams()
   const [lookup, setLookup] = useState(params.get('app') ?? '')
+  if (demo) return <DemoCrew viewed={viewed} />
   return (
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Apps</h1><p className="text-muted mt-2 max-w-2xl">Give an app a budget it can draw from your trove. It can never take more than the budget, more than one draw cap, or anything below your floor.</p></header>
@@ -34,6 +40,61 @@ export default function Apps() {
           </div>
         )}
       </NeedsWallet>
+    </div>
+  )
+}
+
+/**
+ * Read-only Crew for demo mode: the demo account's live policy plus the agents
+ * that actually drew from it (Drawn events, read from the chain). Sessions
+ * cannot be enumerated on-chain — the mapping has no list — so the page says
+ * what it shows (draws) and does not pretend to list sessions.
+ */
+function DemoCrew({ viewed }: { viewed: ReturnType<typeof useViewedAccount> }) {
+  const acct = useAccount(viewed.address)
+  const logs = useAccountLogs(viewed.address, acct.data?.version)
+  const a = acct.data
+  const draws = (logs.data?.rows ?? []).filter((r) => r.event === 'Drawn')
+  return (
+    <div className="space-y-8">
+      <header><h1 className="display text-4xl">Apps</h1><p className="text-muted mt-2 max-w-2xl">Give an app a budget it can draw from your trove. It can never take more than the budget, more than one draw cap, or anything below your floor.</p></header>
+      <div className="grid lg:grid-cols-2 gap-8">
+        <Card title="Demo account policy">
+          {acct.isLoading ? (
+            <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+          ) : acct.isError ? (
+            <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+          ) : a ? (
+            <div className="text-sm space-y-2">
+              <div>Floor <b className="mono">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</b> · shield line <b className="mono">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</b> · target <b className="mono">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</b></div>
+              <div>Bounty <b className="mono">{a.bounty !== null ? `${fmt(a.bounty)} MUSD` : 'unknown'}</b> per effective shield</div>
+              <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b></div>
+              <p className="text-muted">Budgets are set by the owner. In demo mode this account is read-only — connect the owner wallet to authorize an app.</p>
+            </div>
+          ) : <p className="text-sm text-muted">Account not readable.</p>}
+        </Card>
+        <Card title="Agents that drew" aside={<span className="caps text-[10px] text-muted">from Drawn logs</span>}>
+          {logs.isLoading ? (
+            <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+          ) : logs.isError ? (
+            <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+          ) : !draws.length ? (
+            <p className="text-sm text-muted">No draws yet on this account.</p>
+          ) : (
+            <ul>
+              {draws.map((d) => (
+                <li key={`${d.tx}-${d.logIndex}`} className="py-3 border-t border-ink/15 text-sm">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <span>Agent <a className="ink-link mono text-xs" href={addrUrl(d.args.agent)} target="_blank" rel="noreferrer">{String(d.args.agent).slice(0, 6)}…{String(d.args.agent).slice(-4)}</a></span>
+                    <a className="ink-link mono text-xs" href={txUrl(d.tx)} target="_blank" rel="noreferrer">tx {d.tx.slice(0, 8)}… ↗</a>
+                  </div>
+                  <div className="mono text-xs mt-1 text-muted">drew {fmt(d.args.amount)} MUSD · ICR after {pct(d.args.icrAfter, 1)} · block {String(d.block)}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }
@@ -145,7 +206,7 @@ function AuthorizedApps({ governor, me }: { governor: Address; me?: Address }) {
   const rows = apps.map((a, i) => ({ a, p: pol.data?.[i]?.result as readonly [bigint, bigint, bigint, bigint, Address] | undefined })).filter((r) => r.p && r.p[3] > 0n)
   return (
     <Card title="Authorized apps" aside={<span className="caps text-[10px] text-muted">on your Governor</span>}>
-      {(logs.isLoading || pol.isLoading) && <p className="text-sm text-muted">Reading your Governor…</p>}
+      {(logs.isLoading || pol.isLoading) && <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>}
       {logs.error && <p className="text-sm text-signal">Could not read Governor logs from the RPC.</p>}
       {logs.data && !pol.isLoading && !rows.length && <p className="text-sm text-muted">No app holds a budget right now.</p>}
       <ul data-testid="authorized-apps">

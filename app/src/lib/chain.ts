@@ -9,6 +9,23 @@ export const mezoTestnet = defineChain({
   testnet: true,
 })
 
+/** Mezo mainnet (31612), read-only. Lab-documented working RPC; rpc.mezo.org does not resolve (LAB_METHODS.md). */
+export const mezoMainnet = defineChain({
+  id: 31612,
+  name: 'Mezo Mainnet',
+  nativeCurrency: { name: 'Bitcoin', symbol: 'BTC', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc-http.mezo.boar.network'] } },
+  blockExplorers: { default: { name: 'Mezo Explorer', url: 'https://explorer.mezo.org' } },
+})
+
+/** Mezo mainnet (31612) proxies, verified against official docs + release table (MEZO_RESOURCES.md). */
+export const MEZO_MAINNET = {
+  troveManager: '0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193',
+  priceFeed: '0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88',
+  sortedTroves: '0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f',
+  musd: '0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186',
+} as const satisfies Record<string, Address>
+
 /** Mezo protocol contracts on testnet 31611 (verified against live calls in our fork tests). */
 export const MEZO = {
   signatures: '0xD757e3646AF370b15f32EB557F0F8380Df7D639e',
@@ -57,6 +74,25 @@ export const ACCOUNTS: AccountDeployments = {
 
 /** First block worth scanning for Account events (implementation deployment). */
 export const ACCOUNTS_DEPLOY_BLOCK: bigint = BigInt(d.accounts.implementation.block)
+
+/**
+ * Demo account for read-only demo mode (plan §6.3): `shared/deployments/testnet.json` →
+ * `accounts.demo` when it is a deployed account address. It is NOT one yet — the record
+ * holds `{status: 'BLOCKED'}` (funding gap, deployer short of the minimum trove) — so the
+ * plan's exact fallback applies: the lab TroveAccountV2 with the `LAB PROTOTYPE` badge.
+ * Never invent a demo account; never fake its numbers.
+ */
+export const LAB_DEMO_ACCOUNT = '0x5A1166eC096e12C0C6187695F82B7F4b285389Df' as Address
+const demoRaw: unknown = (d.accounts as { demo?: unknown } | undefined)?.demo
+export const DEMO_ACCOUNT: Address = typeof demoRaw === 'string' && demoRaw.startsWith('0x') ? (demoRaw as Address) : LAB_DEMO_ACCOUNT
+export const DEMO_ACCOUNT_SOURCE: 'production' | 'lab' = DEMO_ACCOUNT === LAB_DEMO_ACCOUNT ? 'lab' : 'production'
+export const DEMO_ACCOUNT_BADGE: string | null = DEMO_ACCOUNT_SOURCE === 'lab' ? 'LAB PROTOTYPE' : null
+
+/** First block worth scanning for the lab account's events (deployed shortly before its open at 16790909). */
+export const LAB_ACCOUNT_LOGS_FROM_BLOCK = 16790000n
+
+/** Testnet Radar (Shield redeploy 2026-11-16). */
+export const RADAR_TESTNET: Address | undefined = ACCOUNTS.radar
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'https://sternpost-api.vercel.app'
 

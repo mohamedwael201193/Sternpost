@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Card } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
+import { RPC_ERROR_TEXT, useAccount, useViewedAccount } from '../useAccount'
+import { fmt, pct } from '../../lib/icr'
+import { DEMO_ACCOUNT_BADGE } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
@@ -14,8 +18,26 @@ function Addr({ a }: { a: string }) {
 }
 
 export default function Open() {
+  const viewed = useViewedAccount()
+  const acct = useAccount(viewed.address)
+  const a = acct.data
   return (
     <div className="space-y-8">
+      <Card title="Demo account — live on testnet" aside={viewed.isLabPrototype && DEMO_ACCOUNT_BADGE ? <span className="caps text-[10px] text-muted">{DEMO_ACCOUNT_BADGE}</span> : undefined}>
+        {acct.isLoading ? (
+          <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+        ) : acct.isError ? (
+          <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+        ) : a ? (
+          <div className="text-sm space-y-2">
+            <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address} ↗</a></div>
+            <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · collateral <b className="mono">{fmt(a.coll, 18, 6)} BTC</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · status <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b></div>
+            <div>Policy: floor {a.floorICR !== null ? pct(a.floorICR) : 'unknown'} · shield {a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'} · target {a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</div>
+            <p className="text-muted">This is the account demo mode shows on every page. One-transaction open would create an account like this one for you.</p>
+          </div>
+        ) : <p className="text-sm text-muted">Account not readable.</p>}
+      </Card>
+
       <Card title="Open a credit account — the live path today, in three steps">
         <ol className="text-sm leading-relaxed space-y-3 list-decimal pl-5">
           <li>

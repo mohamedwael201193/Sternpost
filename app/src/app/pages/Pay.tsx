@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from 'wagmi'
 import { zeroAddress, type Address } from 'viem'
 import { Card, Empty, NeedsWallet } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
 import { useTrove } from '../useTrove'
+import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '../useAccount'
 import { erc20Abi, factoryAbi } from '../../lib/abi'
 import { MEZO, STERNPOST } from '../../lib/chain'
 import { fmt } from '../../lib/icr'
@@ -17,14 +19,24 @@ const spendAbi = [
 
 export default function Pay() {
   const t = useTrove()
+  const viewed = useViewedAccount()
+  const demo = viewed.demoMode
+  const acct = useAccountData(demo ? viewed.address : undefined)
   const proof = PROOFS.find((p) => p.id === 'x402')!
   return (
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Pay</h1><p className="text-muted mt-2 max-w-2xl">Drawn MUSD can sit in a spend wallet that an agent signs x402 payments from. The agent can spend that wallet, never your trove.</p></header>
       <div className="grid lg:grid-cols-[1fr_360px] gap-8">
         <div className="space-y-6">
-          <NeedsWallet what="see your spend wallets"><Wallets owner={t.address!} /></NeedsWallet>
-          <Receipts payer={undefined} />
+          {demo ? (
+            acct.isLoading ? <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+            : acct.isError ? <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+            : acct.data?.owner ? <Wallets owner={acct.data.owner} />
+            : <Empty title="No spend wallets">The demo account has no known owner.</Empty>
+          ) : (
+            <NeedsWallet what="see your spend wallets"><Wallets owner={t.address!} /></NeedsWallet>
+          )}
+          <Receipts payer={demo ? viewed.address : undefined} />
         </div>
         <Card title="Last x402 settlement">
           <div className="border border-ink/20 bg-paper2 p-5 text-center">
@@ -61,7 +73,7 @@ function Wallets({ owner }: { owner: Address }) {
         return (
           <div key={w} className="py-3 border-t border-ink/15 grid sm:grid-cols-3 gap-2 text-sm items-center">
             <a className="ink-link mono text-xs" href={addrUrl(w)} target="_blank" rel="noreferrer">{w.slice(0, 10)}…{w.slice(-4)}</a>
-            <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : '—'}</b> MUSD</span>
+            <span><b className="mono">{bal?.result !== undefined ? fmt(bal.result as bigint) : 'Loading…'}</b> MUSD</span>
             <span className="text-xs">{!a || a === zeroAddress ? 'no agent' : <>agent {a.slice(0, 8)}… until {new Date(Number(exp?.result ?? 0n) * 1000).toLocaleDateString()}</>}</span>
             <PayRow wallet={w} agent={a} />
           </div>

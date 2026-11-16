@@ -1,14 +1,41 @@
 import { Link } from 'react-router-dom'
 import { Card } from '../kit'
-import { txUrl } from '../../lib/proofs'
+import { Skeleton } from '../../ui/Skeleton'
+import { RPC_ERROR_TEXT, useAccount, useRadar, useViewedAccount } from '../useAccount'
+import { fmt, pct } from '../../lib/icr'
+import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
 
 const REVOKE_TX = deployments.liveFlow.txs.find((t) => t.step.startsWith('revoke()'))?.hash ?? ''
 const UNFREEZE_TX = deployments.sternpost.classicRedeploy.defend.flow.find((t) => t.step.startsWith('unfreeze()'))?.hash ?? ''
 
 export default function Close() {
+  const viewed = useViewedAccount()
+  const acct = useAccount(viewed.address)
+  const radar = useRadar('testnet', viewed.address)
+  const a = acct.data
   return (
     <div className="space-y-8">
+      <Card title="Demo account — live close position">
+        {acct.isLoading || radar.isLoading ? (
+          <div className="space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+        ) : acct.isError ? (
+          <p className="text-sm text-signal">{RPC_ERROR_TEXT}</p>
+        ) : a ? (
+          <div className="text-sm space-y-2">
+            <div><a className="mono ink-link text-magenta text-xs break-all" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address} ↗</a></div>
+            <div>Trove <b>{a.troveStatus === 1 ? 'active' : 'not active'}</b> · ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b> · MUSD on the account <b className="mono">{fmt(a.balances.musd)} MUSD</b></div>
+            <div>Recovery Mode <b>{radar.data?.recoveryMode ? 'ON — closeAccount() would revert' : 'off'}</b> · system health (TCR) <b className="mono">{radar.data ? pct(radar.data.tcr, 1) : 'unknown'}</b></div>
+            <p className="text-muted">
+              {a.troveStatus === 1
+                ? `Closing would repay the full ${fmt(a.debt)} MUSD debt from the account's MUSD + sMUSD and return the ${fmt(a.coll, 18, 6)} BTC collateral to the owner.`
+                : 'The trove is not active, so closeAccount() would take the surplus-claim path.'}{' '}
+              Closing is owner-only; in demo mode this account is read-only.
+            </p>
+          </div>
+        ) : <p className="text-sm text-muted">Account not readable.</p>}
+      </Card>
+
       <Card title="Close the account — what happens" aside={<span className="caps text-[10px] text-muted">Contract code · task 1.3</span>}>
         <p className="text-sm leading-relaxed">
           <span className="mono">closeAccount()</span> is implemented in TroveAccount

@@ -12,7 +12,8 @@ const arc = (a0: number, a1: number, r: number) => {
 export function Dial({ value, floor, size = 260 }: { value: number | null; floor?: number; size?: number }) {
   const reduce = useReducedMotion()
   const healthy = value != null && (floor == null || value >= floor + 20)
-  const state = value == null ? '—' : floor != null && value < floor ? 'Below floor' : healthy ? 'Healthy' : 'Near floor'
+  // Labelled empty states (plan §6.3): never a bare "—" where a number belongs.
+  const state = value == null ? '' : floor != null && value < floor ? 'Below floor' : healthy ? 'Healthy' : 'Near floor'
   return (
     <figure className="relative select-none" style={{ width: size }} aria-label={`Collateral ratio ${value == null ? 'unknown' : value.toFixed(0) + '%'}`}>
       <svg viewBox="0 0 200 200" className="w-full overflow-visible">
@@ -42,16 +43,20 @@ export function Dial({ value, floor, size = 260 }: { value: number | null; floor
       </svg>
       <div className="absolute inset-x-0 top-[50%] text-center pointer-events-none">
         <div className="display leading-none" style={{ fontSize: size * .2 }} data-testid="dial-value">
-          {value == null ? '—' : value >= 1000 ? '999+' : value.toFixed(0)}<span className="text-magenta" style={{ fontSize: size * .11 }}>%</span>
+          {value == null ? <span style={{ fontSize: size * .085 }}>No trove</span> : <>{value >= 1000 ? '999+' : value.toFixed(0)}<span className="text-magenta" style={{ fontSize: size * .11 }}>%</span></>}
         </div>
+        {state !== '' && (
         <div className={`mt-1 inline-flex items-center gap-1 text-sm ${healthy || value == null ? 'text-ink' : 'text-signal'}`}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-magenta" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /><path d="M9 12l2 2 4-4" /></svg>
           {state}
         </div>
+        )}
       </div>
+      {floor != null && (
       <figcaption className="absolute inset-x-6 bottom-[6%] flex justify-between items-end text-[10px] caps text-muted">
-        <span>Floor</span><span className="mono text-ink normal-case tracking-normal text-xs">{floor != null ? `${floor.toFixed(0)}%` : '—'}</span>
+        <span>Floor</span><span className="mono text-ink normal-case tracking-normal text-xs">{`${floor.toFixed(0)}%`}</span>
       </figcaption>
+      )}
     </figure>
   )
 }

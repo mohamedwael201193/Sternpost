@@ -3,13 +3,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { isAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import { Gauge } from '../../ui/Gauge'
-import { BtcSignNote, Card, Empty, NeedsWallet, TxStatus, useIsBtcAccount } from '../kit'
+import { Skeleton } from '../../ui/Skeleton'
+import { BtcSignNote, Card, ConnectButton, Empty, NeedsWallet, TxStatus, useIsBtcAccount } from '../kit'
 import { useTrove } from '../useTrove'
+import { RPC_ERROR_TEXT, useAccount as useAccountData, useViewedAccount } from '../useAccount'
 import { MIN_LEFT_S, useDrawSend } from '../useDrawSend'
 import { borrowerOpsAbi, governorAbi } from '../../lib/abi'
 import { MEZO } from '../../lib/chain'
 import { REASONS, WAD, pct, projectedIcr } from '../../lib/icr'
 import { DRAW_WINDOW_S } from '../../lib/sig'
+import { addrUrl } from '../../lib/proofs'
 import { useLimits } from '../useLimits'
 import { Limits } from '../Limits'
 import { fmt } from '../../lib/icr'
@@ -18,6 +21,9 @@ const toPct = (v?: bigint) => (v === undefined ? null : v >= 2n ** 200n ? 999 : 
 
 export default function Draw() {
   const t = useTrove()
+  const viewed = useViewedAccount()
+  const demo = viewed.demoMode
+  const acct = useAccountData(demo ? viewed.address : undefined)
   const [amount, setAmount] = useState('')
   const [touched, setTouched] = useState(false)
   const [app, setApp] = useState('')
@@ -39,6 +45,7 @@ export default function Draw() {
     <div className="space-y-8">
       <header><h1 className="display text-4xl">Draw</h1><p className="text-muted mt-2 max-w-2xl">See exactly where a draw leaves your trove before you sign. The Governor runs the same check on-chain and reverts anything below your floor.</p></header>
       <BtcSignNote className="max-w-2xl" />
+      {demo ? <DemoDraw acct={acct} viewed={viewed} /> : (
       <NeedsWallet what="draw MUSD">
         {!t.hasTrove ? <Empty title="No trove on this wallet">Open one at testnet.mezo.org first.</Empty>
           : !t.governor ? <Empty title="No Governor yet">Create your Governor on Home to set a floor.</Empty> : (
@@ -59,6 +66,45 @@ export default function Draw() {
           </div>
         )}
       </NeedsWallet>
+      )}
+    </div>
+  )
+}
+
+/** Read-only Draw for demo mode: the demo trove's live position, no signing. */
+function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; viewed: ReturnType<typeof useViewedAccount> }) {
+  const a = acct.data
+  return (
+    <div className="grid lg:grid-cols-[1fr_420px] gap-8">
+      <Card>
+        {acct.isLoading ? (
+          <div className="space-y-4"><Skeleton className="h-[250px] w-[250px] rounded-full mx-auto" label="Loading trove position" /><Skeleton className="h-4 w-2/3 mx-auto" /></div>
+        ) : acct.isError ? (
+          <p className="text-sm text-signal" role="alert">{RPC_ERROR_TEXT}</p>
+        ) : a ? (
+          <>
+            <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
+              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" /></div>
+              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="After draw" /></div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 text-center mt-4 gap-4">
+              <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{pct(a.icr, 1)}</div></div>
+              <div><div className="caps text-[11px] text-muted">Floor</div><div className="display text-3xl">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</div></div>
+              <div><div className="caps text-[11px] text-muted">Debt</div><div className="display text-3xl">{fmt(a.debt)} MUSD</div></div>
+              <div><div className="caps text-[11px] text-muted">Collateral</div><div className="display text-3xl">{fmt(a.coll, 18, 4)} BTC</div></div>
+            </div>
+            <p className="mt-6 text-sm text-muted" role="status">
+              Read-only preview of the demo account{' '}
+              <a className="ink-link mono text-xs" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">{viewed.address.slice(0, 6)}…{viewed.address.slice(-4)}</a>.
+              Drawing needs the owner wallet — the Governor check below runs on your own trove once you connect.
+            </p>
+          </>
+        ) : <p className="text-sm text-muted">Account not readable.</p>}
+      </Card>
+      <Card title="Draw from your own trove">
+        <p className="text-sm">Connect a wallet on Mezo testnet (chain 31611) to see where a draw leaves your trove before you sign. The Governor runs the same check on-chain and reverts anything below your floor.</p>
+        <div className="mt-4"><ConnectButton /></div>
+      </Card>
     </div>
   )
 }
