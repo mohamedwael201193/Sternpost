@@ -157,7 +157,11 @@ export default function Home() {
               <Row k="Credit account" v={loading ? <Skeleton className="h-4 w-32" /> : <a className="ink-link text-magenta mono text-xs" href={addrUrl(viewed.address)} target="_blank" rel="noreferrer">Account {viewed.address.slice(0, 6)}…{viewed.address.slice(-4)}</a>} />
               <Row k="Collateral" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : coll !== undefined ? `${fmt(coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={loading ? <Skeleton className="h-4 w-24" /> : acctError ? 'Unavailable' : debt !== undefined ? `${fmt(debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : floorV ? pct(floorV) : 'Not configured'} />
+              {/* MED-2 (round 6), demo branch: same lie as the own-account rows
+                  below — on a failed demo-account read floorV is undefined
+                  and the row would claim "Not configured" about an unknown
+                  policy. Gate on the account error like the Shield row. */}
+              <Row k="Floor" v={loading ? <Skeleton className="h-4 w-16" /> : acctError ? 'Unavailable' : floorV ? pct(floorV) : 'Not configured'} />
               {/* J1 LOW-2: when needed() itself failed (null) but the policy
                   exists, the shield state is UNKNOWN — asserting "No shield
                   needed" would be wrong if the ICR were below the shield
@@ -171,8 +175,15 @@ export default function Home() {
               <Row k="Plotted course" v={t.govError ? 'Unavailable' : t.governor ? <a className="ink-link text-magenta mono text-xs" href={addrUrl(t.governor)} target="_blank" rel="noreferrer">Governor {t.governor.slice(0, 6)}…{t.governor.slice(-4)}</a> : 'No Governor yet'} />
               <Row k="Collateral" v={acctError ? 'Unavailable' : t.coll !== undefined ? `${fmt(t.coll, 18, 6)} BTC` : 'No trove'} />
               <Row k="Debt" v={acctError ? 'Unavailable' : t.debt !== undefined ? `${fmt(t.debt)} MUSD` : 'No trove'} />
-              <Row k="Floor" v={t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
-              <Row k="Standby heal" v={t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
+              {/* MED-2 (round 6): the Governor batch is enabled: !!governor,
+                  so on a governorOf failure (govError, governor undefined)
+                  it NEVER runs — gvError stays false and floor/standby stay
+                  undefined. Gating only on gvError would render "Not
+                  configured" / "DISARMED" about an UNKNOWN Governor. Gate
+                  both rows on govError || gvError, matching the Spend route
+                  (:140) and Watch standby (:104-105). */}
+              <Row k="Floor" v={t.govError || t.gvError ? 'Unavailable' : t.floor ? pct(t.floor) : 'Not configured'} />
+              <Row k="Standby heal" v={t.govError || t.gvError ? 'Unavailable' : t.standby?.[3] ? `${fmt(t.standby[0])} MUSD armed until ${standbyDate}` : 'DISARMED — re-arm to enable defend'} />
               <Row k="Mezo nonce" v={acctError ? 'Unavailable' : t.nonce !== undefined ? String(t.nonce) : 'Not connected'} />
             </>
           )}
@@ -204,6 +215,11 @@ export default function Home() {
               {own.data === null && !own.isLoading && !own.isError && (
                 <p className="text-sm leading-relaxed mt-6">You have no credit account yet. Open one in about two minutes. <Link className="pill" to="/app/open">Open a credit account →</Link></p>
               )}
+              {/* LOW-6 (round 6): the own-account scan error is surfaced on
+                  Close/Open but was swallowed here — own.data is undefined
+                  (not null) on error, so the CTA above is suppressed with
+                  no error text at all. Say the read failed. */}
+              {own.isError && <p className="text-sm text-signal mt-6">{RPC_ERROR_TEXT}</p>}
               {t.hasTrove && (
                 <Card title="Wallet balances">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

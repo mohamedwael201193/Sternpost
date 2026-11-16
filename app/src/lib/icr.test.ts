@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WAD, icr, icrPct, isNoDebtIcr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
+import { WAD, demoIcrLabel, icr, icrPct, isNoDebtIcr, judgeDraw, maxSafeDraw, pct, safeDraw } from './icr'
 
 const price = 100_000n * WAD // $100k BTC
 const coll = WAD // 1 BTC
@@ -56,5 +56,22 @@ describe('safeDraw', () => {
   })
   it('remaining budget binds', () => {
     expect(safeDraw({ floorRoom: 100n * W, feePerWad: 0n, perDraw: 50n * W, remaining: 2n * W }).limit).toBe('budget')
+  })
+})
+
+describe('demoIcrLabel (LOW-3, round 6)', () => {
+  const noDebt = 2n ** 255n
+  it('"No debt" only for a known-active trove (status 1)', () => {
+    expect(demoIcrLabel(noDebt, 1)).toBe('No debt')
+    expect(demoIcrLabel(noDebt, 0)).toBe('No trove')
+    expect(demoIcrLabel(noDebt, 2)).toBe('No trove')
+  })
+  it('an unreadable status is "Unavailable", never a claim about the trove', () => {
+    expect(demoIcrLabel(noDebt, null)).toBe('Unavailable')
+    expect(demoIcrLabel(noDebt, undefined)).toBe('Unavailable')
+  })
+  it('a future status this code does not understand (e.g. 5) is "Unavailable", not "No trove"', () => {
+    expect(demoIcrLabel(noDebt, 5)).toBe('Unavailable')
+    expect(demoIcrLabel(noDebt, 99)).toBe('Unavailable')
   })
 })

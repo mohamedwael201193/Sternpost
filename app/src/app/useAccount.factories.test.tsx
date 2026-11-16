@@ -45,6 +45,9 @@ let codeByFactory: Record<string, string> = {}
 // L-e: block hash by height, mutable so a test can reorg one height.
 const DEFAULT_BLOCK_HASH = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 let hashByBlock: Record<string, string> = {}
+// LOW-4 (round 6): block heights whose getBlock read throws, so a test can
+// make the reorg CHECK read fail while the store read succeeds.
+let failGetBlockBlocks = new Set<string>()
 let warnSpy: ReturnType<typeof vi.spyOn>
 
 function makeClient() {
@@ -55,7 +58,10 @@ function makeClient() {
       return eventsByFactory[a.address.toLowerCase()] ?? []
     }),
     getCode: vi.fn(async (a: { address: string }) => codeByFactory[a.address.toLowerCase()] ?? '0x60006000'),
-    getBlock: vi.fn(async (a: { blockNumber: bigint }) => ({ hash: hashByBlock[a.blockNumber.toString()] ?? DEFAULT_BLOCK_HASH })),
+    getBlock: vi.fn(async (a: { blockNumber: bigint }) => {
+      if (failGetBlockBlocks.has(a.blockNumber.toString())) throw new Error('rpc died')
+      return { hash: hashByBlock[a.blockNumber.toString()] ?? DEFAULT_BLOCK_HASH }
+    }),
   }
 }
 
@@ -67,6 +73,7 @@ beforeEach(() => {
   throwOnEvents = false
   codeByFactory = {}
   hashByBlock = {}
+  failGetBlockBlocks = new Set()
   clearOwnAccountCache()
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -254,6 +261,27 @@ describe('L-e (round 4) — a same-height reorg clears the cache', () => {
     // Forward-only: no new blocks, so no new log calls at all.
     expect(client.getContractEvents.mock.calls.length).toBe(before)
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('reorg'))
+  })
+
+  it('LOW-4 (round 6) — a failed check read does not let the store read erase the reorg signal', async () => {
+    const client = makeClient()
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    // The head block reorgs, but the next scan cannot READ the stored hash
+    // to check it — and new blocks arrive, so the scan runs and the store
+    // read succeeds. Pre-fix the store overwrote the stored hash with the
+    // new head and the reorg was never detected; post-fix the old stored
+    // hash is kept, so the following scan catches it.
+    hashByBlock['16810643'] = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    failGetBlockBlocks.add('16810643')
+    latestBlock = 16810650n
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('reorg'))
+    failGetBlockBlocks.delete('16810643')
+    const before = client.getContractEvents.mock.calls.length
+    await scanOwnAccounts(client as never, OWNER as `0x${string}`)
+    const fresh = client.getContractEvents.mock.calls.slice(before)
+    expect(fresh.map((c) => (c[0] as unknown as { fromBlock: bigint }).fromBlock)).toContain(16803285n)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reorg'))
   })
 })
 

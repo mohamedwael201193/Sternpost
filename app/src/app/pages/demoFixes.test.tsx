@@ -39,6 +39,9 @@ let troveState: Record<string, unknown> = {}
 // success into a stale-data error and re-render (TanStack Query v5 retains
 // data on error — the component must not trust it).
 let previewState: { data?: unknown; isLoading: boolean; isError: boolean } = { data: undefined, isLoading: false, isError: false }
+// Round-6 LOW-1: the mocked getBorrowingFee result — a fee-read failure must
+// fail the local projection instead of silently pricing the draw with fee 0.
+let feeState: { data?: bigint; isError: boolean } = { data: undefined, isError: false }
 // Round-4 MED-2 (DrawHero): the mocked useLimits result; a safe suggest lets
 // the hero pre-fill an amount so wei > 0 and the preview actually runs.
 let limitsState: Record<string, unknown> = {}
@@ -83,7 +86,7 @@ const ZERO_DEBT_ACTIVE_SNAP = {
 vi.mock('wagmi', () => ({
   useAccount: () => walletState,
   usePublicClient: () => null,
-  useReadContract: (a: any) => (a?.functionName === 'walletsOf' ? { data: [SPEND_WALLET] } : a?.functionName === 'previewDraw' ? previewState : { data: undefined }),
+  useReadContract: (a: any) => (a?.functionName === 'walletsOf' ? { data: [SPEND_WALLET] } : a?.functionName === 'previewDraw' ? previewState : a?.functionName === 'getBorrowingFee' ? feeState : { data: undefined }),
   useReadContracts: () => ({ data: readsState }),
   useWalletClient: () => ({ data: undefined }),
   useWriteContract: () => ({ writeContractAsync: vi.fn() }),
@@ -170,6 +173,7 @@ beforeEach(() => {
   readsState = []
   troveState = {}
   previewState = { data: undefined, isLoading: false, isError: false }
+  feeState = { data: undefined, isError: false }
   limitsState = {}
   cleanup()
 })
@@ -404,6 +408,11 @@ describe('L2 — "No Governor yet" rows gate on the governor read error', () => 
     expect(c.textContent).toContain('Unavailable')
     expect(c.textContent).not.toContain('No Governor yet')
     expect(c.textContent).not.toContain('Deploys your own Governor')
+    // MED-2 (round 6): this state rendered "DISARMED" in the Standby row
+    // before the fix (standby undefined, gvError false) while the test
+    // asserted nothing about it — the Governor is unknown here, not disarmed.
+    expect(c.textContent).not.toContain('DISARMED')
+    expect(c.textContent).not.toContain('Not configured')
   })
 })
 
@@ -425,6 +434,37 @@ describe('L3 — Governor batch (floor/frozen/standby) gates on gvError', () => 
     const c = await renderPage(<Watch />)
     expect(c.textContent).toContain('Unavailable')
     expect(c.textContent).not.toContain('No Governor yet')
+  })
+})
+
+describe('MED-2 (round 6) — Home Floor/Standby lie when governorOf fails', () => {
+  it('shows "Unavailable", never "Not configured" / "DISARMED", when governorOf fails and the Governor batch never ran', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    // The Governor batch is enabled: !!governor, so on a governorOf failure
+    // it never runs: gvError stays false and floor/standby stay undefined.
+    // Gating only on gvError rendered "Not configured" / "DISARMED" about
+    // an unknown Governor.
+    troveState = { error: true, coreError: false, govError: true, gvError: false, governor: undefined, ...TROVE_NUMBERS, floor: undefined, standby: undefined, frozen: undefined }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('Not configured')
+    expect(c.textContent).not.toContain('DISARMED')
+  })
+
+  it('still shows the live floor and armed standby once the Governor reads succeed', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true, frozen: false,
+      floor: 2_500_000_000_000_000_000n,
+      standby: [30_000_000_000_000_000_000n, 1790000000n, 0n, true] as const,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('250%')
+    expect(c.textContent).toContain('30.00 MUSD armed')
+    expect(c.textContent).not.toContain('Unavailable')
   })
 })
 
@@ -646,10 +686,16 @@ describe('MED-2 (round 4) — previewDraw error is fail-CLOSED, never fail-open'
     previewState = { ...PREVIEW_OK }
     const c = await renderPage(<Home />)
     expect(signButton(c)?.disabled).toBe(false)
+    // LOW-1 (round 6): the pre-filled amount makes the After-draw number
+    // visible — it must show the previewed 160.0% while the preview is good…
+    expect(c.querySelector('[data-testid="hero-after"]')?.textContent).toContain('160.0%')
     previewState = { ...PREVIEW_STALE_ERROR }
     const c2 = await rerenderPage(<Home />)
     expect(c2.textContent).toContain('Preview failed')
     expect(signButton(c2)?.disabled).toBe(true)
+    // …and go blank on the error, never fall back to the local projection
+    // beside the "Preview failed" plate.
+    expect(c2.querySelector('[data-testid="hero-after"]')?.textContent).toBe('—')
   })
 
   it('DrawHero: a never-succeeded preview shows the error plate (L-g)', async () => {
@@ -857,5 +903,173 @@ describe('LOW-2 (round 5) — DemoDraw Gauge agrees with the "Now" text', () => 
     expect(c.querySelector('figure[aria-label="Current: No debt"]')).toBeNull()
     expect(c.textContent).toContain('No trove')
     expect(c.textContent).not.toContain('No debt')
+  })
+})
+
+describe('LOW-1 (round 6) — the After-draw projection is blank on a preview error, never the local fallback', () => {
+  const CONNECTED_TROVE = {
+    ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+  const PREVIEW_OK = { data: [true, '', 1_600_000_000_000_000_000n], isLoading: false, isError: false }
+  const PREVIEW_STALE_ERROR = { data: [true, '', 1_600_000_000_000_000_000n], isLoading: false, isError: true }
+  const PREFILL = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+
+  it('Draw: the After-draw cell shows the previewed number, then goes blank on a failed refetch', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { ...PREFILL }
+    previewState = { ...PREVIEW_OK }
+    const c = await renderPage(<Draw />)
+    // The safe suggest pre-fills 100 MUSD, so wei > 0 and the projection is
+    // visible (with wei 0 the cell is '—' in both states and the bug hides).
+    expect(c.querySelector('[data-testid="draw-after"]')?.textContent).toContain('160.0%')
+    expect(c.textContent).toContain('Safe.')
+    previewState = { ...PREVIEW_STALE_ERROR }
+    const c2 = await rerenderPage(<Draw />)
+    expect(c2.textContent).toContain('Preview failed.')
+    expect(c2.textContent).not.toContain('Safe.')
+    expect(signButton(c2)?.disabled).toBe(true)
+    expect(c2.querySelector('[data-testid="draw-after"]')?.textContent).toBe('—')
+  })
+
+  it('Draw: a failed fee read fails the local projection instead of pricing the draw with fee 0', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { ...PREFILL }
+    feeState = { data: undefined, isError: true }
+    previewState = { data: undefined, isLoading: true, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('[data-testid="draw-after"]')?.textContent).toBe('—')
+    expect(c.textContent).not.toContain('Safe.')
+  })
+
+  it('DrawHero: a failed fee read blanks the After-draw and debt-after figures and shows the fee as unavailable', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { ...PREFILL }
+    feeState = { data: undefined, isError: true }
+    previewState = { data: undefined, isLoading: true, isError: false }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="hero-after"]')?.textContent).toBe('—')
+    expect(c.querySelector('[data-testid="hero-debt-after"]')?.textContent).toBe('—')
+    expect(c.querySelector('[data-testid="hero-fee"]')?.textContent).toContain('unavailable')
+    expect(c.textContent).not.toContain('Safe.')
+    expect(signButton(c)?.disabled).toBe(true)
+  })
+})
+
+describe('LOW-2 (round 6) — a stale "Unsafe" does not linger in DrawHero once the amount is cleared', () => {
+  const CONNECTED_TROVE = {
+    ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+  const PREVIEW_UNSAFE = { data: [false, 'BELOW_FLOOR', 1_200_000_000_000_000_000n], isLoading: false, isError: false }
+
+  it('DrawHero: no "Unsafe" line with an empty amount field, even when the retained preview data says unsafe', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = {}
+    previewState = { ...PREVIEW_UNSAFE }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).not.toContain('Unsafe:')
+    expect(c.textContent).not.toContain('below your safety floor')
+  })
+
+  it('DrawHero: the "Unsafe" line still shows while an amount is entered and the preview says unsafe', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...CONNECTED_TROVE }
+    limitsState = { safe: { suggest: 100_000_000_000_000_000_000n, max: 1_000_000_000_000_000_000_000n } }
+    previewState = { ...PREVIEW_UNSAFE }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Unsafe:')
+    expect(c.textContent).toContain('below your safety floor')
+  })
+})
+
+describe('LOW-3 (round 6) — the own-account "No debt" sites gate on a KNOWN-active status', () => {
+  const ZERO_DEBT_UNKNOWN = {
+    hasTrove: true, coll: 50_000_000_000_000_000n, debt: 0n,
+    price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+    troveStatus: undefined, governor: GOVERNOR, floor: 2_500_000_000_000_000_000n,
+    error: false, coreError: false, govError: false, gvError: false, sysError: false,
+  }
+  const ZERO_DEBT_KNOWN = { ...ZERO_DEBT_UNKNOWN, troveStatus: 1 }
+
+  it('DrawHero "Current" shows "Unavailable", never "No debt", when the sys batch has not returned a status', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT_UNKNOWN }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="hero-current"]')?.textContent).toBe('Unavailable')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('DrawHero "Current" still shows "No debt" once the status is KNOWN active', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT_KNOWN }
+    const c = await renderPage(<Home />)
+    expect(c.querySelector('[data-testid="hero-current"]')?.textContent).toBe('No debt')
+  })
+
+  it('Draw gauges + "Now" show "Unavailable", never "No debt", when the status is unknown', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT_UNKNOWN }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('figure[aria-label="Current: Unavailable"]')).not.toBeNull()
+    expect(c.querySelector('figure[aria-label="After draw: Unavailable"]')).not.toBeNull()
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Draw gauges + "Now" still show "No debt" once the status is KNOWN active', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT_KNOWN }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('figure[aria-label="Current: No debt"]')).not.toBeNull()
+    expect(c.textContent).toContain('No debt')
+  })
+
+  it('Watch ICR card shows "Unavailable", never "No debt", when the status is unknown', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = { ...ZERO_DEBT_UNKNOWN, governor: undefined }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No debt')
+  })
+})
+
+describe('LOW-6 (round 6) — the two error batches that surfaced nowhere', () => {
+  it('Watch shows "Recovery Mode: Unavailable" when only the connected sys batch fails', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      ...TROVE_NUMBERS, governor: GOVERNOR, hasTrove: true,
+      error: false, coreError: false, govError: false, gvError: false, sysError: true, recoveryMode: undefined,
+    }
+    const c = await renderPage(<Watch />)
+    expect(c.textContent).toContain('Recovery Mode')
+    expect(c.textContent).toContain('Unavailable')
+    // No ON banner: the static "Recovery Mode — what it does" explainer
+    // below still mentions paused draws, so assert on the banner text.
+    expect(c.textContent).not.toContain('Recovery Mode is ON')
+  })
+
+  it('Home shows the RPC error when the own-account scan fails, never a silent missing CTA', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    ownState = { data: null, isLoading: false, isError: true }
+    const c = await renderPage(<Home />)
+    expect(c.textContent).toContain('Could not reach the Mezo testnet RPC')
+    expect(c.textContent).not.toContain('You have no credit account yet')
   })
 })

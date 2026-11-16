@@ -36,15 +36,24 @@ export default function Draw() {
 
   const fee = useReadContract({ address: MEZO.borrowerOperations, abi: borrowerOpsAbi, functionName: 'getBorrowingFee', args: [wei], query: { enabled: wei > 0n } })
   const preview = useReadContract({ address: t.governor, abi: governorAbi, functionName: 'previewDraw', args: [appAddr, wei, payeeAddr], query: { enabled: !!t.governor, refetchInterval: 15_000 } })
-  const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
+  // LOW-1 (round 6): the local projection must never silently price the draw
+  // with fee 0 — on a fee-read failure `fee.data ?? 0n` understates the fee
+  // and overstates the after-draw ICR. A failed fee read fails the local
+  // projection (the on-chain preview, when it returns, still rules).
+  const feeError = fee.isError
+  const local = !feeError && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
   // MED-2 (round 4): TanStack Query v5 RETAINS data on error, so after one
   // successful preview a failed 15 s refetch would leave the stale success
   // in preview.data — the verdict would keep saying "Safe." and the Sign
   // button would stay enabled. Gate everything on isError: on error the
   // verdict, the button and the projection all act as if no preview exists.
+  // LOW-1 (round 6): the projection is part of that gate — `icrAfter ??
+  // local` fell back to the locally computed number beside the "Preview
+  // failed" plate, so the After-draw gauge/number kept showing a stale
+  // projection. On error the projection is undefined, full stop.
   const previewError = preview.isError
   const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
-  const projected = icrAfter ?? local
+  const projected = previewError ? undefined : icrAfter ?? local
   const lim = useLimits(t, appAddr)
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const pick = (v: string) => { setTouched(true); setAmount(v) }
@@ -65,12 +74,19 @@ export default function Draw() {
           <div className="grid lg:grid-cols-[1fr_420px] gap-8">
             <Card>
               <div className="grid sm:grid-cols-2 gap-6 justify-items-center">
-                <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(t.icr) ? 'No debt' : undefined} /></div>
-                <div className="text-center"><Gauge value={toPct(t.icr)} projected={toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={isNoDebtIcr(t.icr) ? 'No debt' : undefined} /></div>
+                {/* LOW-3 (round 6): the own-account gauges must not assert
+                    "No debt" on an unknown status — hasTrove counts
+                    statusNum === undefined as active (useTrove), so a
+                    zero-debt trove whose sys batch is pending/failed would
+                    claim "No debt". Gate the label on troveStatus === 1,
+                    mirroring the Home Dial (round 5); unknown renders
+                    "Unavailable" instead. */}
+                <div className="text-center"><Gauge value={toPct(t.icr)} floor={toPct(t.floor) ?? undefined} size={250} label="Current" emptyLabel={isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
+                <div className="text-center"><Gauge value={toPct(t.icr)} projected={toPct(projected)} floor={toPct(t.floor) ?? undefined} size={250} label="After draw" emptyLabel={isNoDebtIcr(t.icr) ? (t.troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} /></div>
               </div>
               <div className="grid grid-cols-2 text-center mt-4">
-                <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr ? pct(t.icr) : '—'}</div></div>
-                <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`}>{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
+                <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{t.icr === undefined ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</div></div>
+                <div><div className="caps text-[11px] text-muted">After draw + fee</div><div className={`display text-3xl ${ok ? 'text-safe' : 'text-signal'}`} data-testid="draw-after">{projected && wei > 0n ? pct(projected, projected < WAD * 10n ? 1 : 0) : '—'}</div></div>
               </div>
               <Verdict ok={ok} reason={reason} loading={preview.isLoading} error={previewError} />
             </Card>

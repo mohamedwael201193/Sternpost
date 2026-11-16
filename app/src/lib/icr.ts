@@ -75,6 +75,10 @@ export function isNoDebtIcr(v?: bigint | null): boolean {
 export function demoIcrLabel(icr: bigint, troveStatus: number | null | undefined, digits = 1): string {
   if (troveStatus === 1) return pct(icr, digits)
   if (troveStatus === null || troveStatus === undefined) return 'Unavailable'
+  // LOW-3 (round 6): the status enum is 0–4. A future status (e.g. 5 from a
+  // newer TroveManager) is UNKNOWN, not "No trove" — never claim the trove
+  // does not exist for a status this code does not understand.
+  if (troveStatus < 0 || troveStatus > 4) return 'Unavailable'
   return 'No trove'
 }
 

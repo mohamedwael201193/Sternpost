@@ -49,6 +49,19 @@ export default function Watch() {
   // troveStatus === 1, mirroring demo hasTrove on Home.
   const demoHasTrove = demo && !!a && a.troveStatus === 1
   const hasTrove = demo ? demoHasTrove : t.hasTrove
+  // LOW-3 (round 6): the non-demo ICR card must not assert "No debt" on an
+  // unknown status — hasTrove counts statusNum === undefined as active
+  // (useTrove), so a zero-debt own trove whose sys batch is pending/failed
+  // claimed "No debt". Gate the no-debt label on troveStatus === 1;
+  // unknown renders "Unavailable" (matching DemoHero), a known non-active
+  // status renders "No trove". The demo branch was already status-1-gated
+  // via demoHasTrove and is unchanged by this.
+  const icrVal = demo ? a?.icr : t.icr
+  const icrStatus = demo ? a?.troveStatus : t.troveStatus
+  const icrLabel = rpcError ? 'Unavailable'
+    : isNoDebtIcr(icrVal)
+      ? icrStatus === 1 ? 'No debt' : icrStatus === null || icrStatus === undefined ? 'Unavailable' : 'No trove'
+      : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`
   return (
     <div className="space-y-8">
       {rpcError && (
@@ -57,6 +70,17 @@ export default function Watch() {
       {recoveryMode === true && (
         <div className="plate rounded-xl p-4 text-sm" role="alert">
           <b>Recovery Mode is ON</b> — Mezo system health (TCR) is below 150%, so draws are paused on-chain. Repay or add collateral to continue.
+        </div>
+      )}
+      {/* LOW-6 (round 6): the connected sys batch (getTroveStatus /
+          checkRecoveryMode / getTCR) failed, so recoveryMode is unknown —
+          say so explicitly, mirroring the Home banner (round 4, L-b).
+          Without this the page renders no Recovery banner at all and the
+          failure passes silently; the TCR card already shows
+          "Unavailable" on tcrError. */}
+      {!demo && t.sysError && recoveryMode !== true && (
+        <div className="plate rounded-xl p-4 text-sm" role="alert">
+          Recovery Mode: <b>Unavailable</b> — the system-health read failed, so this page cannot say whether Recovery Mode is on.
         </div>
       )}
       {recoveryMode === false && (
@@ -68,7 +92,7 @@ export default function Watch() {
       <div className="grid sm:grid-cols-3 gap-4">
         <Card title={demo ? 'Demo account ICR' : 'Your ICR'}>
           {loading ? <Skeleton className="h-9 w-28" label="Loading ICR" /> : (
-            <div className="display text-3xl">{rpcError ? 'Unavailable' : hasTrove && isNoDebtIcr(demo ? a?.icr : t.icr) ? 'No debt' : icrPct === null ? 'No trove' : `${icrPct.toFixed(1)}%`}</div>
+            <div className="display text-3xl">{icrLabel}</div>
           )}
           <p className="text-xs text-muted mt-1">Liquidation floor · 110% (Mezo MCR)</p>
         </Card>

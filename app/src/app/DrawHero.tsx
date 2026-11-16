@@ -13,7 +13,7 @@ import { useLimits } from './useLimits'
 import { Limits } from './Limits'
 import { borrowerOpsAbi, governorAbi } from '../lib/abi'
 import { MEZO, ROUTER } from '../lib/chain'
-import { REASONS, WAD, fmt, icrPct as toPct, pct, projectedIcr } from '../lib/icr'
+import { REASONS, WAD, fmt, icrPct as toPct, isNoDebtIcr, demoIcrLabel, pct, projectedIcr } from '../lib/icr'
 import { DRAW_WINDOW_S } from '../lib/sig'
 
 const ROUTES: [Route, string, string][] = [
@@ -39,15 +39,22 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
   // as Draw.tsx. Gate the verdict and the Sign button on isError so a failed
   // refetch never leaves a stale "Safe." with an enabled button. The error
   // plate only applies while a preview is actually running (wei > 0n).
+  // LOW-1 (round 6): the projection is part of that gate — `icrAfter ??
+  // local` fell back to the locally computed number beside the "Preview
+  // failed" plate, so the After-draw bar/number kept showing a stale
+  // projection. On error the projection is undefined, full stop. The fee
+  // read gets the same treatment: on a fee-read failure the local projection
+  // and the debt-after figure must not silently price the draw with fee 0.
   const previewError = preview.isError && wei > 0n
   const [ok, reason, icrAfter] = previewError ? [undefined, '', undefined] : preview.data ?? [undefined, '', undefined]
-  const local = t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
-  const after = icrAfter ?? local
+  const feeError = fee.isError
+  const local = !feeError && t.hasTrove && t.price ? projectedIcr(t.coll!, t.price, t.debt!, wei, fee.data ?? 0n) : undefined
+  const after = previewError ? undefined : icrAfter ?? local
   const lim = useLimits(t, t.address)
   // Start from a value the Governor will accept instead of a fixed number that may exceed the cap.
   useEffect(() => { if (!touched && lim.safe) setAmount(lim.safe.suggest > 0n ? fmt(lim.safe.suggest, 18, 2).replace(/,/g, '') : '') }, [touched, lim.safe?.suggest])
   const over = lim.safe && wei > lim.safe.max ? wei - lim.safe.max : 0n
-  const debtAfter = t.debt !== undefined && wei > 0n ? t.debt + wei + (fee.data ?? 0n) : undefined
+  const debtAfter = !feeError && t.debt !== undefined && wei > 0n ? t.debt + wei + (fee.data ?? 0n) : undefined
   const d = useDrawSend(t)
   const routesReady = useRoutesReady(t)
   const blocked = route !== 'keep' && !routesReady.ready
@@ -75,7 +82,7 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
           <span className="caps text-[12px]">MUSD</span>
         </div>
         <div id="hero-avail" className="flex justify-between mt-2 text-xs">
-          <span className="text-muted" data-testid="hero-fee">Mezo fee {fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)` : '—'}</span>
+          <span className="text-muted" data-testid="hero-fee">Mezo fee {feeError ? 'unavailable' : fee.data !== undefined && wei > 0n ? `${fmt(fee.data, 18, 4)} MUSD${lim.feeError ? '' : ` (${(Number((lim.feePerWad * 10000n) / WAD) / 100).toFixed(2)}%)`}` : '—'}</span>
           {over > 0n && <span className="text-signal" data-testid="hero-over">{fmt(over)} MUSD over max safe</span>}
         </div>
         <Limits t={t} l={lim} onPick={(v) => { setTouched(true); setAmount(v) }} />
@@ -91,7 +98,13 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
           {flo != null && <div className="absolute -top-1.5 -bottom-1.5 w-[2px] bg-signal" style={{ left: `${pos(flo)}%` }} title="Floor" />}
         </div>
         <dl className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 mt-3 text-sm">
-          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right">{t.icr ? pct(t.icr) : '—'}</dd>
+          {/* LOW-3 (round 6): the "Current" number must not assert "No debt"
+              on an unknown status — hasTrove counts statusNum === undefined
+              as active (useTrove), so a zero-debt own trove whose sys batch
+              is pending/failed would claim "No debt" on the Home page
+              itself. Gate the no-debt label on troveStatus === 1, mirroring
+              the Home Dial (round 5). */}
+          <dt>Current</dt><dd className="mono text-magenta">{flo != null ? `floor ${flo.toFixed(0)}%` : ''}</dd><dd className="mono text-right" data-testid="hero-current">{!t.icr ? '—' : isNoDebtIcr(t.icr) ? demoIcrLabel(t.icr, t.troveStatus) : pct(t.icr)}</dd>
           <dt>After draw</dt><dd /><dd className={`mono text-right ${ok === false ? 'text-signal' : 'text-magenta'}`} data-testid="hero-after">{after && wei > 0n ? `${pct(after, after < WAD * 10n ? 1 : 0)}${t.floor && after < t.floor ? ' · below floor' : ''}` : '—'}</dd>
           <dt>Debt after</dt><dd /><dd className="mono text-right" data-testid="hero-debt-after">{debtAfter !== undefined ? `${fmt(debtAfter)} MUSD` : '—'}</dd>
         </dl>
@@ -108,7 +121,18 @@ export const DrawHero = forwardRef<HTMLElement, { t: Trove }>(function DrawHero(
             {ready && route !== 'keep' && <EnableRoutes t={t} />}
           </fieldset>
         )}
-        {ready && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}{reason === 'OVER_PER_DRAW' && lim.perDraw !== undefined ? ` The cap is ${fmt(lim.perDraw)} MUSD.` : ''}</p>}
+        {/* LOW-2 (round 6): the query is disabled at wei === 0n, so TanStack
+            retains the last verdict after the amount is cleared — the stale
+            "Unsafe" line kept rendering beside an empty amount field. Gate
+            it on wei > 0n, like the error plate below it.
+            Asymmetry, decided consciously: Draw.tsx shows its "Preview
+            failed" plate at wei === 0n because its preview query runs
+            regardless of amount (enabled: !!governor) — the plate is
+            truthful there, the preview genuinely failed. The hero query
+            only runs at wei > 0n, so at wei === 0n there is no preview to
+            fail and no verdict to show. Each plate matches whether its own
+            query actually ran. */}
+        {ready && wei > 0n && ok === false && <p role="status" className="mt-2 text-xs text-signal">Unsafe: {REASONS[reason] ?? reason}{reason === 'OVER_PER_DRAW' && lim.perDraw !== undefined ? ` The cap is ${fmt(lim.perDraw)} MUSD.` : ''}</p>}
         {/* MED-2 / L-g (round 4): a failed preview is an error plate, never a
             stale verdict — and the Sign button below is disabled while ok is
             forced undefined by the error gate above. */}

@@ -254,6 +254,14 @@ export async function scanOwnAccounts(
   // so logs recorded at that height may be gone. Compare the stored hash per
   // factory; on a mismatch drop the cache and rescan. A client without
   // getBlock (or a failed hash read) simply skips the check.
+  // LOW-4 (round 6): the check read and the store read below are two
+  // separate calls. If the check read FAILS, the cache is kept — but the
+  // store read would then overwrite the stored hash with the post-reorg
+  // head hash, erasing the reorg signal the next call should have caught.
+  // Remember which factories could not be verified and do NOT overwrite
+  // their stored hash this round; the old hash stays so the next call
+  // retries the check against the original block.
+  const unverifiedHash = new Set<string>()
   if (entry && typeof client.getBlock === 'function') {
     for (const f of factories) {
       const stored = entry.scannedHash.get(f.address)
@@ -264,6 +272,7 @@ export async function scanOwnAccounts(
       } catch {
         current = undefined // unverifiable: keep the cache, never clear on a read failure
       }
+      if (!current?.hash) unverifiedHash.add(f.address.toLowerCase())
       if (current?.hash && current.hash !== stored.hash) {
         console.warn(`[scanOwnAccounts] block ${stored.block} hash changed for factory ${f.address} (reorg?) — clearing the scan cache for ${owner}`)
         ownScanCache.delete(key)
@@ -335,7 +344,9 @@ export async function scanOwnAccounts(
       entry.scannedTo.set(f.address, latest)
       // L-e (round 4): remember the hash of the last scanned block so a
       // same-height reorg is detectable on the next call.
-      if (typeof client.getBlock === 'function') {
+      // LOW-4 (round 6): never overwrite when this round's check read
+      // failed — see the unverifiedHash note above.
+      if (typeof client.getBlock === 'function' && !unverifiedHash.has(f.address.toLowerCase())) {
         try {
           const head = await client.getBlock({ blockNumber: latest })
           if (head?.hash) entry.scannedHash.set(f.address, { block: latest, hash: head.hash })

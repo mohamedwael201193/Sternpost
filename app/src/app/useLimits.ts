@@ -21,10 +21,17 @@ export function useLimits(t: Trove, app?: Address) {
   const p = pol?.result as readonly [bigint, bigint, bigint, bigint, Address] | undefined
   const authorized = !!p && p[3] > 0n
   const floorRoom = t.hasTrove && t.price && t.floor ? maxSafeDraw(t.coll!, t.price, t.debt!, t.floor) : undefined
+  // LOW-1 (round 6): with allowFailure: true the batch query never sets
+  // q.isError — a failed getBorrowingFee slot reports status 'failure' on
+  // its own entry while the batch resolves. Reading feePerWad as 0n on that
+  // failure silently prices the max safe draw with NO fee, overstating it.
+  // A failed fee read fails the safe draw (no suggest, no max) until the
+  // read succeeds; callers that display the rate must gate on feeError too.
+  const feeError = fee?.status === 'failure'
   const feePerWad = (fee?.result as bigint | undefined) ?? 0n
   const perDraw = authorized ? p![2] : undefined
   const remaining = authorized ? (rem?.result as bigint | undefined) : undefined
   // Wait for the policy read: a floor-only max shown first would suggest an amount the cap or budget then refuses.
-  const safe = floorRoom !== undefined && q.data ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
-  return { loaded: !!q.data, authorized, perDraw, remaining, floorRoom, feePerWad, safe }
+  const safe = floorRoom !== undefined && q.data && !feeError ? safeDraw({ floorRoom, feePerWad, perDraw, remaining }) : undefined
+  return { loaded: !!q.data, authorized, perDraw, remaining, floorRoom, feePerWad, feeError, safe }
 }
