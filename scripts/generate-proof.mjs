@@ -691,11 +691,13 @@ function main() {
   const totalPassed = tests.total.passed;
   const passedInclFork = tests.reconciliation.passedInclFork;
   const invariantProperties = countInvariantProperties();
-  const invariantSuites = tests.suites.filter((s) => s.kind === "invariant").length;
-  const invariantExtra = invariantProperties - invariantSuites;
+  const invariantEntries = tests.suites
+    .filter((s) => s.kind === "invariant")
+    .reduce((n, s) => n + s.passed + s.failed + s.skipped, 0);
+  const invariantExtra = invariantProperties - invariantEntries;
   if (invariantProperties === 0 || invariantExtra < 0) {
     console.error(
-      `generate-proof: REFUSING — invariant count implausible (properties=${invariantProperties}, suites=${invariantSuites}) — check countInvariantProperties`
+      `generate-proof: REFUSING — invariant count implausible (properties=${invariantProperties}, entries=${invariantEntries}) — check countInvariantProperties`
     );
     process.exit(1);
   }

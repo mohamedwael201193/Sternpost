@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-15T19:39:53.963Z",
-  "sourceCommit": "448d96c12b854377887274424e61b1f96eb81a26",
+  "generatedAt": "2026-11-16T02:24:29.191Z",
+  "sourceCommit": "9718bc4fee126eea1233499b2bb4e2ba081b15b3",
   "network": "Mezo testnet",
   "chainId": 31611,
   "explorer": "https://explorer.test.mezo.org",
   "notes": [
     "Testnet only (chain 31611). Sternpost is NOT deployed on mainnet; mainnet rows below are fork-tested, never broadcast.",
-    "TESTS.json is stale: it predates the 1.3/closeAccount/1.6 merges. testsStale=true until task/0.8-refresh re-runs FORK=1 make test-all.",
-    "Every §7.4 production proof row is 'not evidenced on main' until task 1.9 deploys the account contracts and runs the proof table. Lab rows are labelled as lab.",
-    "total.passed is a NON-FORK subtotal (256). Passed incl. fork is 273; distinct declared tests are 270. Never quote 256 as the whole table total.",
-    "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), MCP existence, previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic."
+    "TESTS.json is stale: sources changed since TESTS.json commit 54ae7a9: contracts/script/fork-rehearse-prod.sh, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
+    "Account contracts ARE deployed to testnet (Shield redeploy 2026-11-16, deployments.accounts), but every §7.4 production proof row is still 'not evidenced on main': the demo account is BLOCKED on funding, so no production flow has run. Lab rows are labelled as lab.",
+    "total.passed is a NON-FORK subtotal (495). Passed incl. fork is 505; distinct declared tests are 540. Never quote 495 as the whole table total.",
+    "Sections the generator schema (v1) does not model — mainnet pilot status, outside-user count (0), fee cap (50 bps), previewDraw fix (commit 511f18b) — live in docs/proof/PROOF_PAGE.md and docs/proof/accounts-2026-11-15.md, not in this file; the 0.9 fee (10 bps) is in deployments.classic; the MCP server (mcp/, TESTS.json mcp 56/0/19) is covered by docs/THREAT_MODEL.md S26."
   ],
   "consumers": {
     "count": 0,
@@ -102,29 +102,101 @@
         "standbyNonce": 45,
         "mezoNonce": 45
       }
+    },
+    "accounts": {
+      "task": "1.9-redeploy: Shield redeploy — TroveAccount implementation + Factory + Radar + Batcher from main 3271231 (Shield fix rounds e7a4177 F1-F9 + 3271231 factory BadCooldown)",
+      "date": "2026-11-16",
+      "deployer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "deployerUrl": "https://explorer.test.mezo.org/address/0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "feeBps": 10,
+      "feeRecipient": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "feeRecipientUrl": "https://explorer.test.mezo.org/address/0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+      "implementation": {
+        "address": "0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8",
+        "addressUrl": "https://explorer.test.mezo.org/address/0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8",
+        "tx": "0xf98de49f1f16d38edcfaa9108ed1f5f978bd08c7fdbf871e8be5fa4f163dc083",
+        "txUrl": "https://explorer.test.mezo.org/tx/0xf98de49f1f16d38edcfaa9108ed1f5f978bd08c7fdbf871e8be5fa4f163dc083",
+        "block": 16804465,
+        "blockUrl": "https://explorer.test.mezo.org/block/16804465",
+        "gasUsed": 4958837,
+        "blockscoutVerified": true
+      },
+      "factory": {
+        "address": "0x46442898c022e1fAa2BD05a23600C1Ec89DcA200",
+        "addressUrl": "https://explorer.test.mezo.org/address/0x46442898c022e1fAa2BD05a23600C1Ec89DcA200",
+        "tx": "0xd1d0227b0ed91ac1d80add1570b0441d51443ec00edc7c984ac11890e897728c",
+        "txUrl": "https://explorer.test.mezo.org/tx/0xd1d0227b0ed91ac1d80add1570b0441d51443ec00edc7c984ac11890e897728c",
+        "block": 16804466,
+        "blockUrl": "https://explorer.test.mezo.org/block/16804466",
+        "gasUsed": 618854,
+        "blockscoutVerified": true,
+        "verificationNote": "Blockscout v2 reports is_verified: true; it also classifies the factory as proxy_type basic_implementation pointing at the verified TroveAccount implementation (its proxy-detector misfiring on the ERC-1167 clone bytecode, same as 1.9). The factory is NOT a proxy functionally; its deployed bytecode independently MATCHes the local forge build."
+      },
+      "radar": {
+        "address": "0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
+        "addressUrl": "https://explorer.test.mezo.org/address/0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
+        "tx": "0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",
+        "txUrl": "https://explorer.test.mezo.org/tx/0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",
+        "block": 16804467,
+        "blockUrl": "https://explorer.test.mezo.org/block/16804467",
+        "gasUsed": 859130,
+        "blockscoutVerified": false,
+        "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Radar). Deployed bytecode independently MATCHes the local forge build."
+      },
+      "batcher": {
+        "address": "0x427D3B9ee181f8658698c1c6c0F8075d003406F8",
+        "addressUrl": "https://explorer.test.mezo.org/address/0x427D3B9ee181f8658698c1c6c0F8075d003406F8",
+        "tx": "0x339c550ab276f609bed44377a103602850cf373e3ffe1c3908bc2ea7e17b3587",
+        "txUrl": "https://explorer.test.mezo.org/tx/0x339c550ab276f609bed44377a103602850cf373e3ffe1c3908bc2ea7e17b3587",
+        "block": 16804468,
+        "blockUrl": "https://explorer.test.mezo.org/block/16804468",
+        "gasUsed": 654843,
+        "blockscoutVerified": false,
+        "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Batcher). Deployed bytecode independently MATCHes the local forge build."
+      },
+      "bytecodeMatch": "all four deployed bytecodes MATCH the local forge build (immutable slots masked): TroveAccount 22,713 B / 65 slots, Factory 2,539 B / 7 slots, Radar 3,726 B / 18 slots, Batcher 2,784 B / 0 slots",
+      "compiler": {
+        "solc": "0.8.24",
+        "optimizerRuns": 200,
+        "viaIR": true,
+        "evmVersion": "paris"
+      },
+      "totalGasUsed": 7091664,
+      "demo": {
+        "status": "BLOCKED",
+        "reason": "funding gap: deployer holds 0.013361426240716919 BTC after the redeploy; a minimum trove needs >=0.0340 BTC at 110% MCR (>=0.0774 BTC at 250% ICR). Thresholds derived at 1.9 deploy time: min debt 2,000 MUSD (1,800 min + 200 gas comp); 110% MCR -> 2,200/price ~= 0.0340 BTC; 250% ICR -> 5,000/price ~= 0.0774 BTC; implied price ~$64.6k/BTC. Faucet top-up (https://faucet.test.mezo.org/) is CAPTCHA-gated and needs the user or a browser agent. No demo account was created and none is claimed."
+      },
+      "previousDeployment": {
+        "date": "2026-11-15",
+        "task": "1.9 Wave 2 account contracts (TroveAccount implementation + Factory + Radar + Batcher)",
+        "implementation": "0xC4f080498a720887b6086f13fBad5627d8abc470",
+        "factory": "0xfb4EFE7953AF18DBCaa1124DA721cD3FB8fD85C3",
+        "radar": "0x9Cd95A420e014da798dbFB74833b9D4DEe868be2",
+        "batcher": "0xB094e06559F7aF264e515F5363D9E89920b19b33",
+        "source": "docs/proof/accounts-2026-11-15.md (task 1.9 record)"
+      }
     }
   },
   "tests": {
     "source": "TESTS.json",
-    "testsCommit": "7b1ffcd",
-    "testsCommitFull": "7b1ffcde1d814ae4ea64568ffbe374307d43f9da",
-    "testsGeneratedAt": "2026-11-15T11:39:26.721Z",
+    "testsCommit": "54ae7a9",
+    "testsCommitFull": "54ae7a982a27015744c0271a4023cea9284002d5",
+    "testsGeneratedAt": "2026-11-16T00:51:50.860Z",
     "forgeStdHash": "9df68c53586f5b771168330515a203dfa51987016b1e10460fc72bbb0b3fb85b",
     "stale": true,
     "testsStale": true,
-    "staleReason": "TESTS.json commit 7b1ffcd is not in this repo's history (work-clone run) — freshness cannot be verified; re-run `make test-all`",
-    "refreshPending": "task/0.8-refresh",
+    "staleReason": "sources changed since TESTS.json commit 54ae7a9: contracts/script/fork-rehearse-prod.sh, scripts/check-threat-model.sh, scripts/generate-proof.mjs, scripts/muster-report.mjs — re-run `make test-all`",
     "total": {
-      "passed": 256,
+      "passed": 495,
       "failed": 0,
-      "skipped": 2
+      "skipped": 24
     },
-    "nonForkDeclared": 258,
+    "nonForkDeclared": 519,
     "forkDeclared": 10,
-    "passedInclFork": 273,
-    "distinctDeclared": 270,
-    "distinctDeclaredNote": "nonForkDeclared + forkDeclared + 2 (forge counts each invariant suite as 1 executed test; the files declare 4 invariant properties)",
-    "contracts": 137,
+    "passedInclFork": 505,
+    "distinctDeclared": 540,
+    "distinctDeclaredNote": "nonForkDeclared + forkDeclared + 11 (forge counts each invariant suite as 1 executed test; the files declare 14 invariant properties)",
+    "contracts": 311,
     "suites": {
       "contracts-unit": {
         "passed": 87,
@@ -148,17 +220,24 @@
         "status": "completed"
       },
       "contracts-account": {
-        "passed": 32,
+        "passed": 192,
         "failed": 0,
-        "skipped": 2,
+        "skipped": 5,
         "kind": "unit",
         "status": "completed"
       },
       "contracts-fuzz-account": {
-        "passed": 1,
+        "passed": 15,
         "failed": 0,
         "skipped": 0,
         "kind": "fuzz",
+        "status": "completed"
+      },
+      "contracts-invariant-account": {
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "kind": "invariant",
         "status": "completed"
       },
       "contracts-routes": {
@@ -193,14 +272,14 @@
         "note": "excluded from total to avoid double-counting"
       },
       "sdk": {
-        "passed": 10,
+        "passed": 12,
         "failed": 0,
         "skipped": 0,
         "kind": "unit",
         "status": "completed"
       },
       "backend": {
-        "passed": 74,
+        "passed": 80,
         "failed": 0,
         "skipped": 0,
         "kind": "unit",
@@ -214,12 +293,11 @@
         "status": "completed"
       },
       "mcp": {
-        "passed": 0,
+        "passed": 56,
         "failed": 0,
-        "skipped": 0,
+        "skipped": 19,
         "kind": "unit",
-        "status": "missing",
-        "note": "mcp package does not exist yet"
+        "status": "completed"
       },
       "keeper": {
         "passed": 0,
@@ -233,8 +311,8 @@
     "reconciliationNote": "total.passed is a NON-FORK subtotal; fork suites are listed separately and never added twice (TESTS.json forkNote)."
   },
   "accountSuite": {
-    "source": "forge test --match-path \"test/account/*\" on current main, lead-verified at the closeAccount merge (2026-11-15). Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH — the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked against the tree on every run (count of `function test*` per file).",
-    "passed": 161,
+    "source": "forge test --match-path \"test/account/*\" on current main, lead-verified at the closeAccount merge (2026-11-15) and updated for the Shield-round Factory tests from the forge run behind TESTS.json commit 54ae7a9 (~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries: FactoryTest 25 unit + 1 fuzz Success, 0 failed; no account-test file changed between 54ae7a9 and HEAD, so that run covers this tree). Not re-executed in this work clone: forge-std is not vendored here (no lib/), so `forge test` cannot compile in this tree. forge itself IS installed in this VM at ~/.foundry/bin/forge (v1.8.6, commit 6bad0a66), merely not on the default PATH — the earlier 'forge is not installed' claim was wrong. Declared counts below are re-checked against the tree on every run (count of `function test*` per file).",
+    "passed": 164,
     "failed": 0,
     "skipped": 3,
     "suites": {
@@ -257,7 +335,7 @@
         "file": "contracts/test/account/Radar.t.sol"
       },
       "Factory": {
-        "passed": 23,
+        "passed": 26,
         "failed": 0,
         "skipped": 0,
         "file": "contracts/test/account/Factory.t.sol"
@@ -276,10 +354,10 @@
         "note": "fork tests, skipped offline"
       }
     },
-    "reconciliationNote": "NOT a subset of TESTS.json: TESTS.json contracts-account (32 passed / 2 skipped) is the older 0.8 suite slice. The 0.8 refresh (task/0.8-refresh) must reconcile the two counts; until then both are reported with their sources.",
-    "staticCheck": "Declared counts re-checked against contracts/test/account/*.sol on every generation (164 declared = 161 passed + 3 skipped).",
-    "scopeNote": "161 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 23, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent re-execution log also ran the unmerged Shield suite's 14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
-    "artifact": "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped.",
+    "reconciliationNote": "Reconciled against TESTS.json (commit 54ae7a9): TESTS.json contracts-account (unit) 192 passed / 0 failed / 5 skipped = pin unit 162 (57 + 36 + 17 + 25 Factory unit + 27 Batcher unit) + TroveAccountShieldTest unit 27 + TroveAccountFuzzTest unit 3; skipped 5 = pin 3 (Batcher 1 + RadarFork 2) + Shield 1 (testFork_shieldOnLiveMezoPath, fork-gated) + Fork 1 (collapsed setUp skip for 8 testFork_ fns). TESTS.json contracts-fuzz-account 15 = pin fuzz 2 (Factory 1 + Batcher 1) + TroveAccountFuzzTest 12 + Shield 1; contracts-invariant-account 1 = TroveAccountInvariantTest (10 properties, 1 forge entry). Verified from the forge run behind TESTS.json (~/workspace/mezo-wave2/work/ci-fix/out/forge-account.json, 213 entries).",
+    "staticCheck": "Declared counts re-checked against contracts/test/account/*.sol on every generation (167 declared = 164 passed + 3 skipped).",
+    "scopeNote": "164 = the six account suites on main (TroveAccountTest 57, Draw 36, RadarUnit 17, Factory 26, BatcherTest 28, RadarFork 0 passed / 2 skipped). The independent pre-merge re-execution log also ran Shield's then-14 tests: full run 175 passed / 0 failed / 3 skipped (~/workspace/mezo-wave2/work/acct-suite-1.4.log, outside the repo).",
+    "artifact": "judges/forge-account.json — forge JSON output for the six on-main account suites, copied from the readme-catchup branch at 499f8ae; totals verified from the artifact: 161 Success / 0 Failure / 3 Skipped (pre-Factory-+3; current pin is 164/0/3).",
     "fullRunWithUnmergedShield": {
       "passed": 175,
       "failed": 0,
@@ -309,28 +387,46 @@
   },
   "contracts": {
     "troveAccountFactory": {
-      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
       "source": "contracts/src/account/TroveAccountFactory.sol",
-      "deployedAddress": null,
-      "deployTx": null
+      "deployedAddress": "0x46442898c022e1fAa2BD05a23600C1Ec89DcA200",
+      "deployedAddressUrl": "https://explorer.test.mezo.org/address/0x46442898c022e1fAa2BD05a23600C1Ec89DcA200",
+      "deployTx": "0xd1d0227b0ed91ac1d80add1570b0441d51443ec00edc7c984ac11890e897728c",
+      "deployTxUrl": "https://explorer.test.mezo.org/tx/0xd1d0227b0ed91ac1d80add1570b0441d51443ec00edc7c984ac11890e897728c",
+      "deployBlock": 16804466,
+      "blockscoutVerified": true
     },
     "troveAccount": {
-      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
       "source": "contracts/src/account/TroveAccount.sol",
-      "deployedAddress": null,
-      "deployTx": null
+      "deployedAddress": "0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8",
+      "deployedAddressUrl": "https://explorer.test.mezo.org/address/0x02Dda72b052fe7b28214C09743d6Ed0DE813F0B8",
+      "deployTx": "0xf98de49f1f16d38edcfaa9108ed1f5f978bd08c7fdbf871e8be5fa4f163dc083",
+      "deployTxUrl": "https://explorer.test.mezo.org/tx/0xf98de49f1f16d38edcfaa9108ed1f5f978bd08c7fdbf871e8be5fa4f163dc083",
+      "deployBlock": 16804465,
+      "blockscoutVerified": true
     },
     "batcher": {
-      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
       "source": "contracts/src/account/Batcher.sol",
-      "deployedAddress": null,
-      "deployTx": null
+      "deployedAddress": "0x427D3B9ee181f8658698c1c6c0F8075d003406F8",
+      "deployedAddressUrl": "https://explorer.test.mezo.org/address/0x427D3B9ee181f8658698c1c6c0F8075d003406F8",
+      "deployTx": "0x339c550ab276f609bed44377a103602850cf373e3ffe1c3908bc2ea7e17b3587",
+      "deployTxUrl": "https://explorer.test.mezo.org/tx/0x339c550ab276f609bed44377a103602850cf373e3ffe1c3908bc2ea7e17b3587",
+      "deployBlock": 16804468,
+      "blockscoutVerified": false,
+      "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Batcher). Deployed bytecode independently MATCHes the local forge build."
     },
     "radar": {
-      "status": "code+tests only — NOT yet deployed to testnet (task 1.9 pending)",
+      "status": "deployed to testnet (Shield redeploy 2026-11-16, from main 3271231); demo account BLOCKED on funding — no production flow has run",
       "source": "contracts/src/account/Radar.sol",
-      "deployedAddress": null,
-      "deployTx": null
+      "deployedAddress": "0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
+      "deployedAddressUrl": "https://explorer.test.mezo.org/address/0xfe74C8e67f0499e4426DD71D6bdf48A9A557DC6C",
+      "deployTx": "0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",
+      "deployTxUrl": "https://explorer.test.mezo.org/tx/0x1b73bfb0642eb19debb9ceeae17cd5ee04888f06d0d99212a7fe8090e520e3ca",
+      "deployBlock": 16804467,
+      "blockscoutVerified": false,
+      "verificationNote": "forge verify-contract reports 'already verified' and the Blockscout v1 getsourcecode API returns full source + ABI (compiler v0.8.24); the v2 is_verified flag still reads false at check time (Blockscout indexer quirk — same bytecode as the verified 1.9 Radar). Deployed bytecode independently MATCHes the local forge build."
     }
   },
   "proofTable": [
@@ -345,9 +441,9 @@
         "txUrl": "https://explorer.test.mezo.org/tx/0x0a3f4c0de6132f9abb030a8a1a07238ce6e5169cf699e796d9e028906db50545",
         "block": 16790703,
         "blockUrl": "https://explorer.test.mezo.org/block/16790703",
-        "what": "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD debt, ICR 1.9255; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)"
+        "what": "TroveAccount v1 open: 0.06 BTC collateral, 2001.8 MUSD composite principal (NET 1800 MUSD received: 1800 + 1.8 borrowing fee + 200 gas comp), ICR 1.9255 on the composite principal; Mezo EIP-712 nonce stayed 43 before/after (contract is the borrower)"
       },
-      "note": "Production createAndOpen needs task 1.9 (deploy + demo account).",
+      "note": "Production createAndOpen needs a demo account: contracts are deployed (deployments.accounts) but the demo account is BLOCKED on funding — no production flow has run.",
       "source": "WAVE2_WIN_PLAN.md §4.1"
     },
     {
@@ -362,7 +458,7 @@
         "batchTx": "0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31",
         "batchTxUrl": "https://explorer.test.mezo.org/tx/0x6768014f8154ea96c06032a35535d2e3e9bc844bd799922cf0bc3efead05fe31"
       },
-      "note": "Production session-open needs task 1.9.",
+      "note": "Production session-open needs a demo account (contracts deployed; demo BLOCKED on funding).",
       "source": "WAVE2_WIN_PLAN.md §4.3 step 1"
     },
     {
@@ -471,7 +567,7 @@
         "what": "Classic (Wave 1, superseded): draw(900 MUSD) reverted, Unsafe(icrAfter=2.183e18, floor=2.5e18)",
         "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account"
       },
-      "note": "Production unsafe-draw simulation needs task 1.9 (eth_call revert BELOW_FLOOR).",
+      "note": "Production unsafe-draw simulation needs a demo account (contracts deployed; demo BLOCKED on funding) — eth_call revert BELOW_FLOOR.",
       "source": "WAVE2_WIN_PLAN.md §4.5; shared/deployments/testnet.json liveFlow"
     },
     {
@@ -484,7 +580,7 @@
         "tx": null,
         "what": "test_recovery_mode_semantics in lab/test/Lab.t.sol (fork); no named production fork test is mapped in TESTS.json"
       },
-      "forkSuites": "TESTS.json fork suites exist (testnet 10/10, mainnet 7/1) but do not name a Recovery Mode test — the 0.8 refresh must map test names",
+      "forkSuites": "TESTS.json fork suites exist (testnet 10/10, mainnet 7/1) but do not name a Recovery Mode test — mapping test names is still open (task 0.8 landed with TESTS.json 54ae7a9; the mapping was not part of it)",
       "note": "Production Recovery Mode fork test needs the 1.x fork suite on current main.",
       "source": "WAVE2_WIN_PLAN.md §4.5, §7.4"
     },
@@ -510,7 +606,7 @@
         "what": "Classic (Wave 1, superseded): revoke() + nonce burn, then a draw with the pre-revoke signature reverts BadHeal (nonce burned)",
         "scope": "Classic Wave-1 deployment, superseded by the 0.9 redeploy — precedent only, not the production account"
       },
-      "note": "Production revoke-then-draw revert needs task 1.9.",
+      "note": "Production revoke-then-draw revert needs a demo account (contracts deployed; demo BLOCKED on funding).",
       "source": "WAVE2_WIN_PLAN.md §7.4; shared/deployments/testnet.json liveFlow"
     },
     {
@@ -524,10 +620,11 @@
         "fullHashAvailable": false,
         "block": 16791587,
         "blockUrl": "https://explorer.test.mezo.org/block/16791587",
-        "what": "Redemption incident: a bot fully redeemed the V3 minimum trove (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral()"
+        "what": "Redemption incident: a lab minimum trove was redeemed (block 16791587); 0.0105 BTC surplus stranded in CollSurplusPool because the deployed V3 had no claimCollateral() (see contracts/src/account/Batcher.sol:144). No explorer link: the redemption tx hash is truncated in every in-repo record.",
+        "forkTest": "contracts/test/account/Batcher.t.sol testFork_claimCollateralAfterSimulatedRedemption"
       },
-      "note": "The redemption tx hash is cited TRUNCATED in the plan — never expand it. Production claimCollateral needs task 1.9 (or a fork test only, labelled, if no bot cooperates).",
-      "source": "WAVE2_WIN_PLAN.md §4.6"
+      "note": "The redemption tx hash is cited TRUNCATED in the plan — never expand it. The plan §4.6 figures (attempted 1902.9, actual 1901.9 MUSD, 0.0295 BTC sent) and the 'bot' attribution are NOT repeated here: no full hash exists in-repo, so no judge can re-verify them on-chain. Production claimCollateral needs a demo account (contracts deployed; demo BLOCKED on funding) or a fork test only, labelled, if no bot cooperates.",
+      "source": "WAVE2_WIN_PLAN.md §4.6 (incident only — figures not repeated, see note); Batcher.sol:144 (0.0105 BTC surplus)"
     },
     {
       "id": "close",
@@ -539,7 +636,7 @@
         "tx": null,
         "what": "Fork rehearsal only (lab/mainnet/rehearsal_output2.txt, nothing broadcast): close() 324,307 gas then sweepBtc 29,233 gas returned all collateral"
       },
-      "note": "Production closeAccount (status 2, BTC/MUSD returned) needs task 1.9.",
+      "note": "Production closeAccount (status 2, BTC/MUSD returned) needs a demo account (contracts deployed; demo BLOCKED on funding).",
       "source": "WAVE2_WIN_PLAN.md §3.6"
     },
     {
@@ -569,7 +666,7 @@
         "txUrl": "https://explorer.test.mezo.org/tx/0x325e0e96cf6225d331891a0e7b1598b8d0ec6b4235fcfd64caf59dc4ffbe13a8",
         "what": "TroveAccountV3 owned by an OrangeKit Safe of a test BTC key"
       },
-      "note": "Production Bitcoin-wallet owner path needs task 1.9 + the OrangeKit flow.",
+      "note": "Production Bitcoin-wallet owner path needs a demo account (contracts deployed; demo BLOCKED on funding) + the OrangeKit flow.",
       "source": "WAVE2_WIN_PLAN.md §7.3"
     }
   ],
