@@ -72,13 +72,15 @@ const TEAM = new Set(
 // error — reject, never silently trim-and-accept. A value starting
 // with "=" (--rpc==URL, --out==DIR) is a hard error. Any other token
 // (positional, or a single-dash typo such as -rpc) is a hard error:
-// error: unexpected argument <token>. The RPC is validated with new URL()
-// (http:/https: only) before first use, so an invalid URL fails cleanly,
-// never with a stack. RPC failures at runtime are caught and reported as a
-// clean error, never a stack trace.
+// error: unexpected argument (the token itself is never echoed —
+// it may be a mistyped URL carrying credentials). The RPC is validated
+// with new URL() (http:/https: only) before first use, so an invalid
+// URL fails cleanly, never with a stack. RPC failures at runtime are
+// caught and reported as a clean error, never a stack trace.
 const USAGE = `Usage: node scripts/muster-report.mjs [--rpc URL | --rpc=URL] [--out DIR | --out=DIR]
   Defaults: RPC from shared/deployments/testnet.json, output
-  docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).`;
+  docs/proof/users-<YYYY-MM-DD>.md (re-runnable; same date overwrites).
+  Note: --rpc must never carry credentials — use a keyless endpoint.`;
 function fail(msg) {
   process.stderr.write(`error: ${msg}\n${USAGE}\n`);
   process.exit(1);
@@ -116,9 +118,8 @@ function checkValue(flag, value) {
   // (Cn) code points, which render as a missing-glyph box, not as blank
   // (that includes the 66 Cn noncharacters — U+FDD0–U+FDEF plus U+FFFE /
   // U+FFFF at each plane end — which survive the strip and render as a
-  // .notdef missing-glyph box on standard stacks; zero of 1,849 installed
-  // fonts define a glyph for the sampled ones, and that rendering is
-  // font-dependent); and surrogates (Cs, 2,048), which are not encodable
+  // .notdef missing-glyph box on standard stacks per a local font survey,
+  // and that rendering is font-dependent); and surrogates (Cs, 2,048), which are not encodable
   // in UTF-8 argv at all.
   if (value.replace(/[\s\p{Cc}\p{Cf}\p{Co}\p{Mn}\p{Me}\u00AD\u0085\u115F-\u1160\u2800\u3164\uFFA0\uFFFC]/gu, "") === "") {
     fail(`invalid value for ${flag}: ${flag} requires a non-empty value`);
@@ -144,9 +145,9 @@ for (let i = 0; i < args.length; i++) {
   } else if (a.startsWith("--out=")) {
     outArg = checkValue("--out", a.slice("--out=".length));
   } else if (a.startsWith("--")) {
-    fail(`unknown flag ${a}`);
+    fail("unknown flag");
   } else {
-    fail(`unexpected argument ${a}`);
+    fail("unexpected argument");
   }
 }
 const RPC = rpcArg || DEPLOYMENTS.rpc;
@@ -159,6 +160,19 @@ try {
 if (rpcUrl.protocol !== "http:" && rpcUrl.protocol !== "https:") {
   fail("invalid value for --rpc: must use http: or https:");
 }
+// Redacted RPC for the report body and stdout ONLY: scheme + host +
+// path, with userinfo, query, and fragment stripped. The actual fetch
+// still sends the key (userinfo as a Basic Authorization header — see
+// rpc()); only the RECORDED/PRINTED value is redacted. The report is
+// committed to a public repo, so a keyed --rpc must never be recorded
+// there. Built by hand (not URL.toString(), which appends a trailing
+// "/") so the keyless default "https://rpc.test.mezo.org" is
+// byte-identical.
+function redactedRpc() {
+  const u = rpcUrl;
+  const p = u.pathname === "/" ? "" : u.pathname;
+  return `${u.protocol}//${u.host}${p}`;
+}
 const FACTORY = DEPLOYMENTS.sternpost.SternpostFactory.address;
 const FACTORY_BLOCK = DEPLOYMENTS.sternpost.SternpostFactory.block;
 const GOVERNOR = DEPLOYMENTS.sternpost.governor;
@@ -170,9 +184,31 @@ const EXPECTED_CHAIN_ID = 31611;
 async function rpc(method, params) {
   // 15 s timeout: without a signal a stalled / unresolvable RPC hangs
   // forever instead of failing cleanly.
-  const res = await fetch(RPC, {
+  // Node fetch (undici) REFUSES a URL that includes credentials
+  // ("Request cannot be constructed from a URL that includes
+  // credentials") — and that refusal's error message contains the full
+  // URL, key included, which the catch below would then print. So
+  // userinfo is converted to a Basic Authorization header and the fetch
+  // URL is the credential-free form: the key still reaches the server
+  // (a query-string key, if any, stays in the URL — undici accepts it),
+  // but no credential ever sits in a URL fetch() sees, so no fetch
+  // error can echo one. The recorded/printed RPC stays redacted
+  // (redactedRpc) regardless.
+  const headers = { "content-type": "application/json" };
+  let fetchUrl = RPC;
+  if (rpcUrl.username || rpcUrl.password) {
+    const user = decodeURIComponent(rpcUrl.username);
+    const pass = decodeURIComponent(rpcUrl.password);
+    headers.authorization =
+      "Basic " + Buffer.from(`${user}:${pass}`, "utf8").toString("base64");
+    const u = new URL(RPC);
+    u.username = "";
+    u.password = "";
+    fetchUrl = u.toString();
+  }
+  const res = await fetch(fetchUrl, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     signal: AbortSignal.timeout(15000),
   });
@@ -189,6 +225,12 @@ async function rpc(method, params) {
 // The 0x prefix is matched case-insensitively ("0X7B7B" is the same value
 // as "0x7b7b") so hex casing variants never false-fail.
 const isHex = (h) => typeof h === "string" && /^0[xX][0-9a-fA-F]+$/.test(h);
+// eth_getCode must return a well-formed even-length hex byte string with
+// a lowercase "0x" prefix and at least one byte. Deliberately stricter
+// than isHex (which accepts "0X"): "", "0X", "0x ", "0x", "0x0", null,
+// and non-strings all fail closed. The degenerate "0x00" (one zero
+// byte) passes: it is well-formed code, however weak.
+const isCanonicalCode = (c) => typeof c === "string" && /^0x([0-9a-fA-F]{2})+$/.test(c);
 const hexToInt = (h) => {
   if (!isHex(h)) throw new Error(`invalid hex value: ${JSON.stringify(h)}`);
   return parseInt(h.slice(2), 16);
@@ -360,24 +402,32 @@ try {
   // any chain reusing chainId 31611, would still return [] from both
   // getLogs calls and the script would publish a vacuous "0 outside
   // addresses" report stamped as Mezo testnet 31611. eth_getCode proves
-  // the 0.9 deployment actually exists at the queried addresses: both the
-  // factory and the governor must return non-empty code (anything other
-  // than "0x" — the actual returned value is used, not a prefix check).
-  // A null / non-string / malformed code fails the same way as empty.
-  // The RPC URL is never echoed here (it may contain an API key); the
-  // message names the expected chain and the address with no code.
-  // Boundary: this cannot close a PERFECT REPLAY (same deployer, same
-  // nonces, same addresses, zero events yet) — that is indistinguishable
-  // from "genuinely zero users" and is out of scope. The fresh-chain /
-  // reset / wrong-31611-endpoint case is what this closes.
+  // non-empty code EXISTS at the queried addresses: both the factory and
+  // the governor must return a well-formed even-length hex byte string
+  // with a lowercase "0x" prefix and at least one byte
+  // (/^0x([0-9a-fA-F]{2})+$/). Anything else — "", "0X", "0x ", "0x",
+  // "0x0", null, a non-string — fails closed the same way as empty; a
+  // non-conforming node returning any other spelling fails closed. The
+  // degenerate "0x00" (one zero byte) passes: it is well-formed code,
+  // however weak. The RPC URL is never echoed here (it may contain an
+  // API key); the message names the expected chain and the address with
+  // no code.
+  // Boundary: this proves non-empty code EXISTS at the two addresses,
+  // NOT that it is the 0.9 deployment — a reset chain redeploying
+  // DIFFERENT bytecode at the same addresses (same deployer/nonces)
+  // would pass. No bytecode/codehash pinning is done here; that is out
+  // of scope. This also cannot close a PERFECT REPLAY (same deployer,
+  // same nonces, same addresses, zero events yet) — that is
+  // indistinguishable from "genuinely zero users" and is out of scope.
+  // The fresh-chain / reset / wrong-31611-endpoint case is what this closes.
   for (const [name, addr] of [
     ["SternpostFactory", FACTORY],
     ["SternpostGovernor", GOVERNOR],
   ]) {
     const code = await rpc("eth_getCode", [addr, "latest"]);
-    if (typeof code !== "string" || code === "0x") {
+    if (!isCanonicalCode(code)) {
       throw new Error(
-        `no contract code at ${name} ${addr} on Mezo testnet 31611 — check --rpc points at Mezo testnet 31611 with the 0.9 deployment`
+        `no contract code at ${name} ${addr} on Mezo testnet 31611 — check --rpc points at Mezo testnet 31611 with the 0.9 deployment, or the node is lagging below the deploy blocks`
       );
     }
   }
@@ -443,7 +493,7 @@ ${outside.length === 0 ? "> **0 outside addresses so far.** No third-party addre
 
 ## Method
 
-- RPC: ${RPC}; latest block at generation: ${latest}
+- RPC: ${redactedRpc()}; latest block at generation: ${latest}
 - \`GovernorCreated\` + \`SpendWalletCreated\` from SternpostFactory \`${FACTORY}\`, blocks ${FACTORY_BLOCK}–${latest}
 - \`Drawn\` (app = topic 1) from SternpostGovernor \`${GOVERNOR}\`, blocks ${GOVERNOR_BLOCK}–${latest}
 - Payees are not counted as users (they only receive a payment).
@@ -484,7 +534,7 @@ try {
   fail(`cannot write report to ${outPath}: ${err.message}`);
 }
 
-console.log(`chain: Mezo testnet 31611 (${RPC})`);
+console.log(`chain: Mezo testnet 31611 (${redactedRpc()})`);
 console.log(`blocks: factory ${FACTORY_BLOCK}, governor ${GOVERNOR_BLOCK}, latest ${latest}`);
 console.log(`events: ${creations.length} creation, ${draws.length} draw`);
 console.log(`outside addresses: ${outside.length}`);
