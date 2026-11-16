@@ -97,12 +97,20 @@ function DemoDraw({ acct, viewed }: { acct: ReturnType<typeof useAccountData>; v
         ) : a ? (
           <>
             <div className="grid sm:grid-cols-1 gap-6 justify-items-center">
-              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" /></div>
+              {/* LOW-2 (round 5): the Gauge gets toPct(a.icr) = null for a
+                  zero-debt ICR, so without an emptyLabel it showed "—"
+                  while "Now" next to it said "No debt" for a known
+                  status-1 zero-debt trove — gauge and text now agree.
+                  Any other status keeps the "—" default (the "Now" text
+                  already says "No trove" / "Unavailable" there). */}
+              <div className="text-center"><Gauge value={toPct(a.icr)} floor={toPct(a.floorICR ?? undefined) ?? undefined} size={250} label="Current" emptyLabel={a.troveStatus === 1 && isNoDebtIcr(a.icr) ? 'No debt' : undefined} /></div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 text-center mt-4 gap-4">
-              {/* MED-1 (round 4): the Gauge above has no emptyLabel, so it
-                  shows "—" for a zero-debt ICR — the "Now" number must agree
-                  and never claim "No debt" for a no-trove / closed preview. */}
+              {/* MED-1 (round 4) + LOW-2 (round 5): the "Now" number must
+                  never claim "No debt" for a no-trove / closed preview,
+                  and the Gauge above now carries the same "No debt"
+                  emptyLabel for a known status-1 zero-debt trove, so
+                  gauge and text agree in both directions. */}
               <div><div className="caps text-[11px] text-muted">Now</div><div className="display text-3xl">{demoIcrLabel(a.icr, a.troveStatus)}</div></div>
               <div><div className="caps text-[11px] text-muted">Floor</div><div className="display text-3xl">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</div></div>
               <div><div className="caps text-[11px] text-muted">Debt</div><div className="display text-3xl">{fmt(a.debt)} MUSD</div></div>

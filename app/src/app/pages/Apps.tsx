@@ -9,7 +9,7 @@ import { useTrove } from '../useTrove'
 import { RPC_ERROR_TEXT, useAccount, useViewedAccount } from '../useAccount'
 import { useAccountLogs } from '../useLogs'
 import { governorAbi } from '../../lib/abi'
-import { fmt, pct } from '../../lib/icr'
+import { fmt, pct, demoIcrLabel } from '../../lib/icr'
 import { DEPLOY_BLOCK } from '../../lib/chain'
 import { addrUrl, txUrl } from '../../lib/proofs'
 import deployments from '../../../../shared/deployments/testnet.json'
@@ -71,7 +71,10 @@ function DemoCrew({ viewed, holding = false }: { viewed: ReturnType<typeof useVi
             <div className="text-sm space-y-2">
               <div>Floor <b className="mono">{a.floorICR !== null ? pct(a.floorICR) : 'unknown'}</b> · shield line <b className="mono">{a.shieldICR !== null ? pct(a.shieldICR) : 'unknown'}</b> · target <b className="mono">{a.targetICR !== null ? pct(a.targetICR) : 'unknown'}</b></div>
               <div>Bounty <b className="mono">{a.bounty !== null ? `${fmt(a.bounty)} MUSD` : 'unknown'}</b> per effective shield</div>
-              <div>ICR <b className="mono">{pct(a.icr, 1)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b></div>
+              {/* MED-1 (round 5): pct() says "No debt" for any zero-debt ICR —
+                  a ?account= preview of a never-opened / closed address must
+                  read "No trove", an unreadable status "Unavailable". */}
+              <div>ICR <b className="mono">{demoIcrLabel(a.icr, a.troveStatus)}</b> · debt <b className="mono">{fmt(a.debt)} MUSD</b></div>
               <p className="text-muted">Budgets are set by the owner. In demo mode this account is read-only — connect the owner wallet to authorize an app.</p>
             </div>
           ) : <p className="text-sm text-muted">Account not readable.</p>}

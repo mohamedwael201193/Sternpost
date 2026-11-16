@@ -123,6 +123,7 @@ import Pay, { PayRow } from './Pay'
 import Draw from './Draw'
 import Home from './Home'
 import Watch from './Watch'
+import ProveItPage from './ProveIt'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -703,5 +704,158 @@ describe('L-b (round 4) — a sys-batch-only failure surfaces on Home', () => {
     expect(c.textContent).toContain('Recovery Mode')
     expect(c.textContent).toContain('Unavailable')
     expect(c.textContent).not.toContain('draws are paused on-chain')
+  })
+})
+
+describe('MED-1 (round 5) — Open + Apps were the two missed demo "No debt" sites', () => {
+  it('Open shows "ICR No trove", never "No debt", for a ?account= preview of a never-opened address (status 0)', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).toContain('not active')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Open shows "ICR No trove", never "No debt", for a closed preview (status 2, coll > 0 / debt 0)', async () => {
+    acctState = { data: CLOSED_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).toContain('not active')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Open still shows "No debt" for the zero-debt ACTIVE demo trove (status 1)', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('No debt')
+    expect(c.textContent).not.toContain('No trove')
+  })
+
+  it('Open shows "Unavailable", never "No debt" / "not active", when the status read failed (null)', async () => {
+    acctState = { data: { ...ZERO_DEBT_ACTIVE_SNAP, troveStatus: null }, isLoading: false, isError: false }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No debt')
+    expect(c.textContent).not.toContain('not active')
+  })
+
+  it('Open shows "No trove", never "No debt", for a connected own account with no trove', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    ownState = { data: OWN_ACCT, isLoading: false, isError: false }
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Open />)
+    expect(c.textContent).toContain('Your account — live on testnet')
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Apps shows "No trove", never "No debt", for a ?account= preview of a never-opened address (status 0)', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Apps />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Apps shows "No trove", never "No debt", for a closed preview (status 2, coll > 0 / debt 0)', async () => {
+    acctState = { data: CLOSED_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Apps />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('Apps still shows "No debt" for the zero-debt ACTIVE demo trove (status 1)', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Apps />)
+    expect(c.textContent).toContain('No debt')
+  })
+})
+
+describe('MED-1 (round 5) — ProveIt gates its ICR + status on troveStatus', () => {
+  it('still shows the live ICR percent + "active" for the lab account (status 1, debt > 0)', async () => {
+    const c = await renderPage(<ProveItPage />)
+    expect(c.textContent).toContain('160.2%')
+    expect(c.textContent).toContain('active')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('shows "No trove", never "No debt", for a status-0 read', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<ProveItPage />)
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).toContain('not active')
+    expect(c.textContent).not.toContain('No debt')
+  })
+
+  it('shows "Unavailable" for ICR and status, never "No debt" / "not active", when the status read failed (null)', async () => {
+    acctState = { data: { ...ZERO_DEBT_ACTIVE_SNAP, troveStatus: null }, isLoading: false, isError: false }
+    const c = await renderPage(<ProveItPage />)
+    expect(c.textContent).toContain('Unavailable')
+    expect(c.textContent).not.toContain('No debt')
+    expect(c.textContent).not.toContain('not active')
+  })
+})
+
+describe('LOW-1 (round 5) — Home Dial never asserts "No debt" on an unknown status', () => {
+  const dial = (c: HTMLDivElement) => c.querySelector('[data-testid="dial-value"]')
+
+  it('Dial shows "Unavailable", never "No debt", when the sys batch has not returned a status (undefined)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    // Real useTrove: coll > 0 / debt 0 with statusNum === undefined counts
+    // as hasTrove, and t.loading does not cover the sys batch.
+    troveState = {
+      hasTrove: true, coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      troveStatus: undefined, governor: undefined,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(dial(c)?.textContent).toContain('Unavailable')
+    expect(dial(c)?.textContent).not.toContain('No debt')
+  })
+
+  it('Dial still shows "No debt" once the status is KNOWN active (status 1)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: true, coll: 50_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      troveStatus: 1, governor: undefined,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(dial(c)?.textContent).toContain('No debt')
+  })
+
+  it('Dial shows "No trove", never "No debt", for a known-closed zero-debt trove (status 2)', async () => {
+    walletState = { ...LIVE }
+    viewedState = { ...LIVE_VIEWED }
+    troveState = {
+      hasTrove: false, coll: 10_000_000_000_000_000n, debt: 0n,
+      price: 64_608_796_300_000_000_000_000n, icr: 2n ** 255n,
+      troveStatus: 2, governor: undefined,
+      error: false, coreError: false, govError: false, gvError: false, sysError: false,
+    }
+    const c = await renderPage(<Home />)
+    expect(dial(c)?.textContent).toContain('No trove')
+    expect(dial(c)?.textContent).not.toContain('No debt')
+  })
+})
+
+describe('LOW-2 (round 5) — DemoDraw Gauge agrees with the "Now" text', () => {
+  it('Gauge shows "No debt" (aria-label "Current: No debt") for a known status-1 zero-debt trove', async () => {
+    acctState = { data: ZERO_DEBT_ACTIVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('figure[aria-label="Current: No debt"]')).not.toBeNull()
+    expect(c.textContent).toContain('No debt')
+  })
+
+  it('Gauge shows "—" (no "No debt") for a status-0 preview, matching "No trove" in "Now"', async () => {
+    acctState = { data: NO_TROVE_SNAP, isLoading: false, isError: false }
+    const c = await renderPage(<Draw />)
+    expect(c.querySelector('figure[aria-label="Current: No debt"]')).toBeNull()
+    expect(c.textContent).toContain('No trove')
+    expect(c.textContent).not.toContain('No debt')
   })
 })

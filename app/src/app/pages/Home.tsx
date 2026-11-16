@@ -112,11 +112,18 @@ export default function Home() {
             {/* MED-1 (round 4): "No debt" only for a known-active trove —
                 demo hasTrove is gated on troveStatus === 1, so a ?account=
                 preview of a no-trove or closed address falls through to
-                the Dial's default "No trove" empty label. */}
+                the Dial's default "No trove" empty label.
+                LOW-1 (round 5): outside demo mode hasTrove counts an
+                UNKNOWN status (useTrove: statusNum === undefined) as a
+                trove, and t.loading does not cover the sys batch — so a
+                zero-debt trove whose getTroveStatus read is still pending
+                or failed would assert "No debt" on an unknown status.
+                Gate the label on troveStatus === 1: unknown renders
+                "Unavailable" instead. */}
             {loading ? <Skeleton className="h-[240px] w-[240px] rounded-full" label="Loading collateral ratio" /> : acctError ? (
               <div className="flex h-[240px] w-[240px] items-center justify-center text-sm text-signal">Unavailable</div>
             ) : (
-              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={hasTrove && isNoDebtIcr(icrV) ? 'No debt' : undefined} />
+              <Dial value={hasTrove ? icrPct(icrV) : null} floor={icrPct(floorV) ?? undefined} size={240} emptyLabel={hasTrove && isNoDebtIcr(icrV) ? (troveStatus === 1 ? 'No debt' : 'Unavailable') : undefined} />
             )}
           </div>
           <div className="text-[11px] text-muted mt-1">Liquidation floor · 110%</div>
